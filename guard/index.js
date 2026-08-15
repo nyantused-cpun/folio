@@ -38,6 +38,28 @@ function normalizePath(p) {
   return String(p ?? "").replace(/\\/g, "/").toLowerCase();
 }
 
+// 项目内自检（2026-08-15 作用域隔离修复）：guard 保持全局挂载（fs/write-intent 事件
+// 从 root scope 发出，preset 内监听不到，L0 防线不能进 preset），但所有 shell 拦截
+// 必须只对「售前项目内」的命令生效——其他 workspace/项目的 python 直调与 output 直写
+// 一律放行，避免兰亭生态污染其他项目。
+// 判据：会话工作区（exec.agent.session.header.cwd，官方先例见 dsh-agent-loop
+// systemPrompt.variable("cwd")）或其绝对 workdir 落在 PROJECT_DIR 内。无法判断时
+// 视为项目外（放行，宁缺毋滥——guard 的本职是项目纪律，不是全局安全）。
+function isCommandInProject(exec) {
+  const p = normalizePath(PROJECT_DIR);
+  const candidates = [
+    exec?.agent?.session?.header?.cwd,
+    exec?.arguments?.workdir,
+  ];
+  for (const raw of candidates) {
+    if (typeof raw !== "string" || !raw.trim()) continue;
+    const n = normalizePath(raw.trim());
+    if (!/^[a-z]:\//.test(n) && !n.startsWith("/")) continue; // 相对路径不可靠，跳过
+    if (n === p || n.startsWith(p + "/")) return true;
+  }
+  return false;
+}
+
 function isProtectedWrite(p) {
   const n = normalizePath(p);
   if (!n.includes(normalizePath(PROJECT_DIR))) return false; // 项目外不拦（file policy 管）
@@ -49,6 +71,7 @@ function isProtectedWrite(p) {
 
 function checkPythonExec(exec) {
   if (exec.name !== "pwsh" && exec.name !== "bash") return null;
+  if (!isCommandInProject(exec)) return null; // 售前项目外：不拦（作用域隔离）
   const cmd = String(exec.arguments?.command ?? "");
   if (!PYTHON_CALL_RE.test(cmd)) return null;
   if (CLI_WHITELIST_RE.test(cmd)) return null;
@@ -65,6 +88,7 @@ function checkPythonExec(exec) {
 // CLI 白名单命令不受此限（引擎自写 output 合法）。
 function checkShellWrite(exec) {
   if (exec.name !== "pwsh" && exec.name !== "bash") return null;
+  if (!isCommandInProject(exec)) return null; // 售前项目外：不拦（作用域隔离）
   const cmd = String(exec.arguments?.command ?? "");
   if (!SHELL_MUTATE_CMDS.test(cmd)) return null;
   const n = normalizePath(cmd);

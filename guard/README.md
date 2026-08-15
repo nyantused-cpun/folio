@@ -53,7 +53,7 @@ dsh plugin --profile web add @presales/dsh-guard
 - 拦 `output/**/*.{html,pptx,docx,xlsx}` 直写与一切 `refs/**` 写/改（项目内路径）
 - 拦 pwsh/bash 里除 `python.exe _cli.py ...` 外的 python 直调
 - approval 禁用环境下：直接 deny + 明确原因，不依赖 ask
-- 项目外路径不拦（交给 file policy 沙箱）
+- **作用域隔离（0.1.0-rc.4）**：shell/python 拦截仅对「售前项目内」命令生效（`isCommandInProject` 按会话 cwd / workdir 落在 PROJECT_DIR 判定），其他 workspace/项目完全放行；项目外路径不拦（交给 file policy 沙箱）
 
 ## 5. 五步复测 SOP（每次 DSH 升级后）
 
@@ -62,6 +62,7 @@ dsh plugin --profile web add @presales/dsh-guard
 3. 新会话：pwsh 跑 `.venv/Scripts/python.exe _cli.py status` → 应放行
 4. 新会话：write 工具直写 `output/xxx/xxx.html` → 应被拒；write `output/xxx/spec.yml`（中间产物）→ 应放行
 5. 新会话：pwsh 跑 `Set-Content "output/xxx/测试.html" -Value x`（或 `>` 重定向写 output 交付物）→ 应被 deny（0.1.0-rc.2 新增 shell 直写检测；2026-08-14 L4 实测旧版此处是缺口）
+6. 新会话（0.1.0-rc.4 作用域隔离）：在**非售前项目**（cwd 不在 PROJECT_DIR）跑 `python -c "print(1)"` 或 `Set-Content` 写任意路径 → 应**放行**（不污染其他项目）；回到售前项目内 → 仍应被 deny
 
 ## 6. 已知限制
 
@@ -72,12 +73,12 @@ dsh plugin --profile web add @presales/dsh-guard
 ## 7. 目录
 
 ```
-.dsh/guard/
-  index.js      插件本体（~120 行）
+guard/
+  index.js      插件本体（~150 行）
   package.json  包元数据（peerDependencies 对齐 rc.6）
   README.md     本文档
-.dsh/preset/pre-sales/    agent preset 事实源（subagent_flash 工具）
-.dsh/setup/presales-setup.ps1  一键安装/卸载/验证（原子写+锁+dry-run）
+preset/agent.cordis.yml   兰亭 agent preset 模板（install-folio-plugins.ps1 安装时落盘）
+setup/install-folio-plugins.ps1  一键安装/卸载/验证（原子写+锁+dry-run）
 ```
 
 ## 8. 归属与许可
@@ -88,3 +89,5 @@ Folio 项目内部插件（D-127）。MIT。
 
 - 0.1.0-rc.1（2026-08-14）：初版。接口锚定 rc.6；运行级验证待 dsh web 重启后执行（§5 SOP）。
 - 0.1.0-rc.2（2026-08-14）：补 shell 直写检测（checkShellWrite：写操作符 × output|inbox|refs 路径段；L4 实测旧版 pwsh Set-Content 直写 output/ 交付物绕开 fs/write-intent 事件面）。发布版 PROJECT_DIR 默认值改 process.cwd()（不硬编码作者路径）。运行级验证待 dsh web 重启后执行（§5 SOP 第 5 步）。
+- 0.1.0-rc.3（2026-08-15）：修复 shell 直写检测漏判——交付物后缀 `$` 锚定改为词边界 `\b`（命令里 `.html` 后面常跟 `-Value`/编码等尾巴，`$` 锚定会漏判；L4 实测暴露）。
+- 0.1.0-rc.4（2026-08-15）：作用域隔离修复——`isCommandInProject` 项目内自检，非售前项目完全放行，解决「切项目被兰亭污染」；发布版仍保留 `process.cwd()` 路径回退，不硬编码作者路径。
