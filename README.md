@@ -129,6 +129,38 @@ pwsh .\setup\install-community-plugins.ps1 -Verify
 
 脚本会从 awesome-dsh-plugins 自动解析仓库、clone 到 `~/.dsh/community-plugins/`、建 Junction 并写 patch，最后重启 `dsh web` 生效。
 
+## 兼容性与生态取舍
+
+> 2026-08-15 对外口径：让使用者一眼知道 Folio 与 DSH 版本的绑定关系、社区插件为什么没直接引入、平台现状。
+
+### 1. 版本对齐
+
+- 当前对齐 **DSH 0.1.0-rc.6**（本机 `dsh -V` 实测）；插件 peer 依赖为 `@deepseek-ai/dsh-agent ^0.1.0-rc.6`、`@deepseek-ai/dsh-tools ^0.1.0-rc.6`、`@deepseek-ai/cordis ^4.0.1`。
+- 所有接口按 rc.6 源码逐行核实；DSH 升级后请重跑插件验证（`setup/install-folio-plugins.ps1 -Verify`）。
+
+### 2. 社区插件：看了什么、为什么没直接装
+
+我们调研过 DSH 社区约 200+ 插件，最终没有直接引入，原因分三类：
+
+| 类别 | 代表插件 | 结论 |
+|---|---|---|
+| 能力重叠 | dsh-memory-evolve、ModLens / dsh-vision-toolkit / dsh-qwen-mm、dsh-my-rsi | 兰亭已有自研实现（记忆/召回、vision-bridge、guard），只作参考，不替换 |
+| 兼容风险 | DSH-better-sidebar、dsh-github-connector、context-vista、dsh-agent-teams | P0 想用，但暂缓启用（装而未挂）：peer 依赖双副本/Symbol 分裂，官方 plugin 通道稳定前不启用 |
+| 方向排除 | dsh-plugin-claude-bridge / dsh-claude-move | Claude 生态适配暂不考虑 |
+
+- 我们**借鉴了社区 `defineTool` 封装模式**，但 15 个 `folio_*` 工具全部自研；
+- 分发基建（marisa / dsh-hub / dsh-plugin-radar）作为参考，官方无统一方案前不引入。
+
+### 3. 极简模式与平台
+
+- 兰亭 preset 设计上对齐 DSH 官方 **minimal 蓝本**（不挂 code 工具、无冗余，塑造专用平台体验）；
+- 实际基线采用 **standard 模板 + 精选工具**（禁用 codex/claude 等），原因是官方 minimal 在 Windows 上存在 PTY 兼容问题（`terminal inspection is unsupported on platform win32`）——这是对 Windows 的兼容性修正，不是偏离方向；
+- 当前 **首发 Windows**；macOS/Linux 安装脚本（install.sh）在 v1.1 路线中。
+
+### 4. Linux / macOS 适配
+
+目前 Folio 面向 Windows 首发。**欢迎其他开发者贡献 macOS/Linux 的安装脚本与环境适配**；如果官方 DSH 工具链在跨平台上更成熟，我们也乐意等官方完善后跟进。
+
 ## 状态与路线
 
 - **v1.0.0（当前）**：首个正式发布——五段价值链全链路 + DSH 深度适配 + LLM host 模式（0 key 起步）+ 安装脚本/自检。变更见 [CHANGELOG.md](CHANGELOG.md)。
@@ -139,7 +171,7 @@ pwsh .\setup\install-community-plugins.ps1 -Verify
   4. 团队可视化：`dsh-agent-teams` 或基于 DSH subagent 事件的自研面板
 - **v1.1 其余规划**：`domain-pack.yml` 方法论包契约（机械校验）+ 市场营销冒烟包 + PPT 工具链正式分发
   - 实施细节见 [docs/兰亭P0插件补全计划_2026-08-15.md](docs/兰亭P0插件补全计划_2026-08-15.md)
-- 平台：Windows 首发（macOS/Linux 安装脚本待补）；PPT 转换工具链要求见安装脚本输出
+- 平台：Windows 首发（macOS/Linux 安装脚本待补，欢迎社区贡献 install.sh / 环境适配；或等待官方工具链更成熟后跟进）；PPT 转换工具链要求见安装脚本输出
 
 ## 许可证
 
