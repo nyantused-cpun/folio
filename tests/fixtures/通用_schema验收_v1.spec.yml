@@ -1,0 +1,8 @@
+confirmed: true
+pages:
+  - id: p1
+    title: 验收
+    elements:
+      - type: cards
+        items:
+          - title: "故意写错字段名 items（应为 cards）"

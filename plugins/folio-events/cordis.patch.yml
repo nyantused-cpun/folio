@@ -1,0 +1,6 @@
+# folio-events 激活 patch（profile 层；dsh.bundle.patch 声明于此）
+# 写法与 folio-tools 同：新增插件 entry 用「无 id 的 insert」
+- insert:
+    - id: folio-events
+      name: "@folio/dsh-events"
+      config: {}

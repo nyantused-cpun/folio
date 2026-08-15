@@ -1,0 +1,15 @@
+# presales-guard 激活 patch（profile 层；dsh.bundle.patch 声明于此）
+#
+# ⚠ 写法依据：cordis-plugin-include applyEntryPatches 语义（0.1.0-rc.6 源码逐行核实）
+#   - patch 层只有三种语义：id 定向 config 覆盖 / disable / insert
+#   - 非 insert 补丁命中不存在的 id → warning「patch: entry ... not found」并被跳过
+#   - 新增插件 entry 必须用「无 id 的 insert」：直接 data.push 追加到顶层 entry 列表
+#   - 旧写法（顶层直写 - id/name/config）在空 entry 树上永不生效 —— 2026-08-14 L4 实测前已修正
+# 安装方式 A：`dsh plugin --profile web add "@presales/dsh-guard"`（npm/git spec）
+# 安装方式 B：把本目录加入 profile 可解析位置（软链/复制到
+#   ~/.dsh/profiles/<name>/node_modules/@presales/dsh-guard），
+#   并在 profiles/<name>/cordis.patch.yml 顶层写同一段
+- insert:
+    - id: presales-guard
+      name: "@presales/dsh-guard"
+      config: {}

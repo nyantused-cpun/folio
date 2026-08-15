@@ -1,0 +1,97 @@
+{
+  "bookish": {
+    "name": "Anthropic 书卷气",
+    "colors": {
+      "primary": "#2b1810",
+      "secondary": "#c96124",
+      "accent": "#c96124",
+      "background": "#faf9f6",
+      "text": "#4a3429"
+    },
+    "fonts": {
+      "heading": "Times New Roman",
+      "body": "Microsoft YaHei"
+    }
+  },
+  "education": {
+    "name": "教育行业",
+    "colors": {
+      "primary": "#3182ce",
+      "secondary": "#63b3ed",
+      "accent": "#ed8936",
+      "background": "#ebf8ff",
+      "text": "#1a365d"
+    },
+    "fonts": {
+      "heading": "Microsoft YaHei",
+      "body": "Microsoft YaHei"
+    }
+  },
+  "enterprise": {
+    "name": "企业通用",
+    "colors": {
+      "primary": "#2b6cb0",
+      "secondary": "#4299e1",
+      "accent": "#f56565",
+      "background": "#f7fafc",
+      "text": "#2c5282"
+    },
+    "fonts": {
+      "heading": "Microsoft YaHei",
+      "body": "Microsoft YaHei"
+    },
+    "html": {
+      "heading": "#1a365d",
+      "primary": "#3182ce",
+      "h2": "#2c5282",
+      "subtitle": "#718096",
+      "muted": "#a0aec0",
+      "table_header_bg": "#ebf8ff",
+      "border": "#e2e8f0",
+      "card_bg": "#f7fafc",
+      "card_title": "#2c5282"
+    }
+  },
+  "tech": {
+    "name": "科技行业",
+    "colors": {
+      "primary": "#805ad5",
+      "secondary": "#9f7aea",
+      "accent": "#48bb78",
+      "background": "#faf5ff",
+      "text": "#4a148c"
+    },
+    "fonts": {
+      "heading": "Microsoft YaHei",
+      "body": "Microsoft YaHei"
+    }
+  },
+  "gov": {
+    "name": "政府行业",
+    "colors": {
+      "primary": "#742a2a",
+      "secondary": "#9b2c2c",
+      "accent": "#e53e3e",
+      "background": "#fff5f5",
+      "text": "#742a2a"
+    },
+    "fonts": {
+      "heading": "SimHei",
+      "body": "Microsoft YaHei"
+    }
+  },
+  "syzygit": {
+    "name": "品牌蓝",
+    "colors": {
+      "primary": "#0078FF",
+      "secondary": "#0A238B",
+      "accent": "#0078FF",
+      "background": "#F4F9FF",
+      "text": "#1A1A1A"
+    },
+    "fonts": {
+      "heading": "Microsoft YaHei",
+      "body": "Microsoft YaHei"
+    }
+  }
+}

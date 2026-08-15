@@ -1,0 +1,659 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>兰亭（Folio）· 产品说明</title>
+    <style>
+
+            body { font-family: 'Microsoft YaHei', sans-serif; max-width: 1200px; margin: 0 auto; padding: 40px 20px;
+                   word-break: normal; overflow-wrap: normal; }
+            h1 { color: #1a365d; border-bottom: 3px solid #3182ce; padding-bottom: 10px; }
+            h2 { color: #2c5282; margin-top: 30px; }
+            .subtitle { color: #718096; font-size: 1.2em; }
+            .author { color: #a0aec0; font-size: 0.9em; }
+            table { border-collapse: collapse; width: 100%; margin: 15px 0; }
+            th, td { border: 1px solid #e2e8f0; padding: 10px; text-align: left; }
+            th { background-color: #ebf8ff; }
+            ul { margin: 10px 0 18px; padding-left: 20px; }
+            li { margin: 5px 0; }
+            .bullets { margin: 10px 0 18px; }
+            .bullet { margin: 5px 0; padding-left: 18px; text-indent: -18px; }
+            .bullet::before { content: "• "; color: #3182ce; }
+            .card { background: #f7fafc; border-radius: 8px; padding: 15px; margin: 10px 0; }
+            .card-title { font-weight: bold; color: #2c5282; }
+            .card-body { margin-top: 5px; }
+            .pullquote { background: #f7fafc; border-left: 4px solid #3182ce; border-radius: 4px; padding: 14px 18px; margin: 14px 0; }
+            .pq-content { font-size: 1.1em; color: #1a365d; font-weight: 500; line-height: 1.6; }
+            .pq-cite { color: #a0aec0; font-size: 0.9em; margin-top: 6px; }
+            .phases { display: flex; flex-direction: column; gap: 10px; margin: 12px 0; }
+            .phase { background: #f7fafc; border-radius: 8px; padding: 12px 16px; }
+            .phase-label { font-weight: bold; color: #2c5282; }
+            .phase-goal { margin-top: 4px; }
+        
+
+:root {
+  --blue:#1B5E8A;  --blue-mid:#4A7FA5;  --blue-light:#EDF2F7;
+  --green:#2F7D5F; --green-light:#F0FAF5;
+  --teal:#2E8B8B;  --teal-light:#EDF6F6;
+  --purple:#7B68AE; --purple-light:#F3F0F9;
+  --gray:#A0AEC0;
+  --orange:#D69E2E; --orange-light:#FEF5E7;
+  --red:#C53030;   --red-light:#FDEDEC;
+  --bg:#F7F8FA;     --card:#FFFFFF;      --text:#1A1A1A;
+  --text-sub:#718096; --border:#E2E8F0;
+}
+section.diagram, section.diagram svg text {
+  font-family: "Helvetica Neue", Helvetica, Arial, "Microsoft YaHei", "微软雅黑", sans-serif;
+}
+section.diagram {
+  background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+  padding: 24px 28px 28px; margin: 20px 0;
+  box-shadow: 0 1px 4px rgba(27,94,138,0.05);
+}
+section.diagram .dg-eyebrow {
+  font-size: 12px; font-weight: 700; letter-spacing: 2px;
+  color: var(--text-sub); text-transform: uppercase;
+}
+section.diagram .dg-title { font-size: 18px; font-weight: 700; color: var(--blue); margin: 4px 0 2px; }
+section.diagram .dg-desc { font-size: 13px; color: var(--text-sub); margin-bottom: 14px; }
+section.diagram .dg-body { overflow-x: auto; }
+section.diagram svg.dg { display: block; width: 100%; height: auto; background: #fff; }
+
+:root {
+  --t-primary:#1C2644; --t-primary-dark:#0F1526; --t-primary-mid:#232F55; --t-accent:#C8A870;
+  --t-role-biz:#1C2644;
+  --t-role-legal:#B03A48;
+  --t-role-fin:#2E5E4E;
+  --t-role-sys:#5B4A8A;
+  --t-role-ext:#C8A870;
+  --t-lit-border:#009E73; --t-lit-bg:#E2F3EC; --t-lit-text:#00795A;
+  --t-part-border:#D55E00; --t-part-bg:#FBE7D9; --t-part-text:#B04900;
+  --t-gap-border:#4A5568; --t-gap-bg:#EDF0F4; --t-gap-text:#4A5568;
+  --t-text-primary:#1A2030; --t-text-secondary:#5A6270; --t-text-tertiary:#9AA0A8;
+  --t-bg-soft:#F7F6F2; --t-bg-muted:#ECE9E0; --t-border:#CAC4B4; --t-card:#FFFFFF;
+  --t-hero-from:#0F1526; --t-hero-to:#1C2644;
+  --t-group-blue:#EAEDF3; --t-group-teal:#EDF3F0;
+  --t-purple-light:#F1EDFB; --t-red-light:#FDEDED;
+  --t-primary-a08:#1C264414; --t-primary-a15:#1C264426; --t-accent-a55:#C8A8708C;
+}
+
+/* ===== v3.0 中文排版基础（同事经验：防「80000多家」拆行） ===== */
+.v2-page, .v2-page p, .v2-page li, .v2-page td, .v2-page th {
+  word-break: normal; overflow-wrap: normal; line-height: 1.6;
+}
+/* ===== v2 页面构件（visual v2.0 §7，mock 版式样板_v0 提炼） ===== */
+/* P 系版式页骨架（§6）：锚点 + 节距 + 分隔线 */
+.v2-page { padding: 24px 0 20px; border-bottom: 1px solid var(--t-border); }
+.v2-page:last-child { border-bottom: none; }
+.topnav { position: sticky; top: 0; z-index: 100; background: var(--t-card); border-bottom: 1px solid var(--t-border); box-shadow: 0 1px 3px rgba(0,0,0,0.04); }
+.topnav-inner { max-width: 1280px; margin: 0 auto; padding: 0 24px; display: flex; align-items: center; gap: 24px; height: 54px; }
+.topnav .brand { font-weight: 800; font-size: 15px; color: var(--t-primary); }
+.topnav .brand-sub { font-size: 12px; color: var(--t-text-secondary); }
+.topnav .nav-links { display: flex; gap: 4px; flex: 1; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; min-width: 0; }
+.topnav .nav-links::-webkit-scrollbar { display: none; }
+.topnav .nav-link { padding: 6px 10px; font-size: 12.5px; color: var(--t-text-secondary); text-decoration: none; border-radius: 6px; white-space: nowrap; }
+.topnav .nav-link:hover { background: var(--t-bg-muted); color: var(--t-primary); }
+/* v3.0 logo 槽位（spec 顶层 brand 注入） */
+.brand-logo { height: 28px; width: auto; display: inline-block; margin-right: 10px; vertical-align: middle; }
+.brand-logo-placeholder { height: 28px; width: 96px; display: inline-flex; align-items: center; justify-content: center; border: 1px dashed var(--t-border); border-radius: 4px; color: var(--t-text-tertiary); font-size: 11px; margin-right: 10px; }
+
+.hero { background: linear-gradient(135deg, var(--t-hero-from) 0%, var(--t-hero-to) 100%); color: white; padding: 44px 32px 36px; border-radius: 12px; margin: 20px 0; }
+.hero-inner { max-width: 1280px; margin: 0 auto; }
+.hero-eyebrow { display: inline-block; justify-self: start; font-size: 11px; font-weight: 700; letter-spacing: 1px; color: var(--t-hero-from); background: var(--t-accent); padding: 3px 10px; border-radius: 3px; margin-bottom: 14px; }
+/* 深色背景标题强制白（客户内审铁律）：覆盖基础样式 h1 的深色 + 下划线 */
+.hero-title { font-size: 30px; line-height: 1.25; font-weight: 800; margin: 0 0 10px; letter-spacing: -0.3px; color: white; border-bottom: none; padding-bottom: 0; }
+.hero-subtitle { font-size: 14px; color: rgba(255,255,255,0.82); max-width: 860px; margin: 0 0 18px; }
+.hero-meta { display: flex; gap: 18px; font-size: 12px; color: rgba(255,255,255,0.6); flex-wrap: wrap; }
+.hero-stats { margin-top: 20px; }
+.hero-stats .stat-card { background: rgba(255,255,255,0.10); border-color: rgba(255,255,255,0.25); border-left-color: var(--t-accent); }
+.hero-stats .stat-value { color: white; }
+.hero-stats .stat-value small { color: rgba(255,255,255,0.65); }
+.hero-stats .stat-label { color: rgba(255,255,255,0.75); }
+
+.section-tag { display: inline-block; font-size: 11px; font-weight: 700; color: var(--t-primary); background: var(--t-primary-a08); padding: 4px 10px; border-radius: 4px; letter-spacing: 0.5px; margin-bottom: 10px; }
+.action-title { font-size: 21px; font-weight: 800; line-height: 1.4; margin: 0 0 6px; letter-spacing: -0.2px; color: var(--t-text-primary); }
+.action-title .hl-yellow { background: linear-gradient(transparent 62%, var(--t-accent-a55) 62%); padding: 0 2px; }
+.hl-red { color: var(--t-role-legal); font-weight: 700; }
+.hl-green { color: var(--t-lit-text); font-weight: 700; }
+.section-sub { font-size: 13px; color: var(--t-text-secondary); margin: 0 0 22px; }
+
+.stats-bar { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 18px 0 6px; }
+.stat-card { border: 1px solid var(--t-border); border-left: 4px solid var(--t-primary); border-radius: 6px; padding: 12px 16px; background: var(--t-card); }
+.stat-card.s-lit { border-left-color: var(--t-lit-border); }
+.stat-card.s-part { border-left-color: var(--t-part-border); }
+.stat-card.s-gap { border-left-color: var(--t-gap-border); }
+.stat-value { font-size: 26px; font-weight: 800; line-height: 1.1; font-variant-numeric: tabular-nums; color: var(--t-text-primary); }
+.stat-value small { font-size: 13px; font-weight: 600; color: var(--t-text-tertiary); margin-left: 2px; }
+.stat-label { font-size: 12px; color: var(--t-text-secondary); margin-top: 2px; }
+
+.kpi-cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 18px 0 6px; }
+.kpi-card { border: 1px solid var(--t-border); border-left: 4px solid var(--t-primary); border-radius: 6px; padding: 12px 16px; background: var(--t-card); }
+.kpi-label { font-size: 12px; color: var(--t-text-secondary); margin-bottom: 6px; }
+.kpi-nums { display: flex; align-items: baseline; gap: 8px; }
+.kpi-from { font-size: 16px; font-weight: 700; color: var(--t-text-tertiary); font-variant-numeric: tabular-nums; }
+.kpi-arrow { color: var(--t-primary-mid); font-weight: 700; }
+.kpi-to { font-size: 24px; font-weight: 800; color: var(--t-primary); font-variant-numeric: tabular-nums; }
+.kpi-note { font-size: 11px; color: var(--t-text-tertiary); margin-top: 4px; }
+
+.pain-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 18px 0 6px; }
+.pain-card { border: 1px solid var(--t-border); border-radius: 8px; padding: 14px 16px; background: var(--t-card); }
+.pain-head { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.pain-title { font-size: 14px; font-weight: 800; color: var(--t-text-primary); }
+.pain-badge { margin-left: auto; font-size: 11px; font-weight: 800; color: white; padding: 2px 8px; border-radius: 10px; }
+.pain-badge.lv-P0 { background: var(--t-role-legal); }
+.pain-badge.lv-P1 { background: var(--t-part-border); }
+.pain-badge.lv-P2 { background: var(--t-text-tertiary); }
+.pain-impact { font-size: 12px; font-weight: 700; color: var(--t-primary); margin-bottom: 4px; }
+.pain-body { font-size: 12px; color: var(--t-text-secondary); line-height: 1.55; }
+
+.info-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 18px 0 6px; }
+.info-card { border: 1px solid var(--t-border); border-radius: 8px; padding: 14px 16px; background: var(--t-card); }
+.info-card h4 { margin: 0 0 8px; font-size: 13px; font-weight: 800; display: flex; align-items: center; gap: 8px; color: var(--t-text-primary); }
+.info-card h4::before { content: ""; width: 8px; height: 8px; background: var(--t-primary); transform: rotate(45deg); flex: 0 0 auto; }
+.info-card ul { margin: 0; padding-left: 18px; font-size: 12px; color: var(--t-text-secondary); }
+.info-card li { margin-bottom: 4px; }
+
+.legend-bar { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; padding: 10px 14px; background: var(--t-bg-soft); border: 1px solid var(--t-border); border-radius: 6px; margin: 14px 0; font-size: 12px; color: var(--t-text-secondary); }
+.legend-item { display: inline-flex; align-items: center; gap: 6px; }
+.legend-swatch { width: 14px; height: 14px; border-radius: 3px; display: inline-block; }
+.sw-lit { background: var(--t-lit-bg); border: 1.5px solid var(--t-lit-border); }
+.sw-part { background: var(--t-part-bg); border: 1.5px solid var(--t-part-border); }
+.sw-gap { background: var(--t-gap-bg); border: 1.5px dashed var(--t-gap-border); }
+.sw-keep { background: var(--t-bg-muted); border: 1.5px solid var(--t-text-tertiary); }
+.sw-role-biz { background: var(--t-role-biz); }
+.sw-role-legal { background: var(--t-role-legal); }
+.sw-role-fin { background: var(--t-role-fin); }
+.sw-role-sys { background: var(--t-role-sys); }
+.sw-role-ext { background: var(--t-role-ext); }
+
+.qa-block { margin: 18px 0 6px; }
+.qa-item { border-left: 3px solid var(--t-primary); background: var(--t-bg-soft); border-radius: 0 6px 6px 0; padding: 10px 14px; margin-bottom: 10px; }
+.qa-q { font-size: 13px; font-weight: 800; color: var(--t-text-primary); }
+.qa-a { font-size: 12px; color: var(--t-text-secondary); margin-top: 4px; line-height: 1.55; }
+
+/* ===== D-093 view_cards（4 列视角卡 + 顶部半圆顶） + callout_block（底部说服区）===== */
+/* view_cards：仿"麦肯锡式 4 视角叙事页"——顶端半圆顶居中标题 + 4 列并列卡片半圆顶 */
+.view-cards { margin: 24px 0 18px; }
+.view-cap { position: relative; height: 64px; background: var(--t-bg-soft); border-radius: 12px; margin-bottom: -32px; }
+.view-cap-circle { position: absolute; left: 50%; top: 0; transform: translateX(-50%); width: 360px; max-width: 80%; background: var(--t-primary); color: var(--t-card); font-size: 14px; font-weight: 700; padding: 18px 20px 14px; border-radius: 0 0 180px 180px / 0 0 64px 64px; text-align: center; letter-spacing: 0.5px; box-shadow: 0 4px 12px var(--t-primary-a15); }
+.view-cap-circle span { display: inline-block; padding: 0 12px; }
+
+.view-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; padding-top: 52px; }
+.view-card { background: var(--t-card); border: 1px solid var(--t-border); border-radius: 10px; padding: 18px 18px 20px; text-align: center; transition: transform 0.2s, box-shadow 0.2s; }
+.view-card:hover { transform: translateY(-2px); box-shadow: 0 6px 18px var(--t-border); }
+.view-icon { width: 48px; height: 48px; margin: 0 auto 12px; display: flex; align-items: center; justify-content: center; background: var(--t-bg-soft); border-radius: 50%; color: var(--t-primary); font-size: 22px; font-weight: 700; }
+.view-perspective { font-size: 15px; font-weight: 800; color: var(--t-text-primary); margin-bottom: 10px; }
+.view-headline { margin-bottom: 8px; }
+.view-headline-num { font-size: 22px; font-weight: 800; color: var(--t-accent); letter-spacing: -0.5px; }
+.view-detail { font-size: 12px; color: var(--t-text-secondary); line-height: 1.6; text-align: left; }
+
+/* callout_block：底部说服区（淡蓝底 + 圆角 + 双编号） */
+.callout-block { background: var(--t-bg-soft); border: 1px solid var(--t-border); border-radius: 10px; padding: 18px 22px; margin: 20px 0 6px; display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px 24px; }
+.callout-point { display: flex; gap: 14px; align-items: flex-start; }
+.callout-num { font-size: 22px; font-weight: 800; color: var(--t-primary); line-height: 1; flex: 0 0 auto; padding-top: 2px; font-family: Georgia, serif; letter-spacing: 0.5px; }
+.callout-body { flex: 1 1 auto; min-width: 0; }
+.callout-title { font-size: 14px; font-weight: 700; color: var(--t-text-primary); line-height: 1.5; margin-bottom: 4px; }
+.callout-hl { color: var(--t-accent); font-weight: 800; padding: 0 2px; background: var(--t-accent-a55); }
+.callout-desc { font-size: 12px; color: var(--t-text-secondary); line-height: 1.55; }
+
+/* ===== v3.0 新构件（P12 目录 / P14 双栏对比 / P15 优缺点 / P16 CTA） ===== */
+.toc-cards { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin: 18px 0 6px; }
+.toc-card { display: flex; gap: 12px; border: 1px solid var(--t-border); border-radius: 8px; padding: 14px 16px; background: var(--t-card); }
+.toc-num { font-size: 20px; font-weight: 800; color: var(--t-primary); font-variant-numeric: tabular-nums; min-width: 36px; }
+.toc-title { font-size: 15px; font-weight: 700; color: var(--t-text-primary); }
+.toc-desc { font-size: 12px; color: var(--t-text-secondary); margin-top: 4px; }
+.duo-compare { display: grid; grid-template-columns: 1fr 1px 1fr; gap: 16px; margin: 18px 0 6px; align-items: stretch; }
+.duo-vrule { background: var(--t-border); width: 1px; }
+.duo-title { font-size: 16px; font-weight: 800; color: var(--t-text-primary); margin-bottom: 10px; }
+.duo-points { margin: 0; padding-left: 18px; }
+.duo-points li { font-size: 13px; color: var(--t-text-secondary); margin: 6px 0; }
+.pros-cons { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 18px 0 6px; }
+.pc-col { border: 1px solid var(--t-border); border-radius: 8px; padding: 14px 16px; background: var(--t-card); }
+.pc-col .pros { color: var(--t-lit-text); }
+.pc-col .cons { color: var(--t-part-text); }
+.pc-head { font-size: 13px; font-weight: 800; margin: 0 0 8px; }
+.pc-col ul { margin: 0; padding-left: 18px; }
+.pc-item { font-size: 13px; color: var(--t-text-secondary); margin: 5px 0; }
+.cta-block { margin: 18px 0 6px; text-align: center; padding: 32px 24px; background: linear-gradient(135deg, var(--t-hero-from), var(--t-hero-to)); border-radius: 12px; }
+.cta-title { font-size: 24px; font-weight: 800; color: white; margin-bottom: 16px; }
+.cta-btn { display: inline-block; background: var(--t-accent); color: var(--t-hero-from); font-weight: 800; padding: 10px 28px; border-radius: 100px; font-size: 14px; }
+.cta-contact { margin-top: 12px; font-size: 12px; color: rgba(255,255,255,0.7); }
+
+/* exhibit 图框（§5.5：既有 diagram 的编号+标题+来源包装） */
+.exhibit { border: 1px solid var(--t-border); border-radius: 8px; overflow: hidden; margin-top: 18px; }
+.exhibit-header { display: flex; align-items: baseline; gap: 12px; padding: 12px 18px; background: var(--t-bg-soft); border-bottom: 1px solid var(--t-border); }
+.exhibit-num { font-size: 11px; font-weight: 800; color: white; background: var(--t-primary); padding: 2px 8px; border-radius: 3px; letter-spacing: 0.5px; }
+.exhibit-title { font-size: 14px; font-weight: 700; color: var(--t-text-primary); }
+.exhibit-body { padding: 20px 18px; }
+.exhibit-source { padding: 8px 18px; font-size: 11px; color: var(--t-text-tertiary); border-top: 1px dashed var(--t-border); background: var(--t-bg-soft); }
+/* 图框内 diagram 去二层边框（外层 exhibit 已有框） */
+.exhibit-body section.diagram { border: none; box-shadow: none; margin: 0; padding: 0; }
+
+/* 三态芯片（§8.2 共享组件：flow_rows 与后续 capability_map 改造共用） */
+.chip-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { font-size: 12px; padding: 3px 9px; border-radius: 4px; border: 1.5px solid; white-space: nowrap; }
+.chip-lit { background: var(--t-lit-bg); border-color: var(--t-lit-border); color: var(--t-lit-text); font-weight: 600; }
+.chip-part { background: var(--t-part-bg); border-color: var(--t-part-border); color: var(--t-part-text); font-weight: 600; }
+.chip-gap { background: var(--t-gap-bg); border-color: var(--t-gap-border); border-style: dashed; color: var(--t-gap-text); }
+.chip-keep { background: var(--t-bg-muted); border-color: var(--t-text-tertiary); color: var(--t-text-secondary); }
+
+/* flow_rows（§8.1，第 28 种子类型；渲染在 diagram/flow.py，样式集中于此） */
+.flow-canvas { display: flex; flex-direction: column; gap: 0; }
+.flow-row { display: flex; align-items: stretch; gap: 10px; padding: 12px 14px; border-radius: 6px; }
+.flow-row.g-blue { background: var(--t-group-blue); }
+.flow-row.g-teal { background: var(--t-group-teal); }
+.flow-row.dashed-opt { background: var(--t-part-bg); border: 1.5px dashed var(--t-part-border); }
+.flow-row.dashed-opt .fc-label { color: var(--t-part-border); }
+.flow-row-label { flex: 0 0 86px; display: flex; flex-direction: column; justify-content: center; font-size: 12px; font-weight: 800; color: var(--t-primary); border-right: 2px solid var(--t-primary-a15); padding-right: 10px; }
+.flow-row-label small { font-weight: 500; color: var(--t-text-tertiary); font-size: 11px; }
+.flow-cards { display: flex; flex: 1; align-items: stretch; gap: 8px; }
+.flow-card { flex: 1; background: var(--t-card); border: 1.5px solid var(--t-border); border-top: 3px solid var(--t-primary); border-radius: 6px; padding: 10px 12px; position: relative; }
+.flow-card.r-biz { border-top-color: var(--t-role-biz); }
+.flow-card.r-legal { border-top-color: var(--t-role-legal); }
+.flow-card.r-fin { border-top-color: var(--t-role-fin); }
+.flow-card.r-sys { border-top-color: var(--t-role-sys); }
+.flow-card.r-ext { border-top-color: var(--t-role-ext); }
+.flow-card.dim { opacity: 0.75; }
+.num-badge { position: absolute; top: -9px; left: 10px; width: 18px; height: 18px; border-radius: 50%; background: var(--t-primary-dark); color: white; font-size: 11px; font-weight: 800; display: flex; align-items: center; justify-content: center; }
+.fc-label { font-size: 13px; font-weight: 700; line-height: 1.35; color: var(--t-text-primary); }
+.fc-desc { font-size: 11px; color: var(--t-text-secondary); margin-top: 3px; line-height: 1.45; }
+.flow-arrow { align-self: center; color: var(--t-primary-mid); font-size: 18px; font-weight: 700; flex: 0 0 auto; }
+.flow-down { text-align: center; color: var(--t-primary-mid); font-size: 20px; line-height: 1; padding: 2px 0; }
+.opt-tag { font-size: 11px; font-weight: 800; color: var(--t-part-border); writing-mode: vertical-lr; letter-spacing: 2px; display: flex; align-items: center; }
+
+/* ===== 审美升级 v2.1（2026-07-31）：阴影层次 / hero 装饰 / 深色导航 / 表格升级 ===== */
+/* 页面背景：浅灰渐变，摆脱纯白公文体 */
+body { background: linear-gradient(180deg, var(--t-bg-muted) 0%, var(--t-card) 420px); }
+.v2-page { padding: 30px 0 28px; }
+
+/* topnav：深蓝渐变导航（对照 v5 渐变页眉，汇报 PPT 质感） */
+.topnav { background: linear-gradient(90deg, var(--t-hero-from) 0%, var(--t-hero-to) 100%); border-bottom: none; box-shadow: 0 2px 10px rgba(15,23,42,0.14); }
+.topnav .brand { color: var(--t-card); }
+.topnav .brand-sub { color: rgba(255,255,255,0.72); }
+.topnav .nav-link { color: rgba(255,255,255,0.86); }
+.topnav .nav-link:hover { background: rgba(255,255,255,0.14); color: var(--t-card); }
+.topnav .nav-links { -webkit-mask-image: linear-gradient(90deg, black 0%, black 93%, transparent 100%); mask-image: linear-gradient(90deg, black 0%, black 93%, transparent 100%); scroll-behavior: smooth; }
+
+/* hero：装饰圆环 + 水印（封面高级感） */
+.hero { position: relative; overflow: hidden; box-shadow: 0 4px 20px rgba(15,23,42,0.16); }
+.hero::before { content: ""; position: absolute; right: -70px; top: -70px; width: 300px; height: 300px; border-radius: 50%; background: radial-gradient(circle, rgba(255,255,255,0.18) 0%, rgba(255,255,255,0) 68%); }
+.hero::after { content: ""; position: absolute; right: 9%; bottom: -110px; width: 240px; height: 240px; border-radius: 50%; border: 30px solid rgba(255,255,255,0.05); }
+.hero-inner { position: relative; z-index: 1; max-width: 900px; }
+.hero-eyebrow { box-shadow: 0 1px 4px rgba(15,23,42,0.18); letter-spacing: 1.5px; }
+/* hero 双栏（有 stats）：左文字区 / 右数据卡，封面右侧有视觉落点 */
+.hero-inner.has-stats { max-width: 1280px; display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: 44px; align-items: center; }
+.hero-inner.has-stats .hero-stats { margin-top: 0; display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+.hero-inner.has-stats .stat-card { background: rgba(255,255,255,0.10); border: 1px solid rgba(255,255,255,0.22); border-radius: 10px; padding: 16px 14px; text-align: center; backdrop-filter: blur(2px); }
+.hero-inner.has-stats .stat-card::after { background: linear-gradient(90deg, var(--t-accent), transparent); }
+
+/* 卡片：阴影层次 + hover 微抬升 */
+.stat-card, .kpi-card, .pain-card, .info-card {
+  box-shadow: 0 1px 2px rgba(15,23,42,0.05), 0 3px 10px rgba(15,23,42,0.05);
+  transition: box-shadow 0.16s ease, transform 0.16s ease;
+}
+.stat-card:hover, .kpi-card:hover, .pain-card:hover, .info-card:hover {
+  box-shadow: 0 2px 5px rgba(15,23,42,0.07), 0 9px 20px rgba(15,23,42,0.09);
+  transform: translateY(-2px);
+}
+.stat-card { position: relative; overflow: hidden; }
+.stat-card::after { content: ""; position: absolute; top: 0; left: 0; width: 100%; height: 3px; background: linear-gradient(90deg, var(--t-primary), var(--t-primary-mid)); }
+.stat-card.s-lit::after { background: linear-gradient(90deg, var(--t-lit-border), var(--t-lit-text)); }
+.stat-card.s-part::after { background: linear-gradient(90deg, var(--t-part-border), var(--t-part-text)); }
+.stat-card.s-gap::after { background: linear-gradient(90deg, var(--t-gap-border), var(--t-gap-text)); }
+.stat-value { font-size: 30px; color: var(--t-primary-dark); }
+.stat-card.s-lit .stat-value { color: var(--t-lit-text); }
+.stat-card.s-part .stat-value { color: var(--t-part-text); }
+.stat-card.s-gap .stat-value { color: var(--t-gap-text); }
+
+/* pain 卡：标题菱形 + impact 左竖线 */
+.pain-card { border-top: 3px solid var(--t-border); }
+.pain-title { display: flex; align-items: center; }
+.pain-title::before { content: ""; width: 9px; height: 9px; background: var(--t-primary); transform: rotate(45deg); display: inline-block; margin-right: 8px; flex: 0 0 auto; }
+.pain-impact { border-left: 3px solid var(--t-primary-mid); padding-left: 9px; }
+.pain-badge { box-shadow: 0 1px 3px rgba(15,23,42,0.18); }
+
+/* kpi：to 数字主色冲击 */
+.kpi-card { border-top: 3px solid var(--t-border); }
+.kpi-to { font-size: 26px; }
+
+/* section-tag：左竖条 + 渐变胶囊 */
+.section-tag { background: linear-gradient(135deg, var(--t-primary-a15), var(--t-primary-a08)); border-left: 3px solid var(--t-primary); padding-left: 12px; }
+
+/* D-092 page_header 页眉横幅：渐变底 + EX 编号徽章 + 标题 + 章节胶囊 + meta */
+.page-header { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; background: linear-gradient(90deg, var(--t-hero-from) 0%, var(--t-hero-to) 100%); border-radius: 10px; padding: 16px 22px; margin: 18px 0 8px; box-shadow: 0 2px 10px rgba(15,23,42,0.14); position: relative; overflow: hidden; }
+.page-header::after { content: ""; position: absolute; right: -40px; top: -40px; width: 140px; height: 140px; border-radius: 50%; border: 18px solid rgba(255,255,255,0.06); }
+.ph-index { font-size: 12px; font-weight: 800; color: var(--t-hero-from); background: var(--t-accent); padding: 4px 10px; border-radius: 4px; letter-spacing: 0.5px; position: relative; z-index: 1; }
+.ph-title { font-size: 20px; font-weight: 800; color: var(--t-card); margin: 0; position: relative; z-index: 1; }
+.ph-tag { font-size: 12px; font-weight: 700; color: rgba(255,255,255,0.9); background: rgba(255,255,255,0.14); border: 1px solid rgba(255,255,255,0.3); padding: 3px 10px; border-radius: 20px; position: relative; z-index: 1; }
+.ph-meta { margin-left: auto; display: flex; gap: 14px; font-size: 11px; color: rgba(255,255,255,0.68); flex-wrap: wrap; position: relative; z-index: 1; }
+.ph-meta-item::before { content: "•"; margin-right: 6px; opacity: 0.7; }
+
+/* 图例：微投影 */
+.legend-bar { box-shadow: 0 1px 3px rgba(15,23,42,0.04); }
+
+/* flow_rows 徽章：渐变 + 白描边 */
+.num-badge { background: linear-gradient(135deg, var(--t-primary-mid), var(--t-primary-dark)); border: 2px solid var(--t-card); box-shadow: 0 1px 3px rgba(15,23,42,0.22); }
+
+/* 表格升级：深蓝表头 + 斑马纹 + 圆角容器（覆盖旧式 th/td 边框） */
+table { border-collapse: separate; border-spacing: 0; border-radius: 10px; overflow: hidden; box-shadow: 0 1px 2px rgba(15,23,42,0.05), 0 3px 10px rgba(15,23,42,0.05); }
+th { background: var(--t-primary); color: var(--t-card); font-weight: 700; font-size: 13px; padding: 12px 14px; border: none; }
+td { border: none; border-bottom: 1px solid var(--t-border); padding: 12px 14px; font-size: 13px; color: var(--t-text-secondary); }
+tbody tr:nth-child(even) { background: var(--t-bg-soft); }
+tbody tr:hover { background: var(--t-bg-muted); }
+tbody tr:last-child td { border-bottom: none; }
+
+/* D-092 diagram 附件槽位：stats（图上）+ legend/notes（图下），组合体 */
+.dg-slot-wrap { border: 1px solid var(--t-border); border-radius: 10px; padding: 16px 16px 14px; background: var(--t-card); margin: 18px 0 8px; }
+.dg-slot-wrap section.diagram { border: none; box-shadow: none; margin: 0 0 4px; padding: 0; }
+.dg-slot-stats { display: grid; gap: 14px; margin-bottom: 14px; }
+.dg-slot-stats .stat-card { margin: 0; box-shadow: 0 1px 2px rgba(15,23,42,0.05), 0 3px 10px rgba(15,23,42,0.05); }
+.dg-slot-notes { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin-top: 12px; }
+.dg-slot-notes .info-card { margin: 0; border-top: 3px solid var(--t-primary); }
+.dg-slot-notes .info-card-title { font-size: 13px; font-weight: 800; color: var(--t-text-primary); margin-bottom: 6px; }
+.dg-slot-notes .info-card-list { list-style: none; margin: 0; padding: 0; font-size: 12px; color: var(--t-text-secondary); line-height: 1.55; }
+.dg-slot-notes .info-card-list li { position: relative; padding-left: 12px; margin-bottom: 3px; }
+.dg-slot-notes .info-card-list li::before { content: ""; position: absolute; left: 0; top: 7px; width: 5px; height: 5px; background: var(--t-primary-mid); border-radius: 50%; }
+
+/* ===== 文字排版 v2.2（2026-08-02）：中文正文行高 / 标题节奏 / 阅读舒适度 ===== */
+/* 中文正文统一舒适行高（正文 1.6-1.75，标题 1.35-1.5），小字号优先受益 */
+.section-sub { line-height: 1.75; max-width: 980px; }
+.hero-meta { line-height: 1.6; }
+.hero-title { line-height: 1.3; max-width: 600px; }
+.hero-subtitle { line-height: 1.75; max-width: 600px; }
+.action-title { line-height: 1.38; margin-bottom: 10px; }
+.stat-label { line-height: 1.55; }
+.kpi-label { line-height: 1.5; }
+.kpi-note { line-height: 1.55; }
+.pain-title { line-height: 1.45; }
+.pain-impact { line-height: 1.5; }
+.pain-body { line-height: 1.7; }
+.info-card h4 { line-height: 1.4; }
+.info-card ul { line-height: 1.75; }
+.info-card li { margin-bottom: 5px; }
+.qa-a { line-height: 1.7; }
+.exhibit-title { line-height: 1.5; }
+.exhibit-source { line-height: 1.6; }
+.fc-label { line-height: 1.45; }
+.fc-desc { line-height: 1.55; }
+.flow-row-label { line-height: 1.45; }
+.legend-item { line-height: 1.5; }
+td { line-height: 1.6; }
+th { line-height: 1.4; }
+
+/* 旧 diagram 变量桥接 -> v2 主题（--t- 变量） */
+:root {
+  --blue: var(--t-primary); --blue-mid: var(--t-primary-mid); --blue-light: var(--t-group-blue);
+  --green: var(--t-lit-border); --green-light: var(--t-lit-bg);
+  --teal: var(--t-role-fin); --teal-light: var(--t-group-teal);
+  --purple: var(--t-role-sys); --purple-light: var(--t-purple-light);
+  --gray: var(--t-gap-border);
+  --orange: var(--t-accent); --orange-light: var(--t-part-bg);
+  --red: var(--t-role-legal); --red-light: var(--t-red-light);
+  --bg: var(--t-bg-soft); --card: var(--t-card);
+  --text: var(--t-text-primary); --text-sub: var(--t-text-secondary);
+  --border: var(--t-border);
+}
+    </style>
+<script>window.__V2_THEMES__ = {"legacy_bluegreen": ":root {\n  --t-primary:#1B5E8A; --t-primary-dark:#14486A; --t-primary-mid:#4A7FA5; --t-accent:#D69E2E;\n  --t-role-biz:#1B5E8A;\n  --t-role-legal:#C53030;\n  --t-role-fin:#2E8B8B;\n  --t-role-sys:#7B68AE;\n  --t-role-ext:#D69E2E;\n  --t-lit-border:#2F7D5F; --t-lit-bg:#F0FAF5; --t-lit-text:#2F7D5F;\n  --t-part-border:#D69E2E; --t-part-bg:#FEF5E7; --t-part-text:#B7791F;\n  --t-gap-border:#A0AEC0; --t-gap-bg:#F7F8FA; --t-gap-text:#718096;\n  --t-text-primary:#1A1A1A; --t-text-secondary:#4A5568; --t-text-tertiary:#718096;\n  --t-bg-soft:#F7F8FA; --t-bg-muted:#EDF2F7; --t-border:#E2E8F0; --t-card:#FFFFFF;\n  --t-hero-from:#14486A; --t-hero-to:#1B5E8A;\n  --t-group-blue:#EDF2F7; --t-group-teal:#EDF6F6;\n  --t-purple-light:#F3F0F9; --t-red-light:#FDEDEC;\n  --t-primary-a08:#1B5E8A14; --t-primary-a15:#1B5E8A26; --t-accent-a55:#D69E2E8C;\n}\n/* 旧 diagram 变量桥接 -> v2 主题（--t- 变量） */\n:root {\n  --blue: var(--t-primary); --blue-mid: var(--t-primary-mid); --blue-light: var(--t-group-blue);\n  --green: var(--t-lit-border); --green-light: var(--t-lit-bg);\n  --teal: var(--t-role-fin); --teal-light: var(--t-group-teal);\n  --purple: var(--t-role-sys); --purple-light: var(--t-purple-light);\n  --gray: var(--t-gap-border);\n  --orange: var(--t-accent); --orange-light: var(--t-part-bg);\n  --red: var(--t-role-legal); --red-light: var(--t-red-light);\n  --bg: var(--t-bg-soft); --card: var(--t-card);\n  --text: var(--t-text-primary); --text-sub: var(--t-text-secondary);\n  --border: var(--t-border);\n}", "consulting_kpmg": ":root {\n  --t-primary:#00338D; --t-primary-dark:#051C2C; --t-primary-mid:#3D6AA8; --t-accent:#FFE600;\n  --t-role-biz:#00338D;\n  --t-role-legal:#E11D48;\n  --t-role-fin:#0D9488;\n  --t-role-sys:#7C3AED;\n  --t-role-ext:#EA580C;\n  --t-lit-border:#059669; --t-lit-bg:#ECFDF5; --t-lit-text:#047857;\n  --t-part-border:#EA580C; --t-part-bg:#FFF7ED; --t-part-text:#C2410C;\n  --t-gap-border:#DC2626; --t-gap-bg:#FEF2F2; --t-gap-text:#B91C1C;\n  --t-text-primary:#0F172A; --t-text-secondary:#475569; --t-text-tertiary:#64748B;\n  --t-bg-soft:#F8FAFC; --t-bg-muted:#F1F5F9; --t-border:#CBD5E1; --t-card:#FFFFFF;\n  --t-hero-from:#051C2C; --t-hero-to:#00338D;\n  --t-group-blue:#EDF1F7; --t-group-teal:#F3F6F5;\n  --t-purple-light:#F1EDFB; --t-red-light:#FDEDED;\n  --t-primary-a08:#00338D14; --t-primary-a15:#00338D26; --t-accent-a55:#FFE6008C;\n}\n/* 旧 diagram 变量桥接 -> v2 主题（--t- 变量） */\n:root {\n  --blue: var(--t-primary); --blue-mid: var(--t-primary-mid); --blue-light: var(--t-group-blue);\n  --green: var(--t-lit-border); --green-light: var(--t-lit-bg);\n  --teal: var(--t-role-fin); --teal-light: var(--t-group-teal);\n  --purple: var(--t-role-sys); --purple-light: var(--t-purple-light);\n  --gray: var(--t-gap-border);\n  --orange: var(--t-accent); --orange-light: var(--t-part-bg);\n  --red: var(--t-role-legal); --red-light: var(--t-red-light);\n  --bg: var(--t-bg-soft); --card: var(--t-card);\n  --text: var(--t-text-primary); --text-sub: var(--t-text-secondary);\n  --border: var(--t-border);\n}", "corporate_navy": ":root {\n  --t-primary:#1E3A8A; --t-primary-dark:#101F4A; --t-primary-mid:#4A6BB8; --t-accent:#D97706;\n  --t-role-biz:#1E3A8A;\n  --t-role-legal:#DC2626;\n  --t-role-fin:#059669;\n  --t-role-sys:#7C3AED;\n  --t-role-ext:#D97706;\n  --t-lit-border:#009E73; --t-lit-bg:#E2F3EC; --t-lit-text:#00795A;\n  --t-part-border:#D55E00; --t-part-bg:#FBE7D9; --t-part-text:#B04900;\n  --t-gap-border:#4A5568; --t-gap-bg:#EDF0F4; --t-gap-text:#4A5568;\n  --t-text-primary:#111111; --t-text-secondary:#525252; --t-text-tertiary:#8A8A8A;\n  --t-bg-soft:#F8FAFC; --t-bg-muted:#EEF1F6; --t-border:#D8DEE9; --t-card:#FFFFFF;\n  --t-hero-from:#101F4A; --t-hero-to:#1E3A8A;\n  --t-group-blue:#EEF1F7; --t-group-teal:#F0F5F5;\n  --t-purple-light:#F1EDFB; --t-red-light:#FDEDED;\n  --t-primary-a08:#1E3A8A14; --t-primary-a15:#1E3A8A26; --t-accent-a55:#D977068C;\n}\n/* 旧 diagram 变量桥接 -> v2 主题（--t- 变量） */\n:root {\n  --blue: var(--t-primary); --blue-mid: var(--t-primary-mid); --blue-light: var(--t-group-blue);\n  --green: var(--t-lit-border); --green-light: var(--t-lit-bg);\n  --teal: var(--t-role-fin); --teal-light: var(--t-group-teal);\n  --purple: var(--t-role-sys); --purple-light: var(--t-purple-light);\n  --gray: var(--t-gap-border);\n  --orange: var(--t-accent); --orange-light: var(--t-part-bg);\n  --red: var(--t-role-legal); --red-light: var(--t-red-light);\n  --bg: var(--t-bg-soft); --card: var(--t-card);\n  --text: var(--t-text-primary); --text-sub: var(--t-text-secondary);\n  --border: var(--t-border);\n}", "product_charcoal": ":root {\n  --t-primary:#1C2644; --t-primary-dark:#0F1526; --t-primary-mid:#232F55; --t-accent:#C8A870;\n  --t-role-biz:#1C2644;\n  --t-role-legal:#B03A48;\n  --t-role-fin:#2E5E4E;\n  --t-role-sys:#5B4A8A;\n  --t-role-ext:#C8A870;\n  --t-lit-border:#009E73; --t-lit-bg:#E2F3EC; --t-lit-text:#00795A;\n  --t-part-border:#D55E00; --t-part-bg:#FBE7D9; --t-part-text:#B04900;\n  --t-gap-border:#4A5568; --t-gap-bg:#EDF0F4; --t-gap-text:#4A5568;\n  --t-text-primary:#1A2030; --t-text-secondary:#5A6270; --t-text-tertiary:#9AA0A8;\n  --t-bg-soft:#F7F6F2; --t-bg-muted:#ECE9E0; --t-border:#CAC4B4; --t-card:#FFFFFF;\n  --t-hero-from:#0F1526; --t-hero-to:#1C2644;\n  --t-group-blue:#EAEDF3; --t-group-teal:#EDF3F0;\n  --t-purple-light:#F1EDFB; --t-red-light:#FDEDED;\n  --t-primary-a08:#1C264414; --t-primary-a15:#1C264426; --t-accent-a55:#C8A8708C;\n}\n/* 旧 diagram 变量桥接 -> v2 主题（--t- 变量） */\n:root {\n  --blue: var(--t-primary); --blue-mid: var(--t-primary-mid); --blue-light: var(--t-group-blue);\n  --green: var(--t-lit-border); --green-light: var(--t-lit-bg);\n  --teal: var(--t-role-fin); --teal-light: var(--t-group-teal);\n  --purple: var(--t-role-sys); --purple-light: var(--t-purple-light);\n  --gray: var(--t-gap-border);\n  --orange: var(--t-accent); --orange-light: var(--t-part-bg);\n  --red: var(--t-role-legal); --red-light: var(--t-red-light);\n  --bg: var(--t-bg-soft); --card: var(--t-card);\n  --text: var(--t-text-primary); --text-sub: var(--t-text-secondary);\n  --border: var(--t-border);\n}"};</script>
+<link rel="stylesheet" href="_assets/editor.css">
+<script src="_assets/editor.js" defer></script>
+</head>
+<body data-edit-mode="preview">
+<div id="__editor_toolbar">
+  <button type="button" data-action="toggle-edit">编辑</button>
+  <button type="button" data-action="theme-panel">主题</button>
+  <button type="button" data-action="export">导出 HTML</button>
+  <button type="button" data-action="reset">重置</button>
+</div>
+<div id="__editor_color_panel"></div>
+
+    <section class="v2-page" id="cover">
+<div class="hero">
+  <div class="hero-inner has-stats">
+    <span class="hero-eyebrow" data-editable="true">兰亭（Folio）· 产品说明 v4.0</span>
+    <h1 class="hero-title" data-editable="true">装进 DSH 的材料生成引擎</h1>
+    <p class="hero-subtitle" data-editable="true">15 个原生工具 · 会话协议自动执行 · 换方法论不换引擎</p>
+    <div class="hero-meta"><span data-editable="true">v4.0 · DSH 原生版</span><span data-editable="true">2026-08-14</span><span data-editable="true">配套《技术白皮书 v4.0》</span></div>
+    <div class="hero-stats stats-bar" style="grid-template-columns: repeat(3, 1fr);"><div class="stat-card"><div class="stat-value num" data-editable="true">15<small>个</small></div><div class="stat-label" data-editable="true">原生工具</div></div><div class="stat-card"><div class="stat-value num" data-editable="true">0<small>key</small></div><div class="stat-label" data-editable="true">配置起步</div></div><div class="stat-card"><div class="stat-value num" data-editable="true">5<small>层</small></div><div class="stat-label" data-editable="true">插件架构</div></div></div>
+  </div>
+</div>
+    </section>
+    <section class="v2-page" id="toc">
+<span class="section-tag" data-editable="true">CONTENTS · 目录</span>
+<h2 class="action-title" data-editable="true">9 章读完：它是什么、装完怎么用、为什么选 DSH</h2>
+<div class="toc-cards"><div class="toc-card"><span class="toc-num" data-editable="true"></span><div class="toc-body"><div class="toc-title" data-editable="true">摘要</div></div></div><div class="toc-card"><span class="toc-num" data-editable="true"></span><div class="toc-body"><div class="toc-title" data-editable="true">痛点</div></div></div><div class="toc-card"><span class="toc-num" data-editable="true"></span><div class="toc-body"><div class="toc-title" data-editable="true">架构</div></div></div><div class="toc-card"><span class="toc-num" data-editable="true"></span><div class="toc-body"><div class="toc-title" data-editable="true">协作</div></div></div><div class="toc-card"><span class="toc-num" data-editable="true"></span><div class="toc-body"><div class="toc-title" data-editable="true">对比</div></div></div><div class="toc-card"><span class="toc-num" data-editable="true"></span><div class="toc-body"><div class="toc-title" data-editable="true">能力</div></div></div><div class="toc-card"><span class="toc-num" data-editable="true"></span><div class="toc-body"><div class="toc-title" data-editable="true">路线</div></div></div><div class="toc-card"><span class="toc-num" data-editable="true"></span><div class="toc-body"><div class="toc-title" data-editable="true">开始</div></div></div></div>
+    </section>
+    <section class="v2-page" id="summary">
+<span class="section-tag" data-editable="true">SECTION 1 · 摘要</span>
+<h2 class="action-title" data-editable="true">一条命令装好 15 个原生工具，会话纪律机器执行</h2>
+<p class="section-sub" data-editable="true">兰亭（Folio）是给咨询顾问用的材料生成引擎。它把「写方案、做 PPT、报价、记住每个客户」这套长活拆成五段，机械的部分全部交给确定性代码，你只做判断和确认。</p>
+<div class="kpi-cards" style="grid-template-columns: repeat(3, 1fr);"><div class="kpi-card"><div class="kpi-label" data-editable="true">原生工具</div><div class="kpi-nums"><span class="kpi-from num" data-editable="true">0</span><span class="kpi-arrow">→</span><span class="kpi-to num" data-editable="true">15</span></div><div class="kpi-note" data-editable="true">记忆面 9 + 质量面 6</div></div><div class="kpi-card"><div class="kpi-label" data-editable="true">配置起步</div><div class="kpi-nums"><span class="kpi-from num" data-editable="true">2 个 key</span><span class="kpi-arrow">→</span><span class="kpi-to num" data-editable="true">0 个 key</span></div><div class="kpi-note" data-editable="true">读图与搜索由 DSH 原生补位</div></div><div class="kpi-card"><div class="kpi-label" data-editable="true">会话收尾</div><div class="kpi-nums"><span class="kpi-from num" data-editable="true">靠 AI 记得</span><span class="kpi-arrow">→</span><span class="kpi-to num" data-editable="true">事件自动执行</span></div><div class="kpi-note" data-editable="true">会话关闭自动存档</div></div></div>
+<div class="info-cards" style="grid-template-columns: repeat(3, 1fr);"><div class="info-card"><h4 data-editable="true">深度适配 DSH</h4><ul><li data-editable="true">工具、守卫、模式、事件四样全走官方扩展面</li><li data-editable="true">不 fork 内核，一行配置升级</li></ul></div><div class="info-card"><h4 data-editable="true">方法论可换</h4><ul><li data-editable="true">Folio Packs：换行业只换方法论包</li><li data-editable="true">第三方只写 YAML 与手册，不碰代码</li></ul></div><div class="info-card"><h4 data-editable="true">极致特化</h4><ul><li data-editable="true">20 页材料进，四格式带质量门出</li><li data-editable="true">每份产出过 5 道机械检查</li></ul></div></div>
+    </section>
+    <section class="v2-page" id="pain">
+<span class="section-tag" data-editable="true">SECTION 2 · 为什么是 DSH</span>
+<h2 class="action-title" data-editable="true">三个 GUI 工具改不了的地方，DSH 都能改</h2>
+<div class="pain-cards" style="grid-template-columns: repeat(4, 1fr);"><div class="pain-card"><div class="pain-head"><span class="pain-title" data-editable="true">改不了给 AI 的提示词</span><span class="pain-badge lv-P0">P0</span></div><div class="pain-impact" data-editable="true">Codex 类工具写死</div><div class="pain-body" data-editable="true">兰亭模式是版本可控的配置：换人、换工作方式、换行业，三层独立换装，不用等官方更新</div></div><div class="pain-card"><div class="pain-head"><span class="pain-title" data-editable="true">工具是命令行黑盒</span><span class="pain-badge lv-P1">P1</span></div><div class="pain-impact" data-editable="true">参数靠猜，报错靠读</div><div class="pain-body" data-editable="true">15 个命令变成带参数校验的原生工具卡。参数写错，调用前就被拦下并告诉你哪里错</div></div><div class="pain-card"><div class="pain-head"><span class="pain-title" data-editable="true">会话纪律靠 AI 自觉</span><span class="pain-badge lv-P1">P1</span></div><div class="pain-impact" data-editable="true">忘跑保存、忘跑审计</div><div class="pain-body" data-editable="true">新会话自动提醒入口协议；会话关闭自动保存客户档案。纪律从「AI 记得」变成「宿主保证」</div></div><div class="pain-card"><div class="pain-head"><span class="pain-title" data-editable="true">记忆两套对不上</span><span class="pain-badge lv-P2">P2</span></div><div class="pain-impact" data-editable="true">宿主日志与客户档案脱节</div><div class="pain-body" data-editable="true">客户名从工具调用里自动提取，会话关闭时自动归入对应客户的档案</div></div></div>
+    </section>
+    <section class="v2-page" id="arch">
+<span class="section-tag" data-editable="true">SECTION 3 · 架构</span>
+<h2 class="action-title" data-editable="true">五层：内核一行不改，DSH 层做厚</h2>
+<p class="section-sub" data-editable="true">L0 内核保持平台无关（Trae、Kimi 同样可用）；L1-L4 是 DSH 原生插件层，全部走官方扩展面。</p>
+<section class="diagram" data-diagram-type="architecture" data-subtype="layered">
+  <div class="dg-eyebrow">architecture / layered</div>
+  <div class="dg-title" data-editable="true">兰亭 × DSH 五层架构</div>
+  <div class="dg-body">
+<div style="display:flex;gap:14px;align-items:stretch;margin-bottom:12px;"><div style="flex:0 0 108px;border-radius:8px;background:#1B5E8A;color:#FFFFFF;font-weight:700;font-size:14px;display:flex;align-items:center;justify-content:center;text-align:center;padding:12px 8px;" data-editable="true">L4 方法论层 · Folio Packs</div><div style="flex:1;background:#F7F8FA;border-radius:8px;padding:14px 18px;"><span data-editable="true" style="display:inline-block;background:#EDF2F7;color:#1B5E8A;border-radius:4px;padding:4px 10px;font-size:12px;font-weight:600;margin:3px 6px 3px 0;">skill 即方法论</span><span data-editable="true" style="display:inline-block;background:#EDF2F7;color:#1B5E8A;border-radius:4px;padding:4px 10px;font-size:12px;font-weight:600;margin:3px 6px 3px 0;">轻量/标准/深度三档</span><span data-editable="true" style="display:inline-block;background:#EDF2F7;color:#1B5E8A;border-radius:4px;padding:4px 10px;font-size:12px;font-weight:600;margin:3px 6px 3px 0;">第三方只写 YAML</span></div></div>
+<div style="display:flex;gap:14px;align-items:stretch;margin-bottom:12px;"><div style="flex:0 0 108px;border-radius:8px;background:#2F7D5F;color:#FFFFFF;font-weight:700;font-size:14px;display:flex;align-items:center;justify-content:center;text-align:center;padding:12px 8px;" data-editable="true">L3 事件层 · 会话协议</div><div style="flex:1;background:#F7F8FA;border-radius:8px;padding:14px 18px;"><span data-editable="true" style="display:inline-block;background:#F0FAF5;color:#2F7D5F;border-radius:4px;padding:4px 10px;font-size:12px;font-weight:600;margin:3px 6px 3px 0;">新会话自动提醒</span><span data-editable="true" style="display:inline-block;background:#F0FAF5;color:#2F7D5F;border-radius:4px;padding:4px 10px;font-size:12px;font-weight:600;margin:3px 6px 3px 0;">会话关闭自动保存</span><span data-editable="true" style="display:inline-block;background:#F0FAF5;color:#2F7D5F;border-radius:4px;padding:4px 10px;font-size:12px;font-weight:600;margin:3px 6px 3px 0;">客户名自动提取</span></div></div>
+<div style="display:flex;gap:14px;align-items:stretch;margin-bottom:12px;"><div style="flex:0 0 108px;border-radius:8px;background:#2E8B8B;color:#FFFFFF;font-weight:700;font-size:14px;display:flex;align-items:center;justify-content:center;text-align:center;padding:12px 8px;" data-editable="true">L2 工具层 · 15 原生工具</div><div style="flex:1;background:#F7F8FA;border-radius:8px;padding:14px 18px;"><span data-editable="true" style="display:inline-block;background:#EDF6F6;color:#2E8B8B;border-radius:4px;padding:4px 10px;font-size:12px;font-weight:600;margin:3px 6px 3px 0;">记忆面 9 个</span><span data-editable="true" style="display:inline-block;background:#EDF6F6;color:#2E8B8B;border-radius:4px;padding:4px 10px;font-size:12px;font-weight:600;margin:3px 6px 3px 0;">质量面 6 个</span><span data-editable="true" style="display:inline-block;background:#EDF6F6;color:#2E8B8B;border-radius:4px;padding:4px 10px;font-size:12px;font-weight:600;margin:3px 6px 3px 0;">参数校验加结构化返回</span></div></div>
+<div style="display:flex;gap:14px;align-items:stretch;margin-bottom:12px;"><div style="flex:0 0 108px;border-radius:8px;background:#7B68AE;color:#FFFFFF;font-weight:700;font-size:14px;display:flex;align-items:center;justify-content:center;text-align:center;padding:12px 8px;" data-editable="true">L1 模式层 · 兰亭 preset</div><div style="flex:1;background:#F7F8FA;border-radius:8px;padding:14px 18px;"><span data-editable="true" style="display:inline-block;background:#F3F0F9;color:#7B68AE;border-radius:4px;padding:4px 10px;font-size:12px;font-weight:600;margin:3px 6px 3px 0;">persona 自定义</span><span data-editable="true" style="display:inline-block;background:#F3F0F9;color:#7B68AE;border-radius:4px;padding:4px 10px;font-size:12px;font-weight:600;margin:3px 6px 3px 0;">五段 SOP 注入</span><span data-editable="true" style="display:inline-block;background:#F3F0F9;color:#7B68AE;border-radius:4px;padding:4px 10px;font-size:12px;font-weight:600;margin:3px 6px 3px 0;">minimal 蓝本</span></div></div>
+<div style="display:flex;gap:14px;align-items:stretch;margin-bottom:12px;"><div style="flex:0 0 108px;border-radius:8px;background:#A0AEC0;color:#FFFFFF;font-weight:700;font-size:14px;display:flex;align-items:center;justify-content:center;text-align:center;padding:12px 8px;" data-editable="true">L0 内核层 · 63 命令</div><div style="flex:1;background:#F7F8FA;border-radius:8px;padding:14px 18px;"><span data-editable="true" style="display:inline-block;background:#FFFFFF;color:#718096;border-radius:4px;padding:4px 10px;font-size:12px;font-weight:600;margin:3px 6px 3px 0;">确定性渲染</span><span data-editable="true" style="display:inline-block;background:#FFFFFF;color:#718096;border-radius:4px;padding:4px 10px;font-size:12px;font-weight:600;margin:3px 6px 3px 0;">质量门禁链</span><span data-editable="true" style="display:inline-block;background:#FFFFFF;color:#718096;border-radius:4px;padding:4px 10px;font-size:12px;font-weight:600;margin:3px 6px 3px 0;">平台无关</span></div></div>
+  </div>
+</section>
+    </section>
+    <section class="v2-page" id="flow">
+<span class="section-tag" data-editable="true">SECTION 4 · 协作</span>
+<h2 class="action-title" data-editable="true">材料进，方案出，8 步全程机械兜底</h2>
+<section class="diagram" data-diagram-type="flow" data-subtype="sequence">
+  <div class="dg-eyebrow">flow / sequence</div>
+  <div class="dg-title" data-editable="true">从「帮我做方案」到交付的 8 步</div>
+  <div class="dg-body">
+<svg class="dg" viewBox="0 0 1200 222.0" xmlns="http://www.w3.org/2000/svg">
+<defs>
+<filter id="dgm-shadow" x="-30%" y="-30%" width="160%" height="160%"><feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#0F172A" flood-opacity="0.12"/></filter>
+<marker id="dgm-arr" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#1B5E8A"/></marker>
+<marker id="dgm-arr-g" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#2F7D5F"/></marker>
+</defs>
+<path d="M159.0,108.0 C189.0,108.0 153.0,108.0 183.0,108.0" stroke="#1B5E8A" stroke-width="2" fill="none" marker-end="url(#dgm-arr)"/>
+<path d="M302.0,108.0 C332.0,108.0 296.0,108.0 326.0,108.0" stroke="#1B5E8A" stroke-width="2" fill="none" marker-end="url(#dgm-arr)"/>
+<path d="M445.0,108.0 C475.0,108.0 439.0,108.0 469.0,108.0" stroke="#1B5E8A" stroke-width="2" fill="none" marker-end="url(#dgm-arr)"/>
+<path d="M588.0,108.0 C618.0,108.0 582.0,100.0 612.0,100.0" stroke="#1B5E8A" stroke-width="2" fill="none" marker-end="url(#dgm-arr)"/>
+<path d="M731.0,100.0 C761.0,100.0 725.0,108.0 755.0,108.0" stroke="#1B5E8A" stroke-width="2" fill="none" marker-end="url(#dgm-arr)"/>
+<path d="M874.0,108.0 C904.0,108.0 868.0,100.0 898.0,100.0" stroke="#1B5E8A" stroke-width="2" fill="none" marker-end="url(#dgm-arr)"/>
+<path d="M1017.0,100.0 C1047.0,100.0 1011.0,100.0 1041.0,100.0" stroke="#1B5E8A" stroke-width="2" fill="none" marker-end="url(#dgm-arr)"/>
+<rect x="40.0" y="64" width="119.0" height="88.0" rx="8" fill="#FFFFFF" stroke="#1B5E8A" stroke-width="1.5" filter="url(#dgm-shadow)"/>
+<rect x="40.0" y="64" width="5" height="88.0" rx="2" fill="#1B5E8A"/>
+<circle cx="40.0" cy="64" r="10" fill="#1B5E8A"/>
+<text x="40.0" y="67.5" font-size="10" font-weight="700" fill="#FFFFFF" text-anchor="middle">1</text>
+<text x="99.5" y="88.4" font-size="13" font-weight="600" fill="#1A1A1A" text-anchor="middle">入口协议</text>
+<text x="99.5" y="118.8" font-size="11" fill="#718096" text-anchor="middle">新会话自动提醒，判</text>
+<text x="99.5" y="133.1" font-size="11" fill="#718096" text-anchor="middle">层级加召回</text>
+<rect x="183.0" y="64" width="119.0" height="88.0" rx="8" fill="#FFFFFF" stroke="#1B5E8A" stroke-width="1.5" filter="url(#dgm-shadow)"/>
+<rect x="183.0" y="64" width="5" height="88.0" rx="2" fill="#1B5E8A"/>
+<circle cx="183.0" cy="64" r="10" fill="#1B5E8A"/>
+<text x="183.0" y="67.5" font-size="10" font-weight="700" fill="#FFFFFF" text-anchor="middle">2</text>
+<text x="242.5" y="88.4" font-size="13" font-weight="600" fill="#1A1A1A" text-anchor="middle">材料入库</text>
+<text x="242.5" y="118.8" font-size="11" fill="#718096" text-anchor="middle">建档、切片、双路索</text>
+<text x="242.5" y="133.1" font-size="11" fill="#718096" text-anchor="middle">引</text>
+<rect x="326.0" y="64" width="119.0" height="88.0" rx="8" fill="#FFFFFF" stroke="#1B5E8A" stroke-width="1.5" filter="url(#dgm-shadow)"/>
+<rect x="326.0" y="64" width="5" height="88.0" rx="2" fill="#1B5E8A"/>
+<circle cx="326.0" cy="64" r="10" fill="#1B5E8A"/>
+<text x="326.0" y="67.5" font-size="10" font-weight="700" fill="#FFFFFF" text-anchor="middle">3</text>
+<text x="385.5" y="88.4" font-size="13" font-weight="600" fill="#1A1A1A" text-anchor="middle">追问确认</text>
+<text x="385.5" y="118.8" font-size="11" fill="#718096" text-anchor="middle">拿不准就问，引用原</text>
+<text x="385.5" y="133.1" font-size="11" fill="#718096" text-anchor="middle">文</text>
+<rect x="469.0" y="64" width="119.0" height="88.0" rx="8" fill="#FFFFFF" stroke="#1B5E8A" stroke-width="1.5" filter="url(#dgm-shadow)"/>
+<rect x="469.0" y="64" width="5" height="88.0" rx="2" fill="#1B5E8A"/>
+<circle cx="469.0" cy="64" r="10" fill="#1B5E8A"/>
+<text x="469.0" y="67.5" font-size="10" font-weight="700" fill="#FFFFFF" text-anchor="middle">4</text>
+<text x="528.5" y="88.4" font-size="13" font-weight="600" fill="#1A1A1A" text-anchor="middle">写骨架</text>
+<text x="528.5" y="118.8" font-size="11" fill="#718096" text-anchor="middle">spec 门禁，没确认</text>
+<text x="528.5" y="133.1" font-size="11" fill="#718096" text-anchor="middle">不生成</text>
+<rect x="612.0" y="64" width="119.0" height="72" rx="8" fill="#FFFFFF" stroke="#1B5E8A" stroke-width="1.5" filter="url(#dgm-shadow)"/>
+<rect x="612.0" y="64" width="5" height="72" rx="2" fill="#1B5E8A"/>
+<circle cx="612.0" cy="64" r="10" fill="#1B5E8A"/>
+<text x="612.0" y="67.5" font-size="10" font-weight="700" fill="#FFFFFF" text-anchor="middle">5</text>
+<text x="671.5" y="88.4" font-size="13" font-weight="600" fill="#1A1A1A" text-anchor="middle">生成 HTML</text>
+<text x="671.5" y="118.8" font-size="11" fill="#718096" text-anchor="middle">同源出 PPT 工程</text>
+<rect x="755.0" y="64" width="119.0" height="88.0" rx="8" fill="#FFFFFF" stroke="#1B5E8A" stroke-width="1.5" filter="url(#dgm-shadow)"/>
+<rect x="755.0" y="64" width="5" height="88.0" rx="2" fill="#1B5E8A"/>
+<circle cx="755.0" cy="64" r="10" fill="#1B5E8A"/>
+<text x="755.0" y="67.5" font-size="10" font-weight="700" fill="#FFFFFF" text-anchor="middle">6</text>
+<text x="814.5" y="88.4" font-size="13" font-weight="600" fill="#1A1A1A" text-anchor="middle">机械质检</text>
+<text x="814.5" y="118.8" font-size="11" fill="#718096" text-anchor="middle">格式、覆盖、独立审</text>
+<text x="814.5" y="133.1" font-size="11" fill="#718096" text-anchor="middle">稿</text>
+<rect x="898.0" y="64" width="119.0" height="72" rx="8" fill="#FFFFFF" stroke="#1B5E8A" stroke-width="1.5" filter="url(#dgm-shadow)"/>
+<rect x="898.0" y="64" width="5" height="72" rx="2" fill="#1B5E8A"/>
+<circle cx="898.0" cy="64" r="10" fill="#1B5E8A"/>
+<text x="898.0" y="67.5" font-size="10" font-weight="700" fill="#FFFFFF" text-anchor="middle">7</text>
+<text x="957.5" y="88.4" font-size="13" font-weight="600" fill="#1A1A1A" text-anchor="middle">你确认转 PPT</text>
+<text x="957.5" y="118.8" font-size="11" fill="#718096" text-anchor="middle">原生形状，客户可改</text>
+<rect x="1041.0" y="64" width="119.0" height="72" rx="8" fill="#FFFFFF" stroke="#1B5E8A" stroke-width="1.5" filter="url(#dgm-shadow)"/>
+<rect x="1041.0" y="64" width="5" height="72" rx="2" fill="#1B5E8A"/>
+<circle cx="1041.0" cy="64" r="10" fill="#1B5E8A"/>
+<text x="1041.0" y="67.5" font-size="10" font-weight="700" fill="#FFFFFF" text-anchor="middle">8</text>
+<text x="1100.5" y="88.4" font-size="13" font-weight="600" fill="#1A1A1A" text-anchor="middle">自动存档</text>
+<text x="1100.5" y="118.8" font-size="11" fill="#718096" text-anchor="middle">会话关闭自动保存</text>
+</svg>
+  </div>
+</section>
+<div class="legend-bar"><span class="legend-item"><i class="legend-swatch sw-keep"></i><span data-editable="true">八步按序执行，其中两步需要你确认</span></span></div>
+    </section>
+    <section class="v2-page" id="compare">
+<span class="section-tag" data-editable="true">SECTION 5 · 对比</span>
+<h2 class="action-title" data-editable="true">同一个命令，三种用法，差距在体验</h2>
+    <table>
+        <thead>
+            <tr>
+        <th>场景</th>
+        <th>DSH 原生（v4）</th>
+        <th>CLI 外挂（v3）</th>
+        <th>其他 GUI</th>
+            </tr>
+        </thead>
+        <tbody>
+        <tr>
+            <td data-editable="true">查客户状态</td>
+            <td data-editable="true">folio_status 工具卡</td>
+            <td data-editable="true">pwsh 敲命令</td>
+            <td data-editable="true">AI 自己翻文件</td>
+        </tr>
+        <tr>
+            <td data-editable="true">生成前确认</td>
+            <td data-editable="true">spec 门禁加工具提示</td>
+            <td data-editable="true">spec 门禁靠 AI 记得</td>
+            <td data-editable="true">无此机制</td>
+        </tr>
+        <tr>
+            <td data-editable="true">会话结束</td>
+            <td data-editable="true">事件自动保存</td>
+            <td data-editable="true">AI 记得才跑</td>
+            <td data-editable="true">无此机制</td>
+        </tr>
+        <tr>
+            <td data-editable="true">改 AI 提示词</td>
+            <td data-editable="true">preset 配置文件</td>
+            <td data-editable="true">改说明文件全文</td>
+            <td data-editable="true">改不了</td>
+        </tr>
+        <tr>
+            <td data-editable="true">拦截违规操作</td>
+            <td data-editable="true">守卫插件机械拦</td>
+            <td data-editable="true">靠约定自觉</td>
+            <td data-editable="true">无此机制</td>
+        </tr>
+</tbody>
+    </table>
+    </section>
+    <section class="v2-page" id="capability">
+<span class="section-tag" data-editable="true">SECTION 6 · 能力</span>
+<h2 class="action-title" data-editable="true">15 个原生工具，加守卫与事件插件</h2>
+    <table>
+        <thead>
+            <tr>
+        <th>层</th>
+        <th>清单</th>
+        <th>干什么</th>
+            </tr>
+        </thead>
+        <tbody>
+        <tr>
+            <td data-editable="true">模式层</td>
+            <td data-editable="true">兰亭 preset</td>
+            <td data-editable="true">persona 加五段 SOP，minimal 蓝本</td>
+        </tr>
+        <tr>
+            <td data-editable="true">工具 · 记忆</td>
+            <td data-editable="true">folio_recall / folio_read / folio_graph_query 等 9 个</td>
+            <td data-editable="true">状态、召回、读档、图谱查询</td>
+        </tr>
+        <tr>
+            <td data-editable="true">工具 · 记忆</td>
+            <td data-editable="true">folio_session_start / folio_save / folio_load / folio_pending</td>
+            <td data-editable="true">入口协议、保存、加载、待办</td>
+        </tr>
+        <tr>
+            <td data-editable="true">工具 · 质量</td>
+            <td data-editable="true">folio_verify / folio_review / folio_cite_audit</td>
+            <td data-editable="true">机械门禁、独立审稿、引用审计</td>
+        </tr>
+        <tr>
+            <td data-editable="true">工具 · 质量</td>
+            <td data-editable="true">folio_audit / folio_theme_verify / folio_spec_diff</td>
+            <td data-editable="true">全系统审计、主题覆盖、骨架对比</td>
+        </tr>
+        <tr>
+            <td data-editable="true">事件层</td>
+            <td data-editable="true">folio-events 插件</td>
+            <td data-editable="true">入口提醒、客户名提取、关闭自动保存</td>
+        </tr>
+        <tr>
+            <td data-editable="true">守卫层</td>
+            <td data-editable="true">presales-guard 0.1.0-rc.2</td>
+            <td data-editable="true">拦直写、拦非 CLI python、拦 shell 直写</td>
+        </tr>
+        <tr>
+            <td data-editable="true">内核层</td>
+            <td data-editable="true">63 个 CLI 命令</td>
+            <td data-editable="true">确定性渲染、质量门禁，平台无关</td>
+        </tr>
+</tbody>
+    </table>
+    </section>
+    <section class="v2-page" id="roadmap">
+<span class="section-tag" data-editable="true">SECTION 7 · 路线</span>
+<h2 class="action-title" data-editable="true">已落地 P1，下一步 P2 图谱投影</h2>
+<section class="diagram" data-diagram-type="timeline" data-subtype="horizontal">
+  <div class="dg-eyebrow">timeline / horizontal</div>
+  <div class="dg-title" data-editable="true">演进路线</div>
+  <div class="dg-body">
+<div style="display:flex;align-items:stretch;">
+<div style="flex:1;background:#FFFFFF;border:1px solid #E2E8F0;border-top:4px solid #1B5E8A;border-radius:8px;padding:16px 18px;"><div style="font-size:11px;font-weight:700;letter-spacing:1px;color:#1B5E8A;" data-editable="true">08-14</div><div style="font-size:16px;font-weight:700;margin:4px 0 2px;" data-editable="true">v1.0 已发布</div><div style="background:#EDF2F7;color:#1B5E8A;border-radius:6px;font-size:12px;font-weight:600;padding:8px 10px;margin-top:10px;" data-editable="true">skill 加守卫加安装脚本</div></div>
+<div style="flex:0 0 34px;display:flex;align-items:center;justify-content:center;"><div style="border-left:16px solid #4A7FA5;border-top:9px solid transparent;border-bottom:9px solid transparent;"></div></div>
+<div style="flex:1;background:#FFFFFF;border:1px solid #E2E8F0;border-top:4px solid #1B5E8A;border-radius:8px;padding:16px 18px;"><div style="font-size:11px;font-weight:700;letter-spacing:1px;color:#1B5E8A;" data-editable="true">08-14</div><div style="font-size:16px;font-weight:700;margin:4px 0 2px;" data-editable="true">P1 已落地</div><div style="background:#EDF2F7;color:#1B5E8A;border-radius:6px;font-size:12px;font-weight:600;padding:8px 10px;margin-top:10px;" data-editable="true">15 工具加事件插件</div></div>
+<div style="flex:0 0 34px;display:flex;align-items:center;justify-content:center;"><div style="border-left:16px solid #4A7FA5;border-top:9px solid transparent;border-bottom:9px solid transparent;"></div></div>
+<div style="flex:1;background:#FFFFFF;border:1px solid #E2E8F0;border-top:4px solid #1B5E8A;border-radius:8px;padding:16px 18px;"><div style="font-size:11px;font-weight:700;letter-spacing:1px;color:#1B5E8A;" data-editable="true">下一步</div><div style="font-size:16px;font-weight:700;margin:4px 0 2px;" data-editable="true">v1.2 规划</div><div style="background:#EDF2F7;color:#1B5E8A;border-radius:6px;font-size:12px;font-weight:600;padding:8px 10px;margin-top:10px;" data-editable="true">兰亭模式 v2 加图谱投影</div></div>
+<div style="flex:0 0 34px;display:flex;align-items:center;justify-content:center;"><div style="border-left:16px solid #4A7FA5;border-top:9px solid transparent;border-bottom:9px solid transparent;"></div></div>
+<div style="flex:1;background:#FFFFFF;border:1px solid #E2E8F0;border-top:4px solid #2F7D5F;border-radius:8px;padding:16px 18px;"><div style="font-size:11px;font-weight:700;letter-spacing:1px;color:#2F7D5F;" data-editable="true">后续</div><div style="font-size:16px;font-weight:700;margin:4px 0 2px;" data-editable="true">v1.3 规划</div><div style="background:#F0FAF5;color:#2F7D5F;border-radius:6px;font-size:12px;font-weight:600;padding:8px 10px;margin-top:10px;" data-editable="true">侧栏面板加 Packs 管理器</div></div>
+</div>
+  </div>
+</section>
+    </section>
+    <section class="v2-page" id="start">
+<span class="section-tag" data-editable="true">SECTION 8 · 开始</span>
+<h2 class="action-title" data-editable="true">三步装好，今天就能用</h2>
+<div class="info-cards" style="grid-template-columns: repeat(3, 1fr);"><div class="info-card"><h4 data-editable="true">① 装</h4><ul><li data-editable="true">跑 install-folio-plugins.ps1</li><li data-editable="true">重启 dsh web 生效</li></ul></div><div class="info-card"><h4 data-editable="true">② 用</h4><ul><li data-editable="true">新会话自动出现入口协议提醒</li><li data-editable="true">问「你有哪些 folio 工具」即可上手</li></ul></div><div class="info-card"><h4 data-editable="true">③ 换</h4><ul><li data-editable="true">换行业装对应 Folio Pack</li><li data-editable="true">换工作方式改 preset 的 SOP 段</li></ul></div></div>
+    </section>
+</body>
+</html>

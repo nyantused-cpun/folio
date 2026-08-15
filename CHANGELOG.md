@@ -1,0 +1,48 @@
+# Changelog
+
+> 版本线说明：本仓库记录**对外发布线**（Folio），与内部工作区版本线（售前助手 v3.x）相互独立、不对齐。只有值得对外说的事才升版本。
+
+## [1.0.0] - 2026-08-15
+
+首个正式发布。内核经多年内部实战迭代（60+ 命令、1000+ 测试用例），本次以兰亭（Folio）品牌开源。
+
+### 核心能力（五段价值链）
+
+- **接入材料（Intake）**：客户建档、inbox 归档、招标/PDF/PPT 解析、切片与双路索引（BM25 + 可选语义索引）
+- **建立记忆（Chronicle）**：决策记录、客户档案、世界书知识图、语义召回（零配置降级纯 BM25）
+- **应用方法论（Craft）**：skill 路由 + 场景大纲 + 主题守卫 + 去 AI 化；方法论可换可组合（Folio Packs，创作指南见 `skills/packs-authoring`）
+- **生成产出（Press）**：spec 协议 → HTML / PPTX / DOCX / 报价同源双输出；33 种图形、10 种页面构件、16 种版式
+- **守住质量（Proof）**：confirmed 门禁、verify、独立审查（review/adversarial）、引用审计、美学/讲法观察
+
+### 宿主适配
+
+- 深度适配 DSH：skills 原生识别、L0 守卫插件、agent preset、能力分级（L0 零 key 起步）
+- `LLM_MODE=host`：DSH 下 5 个 LLM 命令不依赖云端 key，推理交由宿主 AI 执行
+- 读图/搜索/独立审查在 DSH 下由宿主原生覆盖；独立 CLI 场景按能力插槽逐级解锁（见 `docs/能力配置引导`）
+
+## [1.0.1] - 2026-08-14（rc）
+
+P1 插件层随 v1.0 发布线合入 `plugins/`（运行级验证待 dsh web 重启后执行，见各插件 README §验证）。
+
+### 新增
+
+- **`@folio/dsh-tools`**：15 个 DSH 原生工具（defineTool 注册）——记忆面 9（status/pending/recall/read/chunk-read/graph-query/session-start/save/load）+ 质量面 6（verify/review/cite-audit/audit/theme-verify/spec-diff）；参数 schema 校验 + subprocess 桥 + 结构化输出；工具定义纯数据表（defs.js）可独立单测
+- **`@folio/dsh-events`**：会话协议事件插件——`agent/session-start` 注入入口协议提醒、`session/event` 提取客户名、`agent/disposed` 自动 save（60s 冷却）；纯逻辑（state.js）单测覆盖
+- **`setup/install-folio-plugins.ps1`**：幂等安装/验证/卸载（Junction ×2 + cordis.patch.yml insert，原子写 + 锁 + 备份）
+- 发布版插件 Folio 安装根自动解析（env FOLIO_HOME 优先，其次包位置上溯找 _cli.py，不硬编码路径）
+
+### 修复
+
+- **guard 0.1.0-rc.2**：补 shell 直写检测（checkShellWrite：写操作符 × output|inbox|refs 路径段）——L4 实测旧版 pwsh `Set-Content` 直写 output/ 交付物可绕开 `fs/write-intent` 事件面；发布版 PROJECT_DIR 默认改 `process.cwd()`
+
+### 质量与安全
+
+- 防幻觉防线：生成前门禁 + 生成后 verify + 独立审查 + 会话审计
+- 去 AI 化机械检查（禁词库、证据边界、语感样本）
+- 全库脱敏：发布版不含任何客户数据；测试基线已裁剪
+
+### 已知限制（v1.0）
+
+- 首发平台 Windows；macOS/Linux 安装脚本待补
+- PPT 转换工具链依赖 node，v0.1 期间需自备（HTML/DOCX/报价不受影响）
+- `domain-pack.yml` 方法论包契约（机械校验）计划 v1.1

@@ -1,0 +1,33 @@
+# 敏感与本地文件
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.pytest_tmp/
+.ruff_cache/
+.venv/
+
+# Node
+node_modules/
+
+# 运行时数据与产出（引擎自建，不入库）
+_knowledge/
+output/
+inbox/
+_archive/
+.versions/
+_assets/
+
+# 系统残留
+_tmp_*/
+*.bak
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/

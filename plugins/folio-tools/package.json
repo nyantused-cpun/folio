@@ -1,0 +1,26 @@
+{
+  "name": "@folio/dsh-tools",
+  "description": "兰亭 CLI 命令工具化：记忆面 9 工具 + 质量面 6 工具（defineTool 注册，spawn venv _cli.py）",
+  "version": "0.1.0-rc.1",
+  "type": "module",
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "verifiedAgainst": {
+      "dshVersion": "0.1.0-rc.6",
+      "evidenceLevel": "L1 源码级（defineTool/subprocess 接口逐行核实）；L4 运行级待 dsh web 重启后执行",
+      "testedAt": "2026-08-14"
+    }
+  },
+  "license": "MIT",
+  "peerDependencies": {
+    "@deepseek-ai/dsh-agent": "^0.1.0-rc.6",
+    "@deepseek-ai/dsh-tools": "^0.1.0-rc.6",
+    "@deepseek-ai/cordis": "^4.0.1"
+  }
+}

@@ -1,0 +1,88 @@
+/* 售前助手 HTML 编辑器工具条（D-091） */
+#__editor_toolbar {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  z-index: 9999;
+  display: flex;
+  gap: 8px;
+  font-family: "Helvetica Neue", Helvetica, Arial, "Microsoft YaHei", sans-serif;
+  opacity: 0.12;
+  transition: opacity 0.25s ease;
+}
+#__editor_toolbar:hover, body[data-edit-mode="edit"] #__editor_toolbar {
+  opacity: 1;
+}
+#__editor_toolbar button {
+  background: #1B5E8A;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 8px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(27, 94, 138, 0.25);
+  opacity: 0.92;
+}
+#__editor_toolbar button:hover { opacity: 1; }
+#__editor_toolbar button[data-action="reset"] { background: #718096; }
+
+#__editor_color_panel {
+  position: fixed;
+  top: 60px;
+  right: 16px;
+  z-index: 9999;
+  display: none;
+  background: #fff;
+  border: 1px solid #E2E8F0;
+  border-radius: 10px;
+  padding: 14px 16px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  font-family: "Helvetica Neue", Helvetica, Arial, "Microsoft YaHei", sans-serif;
+  font-size: 12px;
+}
+#__editor_color_panel.open { display: block; }
+#__editor_color_panel .color-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+  cursor: pointer;
+}
+#__editor_color_panel .color-row input[type="color"] {
+  width: 32px;
+  height: 24px;
+  border: 1px solid #E2E8F0;
+  border-radius: 4px;
+  padding: 0;
+  cursor: pointer;
+}
+/* 主题切换下拉（v2.0 §9.4） */
+#__editor_color_panel .color-row select {
+  font-size: 12px;
+  padding: 4px 6px;
+  border: 1px solid #E2E8F0;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+/* 编辑模式可视化提示 */
+body[data-edit-mode="edit"] [data-editable] {
+  outline: 1px dashed rgba(27, 94, 138, 0.4);
+  outline-offset: 2px;
+  cursor: text;
+}
+body[data-edit-mode="edit"] [data-editable]:hover {
+  outline-color: #1B5E8A;
+  background: rgba(27, 94, 138, 0.04);
+}
+body[data-edit-mode="edit"] [data-editable]:focus {
+  outline: 2px solid #1B5E8A;
+  background: rgba(27, 94, 138, 0.06);
+}
+
+/* 打印时隐藏工具条 */
+@media print {
+  #__editor_toolbar, #__editor_color_panel { display: none !important; }
+}
