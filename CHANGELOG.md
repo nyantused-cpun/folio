@@ -2,6 +2,25 @@
 
 > 版本线说明：本仓库记录**对外发布线**（Folio），与内部工作区版本线（售前助手 v3.x）相互独立、不对齐。只有值得对外说的事才升版本。
 
+## [1.0.1] - 2026-08-15
+
+### 修复
+
+- **guard 0.1.0-rc.4（作用域隔离）**：guard 保持 profile 全局挂载（L0 防线不能进 preset），但 shell/python 拦截仅对「售前项目内」命令生效（`isCommandInProject` 按会话 cwd/workdir 判定），解决「切项目被兰亭污染」；发布版保留 `FOLIO_HOME` / `process.cwd()` 路径解析，不硬编码作者路径。
+- **@folio/dsh-events 1.0.1（作用域隔离改造）**：插件移入 pre-sales preset 层；原 `session/event` 实时观察（preset 内收不到 root scope 广播）改由 `agent/disposed` 扫描 `agent.session.events` 提取客户名。
+- **inbox 命名统一**：`src/_inbox_scan.py` 由 `_inbox` 改 `inbox`（无下划线=用户 I/O，下划线=引擎私有）。
+
+### 新增
+
+- **agent preset 入仓**：`preset/agent.cordis.yml` 模板（`__FOLIO_HOME__` 占位），`install-folio-plugins.ps1` 安装时自动落盘/替换占位符；README 快速开始补第二条插件安装命令。
+- **社区生态 / 友情链接**：README 新增社区插件对照与 v1.1 优先补全清单；`setup/install-community-plugins.ps1` 提供 `-DryRun`/`-Verify` 入口（暂缓启用，装而未挂）。
+- **install-all**：默认只装自研插件（guard + folio-tools + folio-events），`-IncludeCommunity` 显式开启社区插件（仍受暂缓保护）。
+
+### 说明
+
+- vision-bridge 未随本次开源分发（内部能力）；需要时自备并手工在 preset 补一行。
+- 原 `[1.0.1](rc)` 章节（2026-08-14 插件层）内容已随 v1.0.0 正式发布，移至文末附注。
+
 ## [1.0.0] - 2026-08-15
 
 首个正式发布。内核经多年内部实战迭代（60+ 命令、1000+ 测试用例），本次以兰亭（Folio）品牌开源。
@@ -20,7 +39,7 @@
 - `LLM_MODE=host`：DSH 下 5 个 LLM 命令不依赖云端 key，推理交由宿主 AI 执行
 - 读图/搜索/独立审查在 DSH 下由宿主原生覆盖；独立 CLI 场景按能力插槽逐级解锁（见 `docs/能力配置引导`）
 
-## [1.0.1] - 2026-08-14（rc）
+## 附：v1.0.0 插件层 rc 明细（2026-08-14，已随 1.0.0 正式发布）
 
 P1 插件层随 v1.0 发布线合入 `plugins/`（运行级验证待 dsh web 重启后执行，见各插件 README §验证）。
 
