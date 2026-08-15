@@ -1,7 +1,7 @@
 {
   "name": "@folio/dsh-tools",
   "description": "兰亭 CLI 命令工具化：记忆面 9 工具 + 质量面 6 工具（defineTool 注册，spawn venv _cli.py）",
-  "version": "0.1.0-rc.1",
+  "version": "1.0.0",
   "type": "module",
   "main": "index.js",
   "exports": {
