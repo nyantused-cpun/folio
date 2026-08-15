@@ -1,5 +1,15 @@
 # Release Notes · Folio (兰亭) v1.0.0
 
+**Folio（兰亭）— a document-generation engine for consultants, built natively for DSH.**
+
+Folio turns client materials into deliverable consulting documents through a five-stage pipeline: intake (archive, parse, chunk, index), chronicle (per-client memory with decision records and knowledge graphs), craft (swappable methodology packs), press (HTML / PPTX / DOCX / quote generated from one source of truth), and proof (mechanical gates, independent review, citation audit).
+
+It ships as a native DeepSeek Harness plugin stack: 15 first-party tools (`folio_*`) with schema-validated parameters, a session-protocol event plugin (auto session-start reminders, auto-save on session close), an L0 guard plugin that blocks direct writes to deliverable paths and non-CLI Python calls, and a custom agent preset ("兰亭 mode") with a swappable persona. The engine kernel stays host-agnostic — the same CLI works in Trae and Kimi — while the DSH layer is pure official extension points, zero forks.
+
+Methodology is replaceable without touching code: Folio Packs (light / standard / deep) are YAML + SKILL.md, so switching domains means swapping a pack, not rewriting the engine. Zero API keys to start under DSH — reading images, web search, and independent review ride the host's native capabilities (`LLM_MODE=host`).
+
+---
+
 > **材料生成引擎 + 可组合方法论包，首发深度适配 DSH。**
 > Folio = 对开本/作品集：把客户扔进来的材料，装订成能送达的汇报材料。
 
