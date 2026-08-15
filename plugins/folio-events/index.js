@@ -1,18 +1,27 @@
-// @folio/dsh-events：兰亭会话协议事件插件（P1 实施 M3，2026-08-14）
+// @folio/dsh-events：兰亭会话协议事件插件（P1 实施 M3，2026-08-14；作用域隔离 2026-08-15）
 //
 // 把 AGENTS.md 的会话纪律机械化（「纪律变机械」第一步）：
 //   1. agent/session-start → 注入入口协议提醒（每新会话自动唤醒模型跑 folio_session_start）
-//   2. session/event → 观察工具调用提取客户名（folio_session_start/folio_save 的 client 参数）
-//   3. agent/disposed → 会话关闭自动 save（会话结束协议的机械触发）
+//   2. agent/disposed → 会话关闭自动 save（会话结束协议的机械触发；客户名从
+//      agent.session.events 的 tool/call 记录扫描提取）
+//
+// 作用域隔离（2026-08-15 修复，解决「兰亭全局污染其他项目」）：
+//   - 本插件从 profile 全局层移入 pre-sales preset（agent.cordis.yml，绝对路径引用），
+//     仅对「售前助手」模式的会话挂载；其他项目/其他模式完全无感。
+//   - 原 session/event 实时观察器（提取客户名）依赖 root scope 广播，preset 内收不到，
+//     已改为 agent/disposed 时扫描 agent.session.events（agent 对象携带 session 引用，
+//     dsh-agent-loop ReactLoopAgent 构造于 session 之上，官方先例：
+//     systemPrompt.variable("cwd", context.agent?.session.header.cwd)）。
 //
 // 接口依据（本机 @deepseek-ai/dsh 0.1.0-rc.6 逐行核实）：
 //   - agent/session-start、agent/disposed：dsh-agent 官方 live 词汇（non-vetoing notification）；
-//   - session/event：dsh-session 官方 live 服务事件（post-commit append 通知，持久事件镜像）；
 //   - agent.followup(message)：dsh-agent 官方入队原语（next-turn FIFO 唤醒）；消息用
 //     dsh-llm/message 的 createUserMessage 构造（mint MessageId，形状正确）；
+//   - tool/call 会话事件形状 {turn, step, callId, name, arguments}：dsh-agent-loop
+//     appendToolCall（session.append("tool/call", ...)）；
 //   - spawn 形态保持 .venv python _cli.py（guard CLI 白名单同一契约）。
 //
-// 设计边界（v1 刻意不做）：
+// 设计边界（v1/v2 刻意不做）：
 //   - turn/end 中途冷却 save 留 v2：中途 save 与模型手动的 folio_save 有写竞态
 //     （task_history/context.md 无跨进程锁），dispose 时机是协议正点，先只做它。
 
@@ -75,7 +84,6 @@ async function runCli(ctx, args, timeoutMs = 120000) {
 }
 
 function apply(ctx) {
-  const clientBySession = new Map(); // sessionId -> client
   const saveCooldown = makeCooldown(SAVE_COOLDOWN_MS);
 
   // ── 1) 新会话入口协议提醒 ────────────────────────────────────────────────
@@ -93,31 +101,21 @@ function apply(ctx) {
     }
   });
 
-  // ── 2) 会话事件观察：提取客户名 ──────────────────────────────────────────
-  ctx.on("session/event", (evt) => {
-    try {
-      const client = extractClientFromToolCall(evt);
-      if (client) {
-        // sessionId 关联：事件可能带 session 引用（第二参数）或 agent 域内已知
-        const sessionId =
-          evt.sessionId ??
-          evt.session?.id ??
-          evt.data?.sessionId ??
-          (typeof evt.source === "object" && evt.source.sessionId);
-        if (sessionId) clientBySession.set(String(sessionId), client);
-        // 无 sessionId 时：记录「最近客户」兜底（dispose 时若查不到精确 id 用之）
-        if (!sessionId) clientBySession.set("*last", client);
-      }
-    } catch (err) {
-      console.error("[folio-events] 事件观察失败:", err);
-    }
-  });
-
-  // ── 3) 会话关闭自动 save ────────────────────────────────────────────────
+  // ── 2) 会话关闭自动 save ────────────────────────────────────────────────
+  // 客户名提取：从 agent.session.events 倒序扫描 tool/call（folio_session_start /
+  // folio_save 的 client 参数）。不再用 session/event 实时观察——该事件从 root scope
+  // 广播，插件移入 preset 后收不到（作用域隔离的必然代价，见文件头注释）。
   ctx.on("agent/disposed", (payload) => {
     const agent = payload?.agent;
     const sessionId = String(agent?.id ?? agent?.session?.id ?? "");
-    const client = clientBySession.get(sessionId) ?? clientBySession.get("*last");
+    const events = agent?.session?.events;
+    let client = null;
+    if (Array.isArray(events)) {
+      for (let i = events.length - 1; i >= 0; i -= 1) {
+        client = extractClientFromToolCall(events[i]);
+        if (client) break;
+      }
+    }
     if (!client) {
       console.log(`[folio-events] 会话 ${sessionId || "?"} 关闭，未识别客户名，跳过自动 save`);
       return;

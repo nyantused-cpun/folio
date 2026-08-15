@@ -2,18 +2,19 @@
 
 > P1 实施 M3（2026-08-14）。把 AGENTS.md 会话纪律机械化（「纪律变机械」第一步）。
 
-## 1. 行为面（v1 三条）
+## 1. 行为面（v1.0.1 两条）
 
 | 触发 | 事件（官方词汇） | 行为 |
 |---|---|---|
 | 新会话 | `agent/session-start`（notification） | `agent.followup(createUserMessage(...))` 注入入口协议提醒，唤醒模型跑 folio_session_start |
-| 会话运行中 | `session/event`（live，post-commit append） | 观察 `tool/call` 事件，从 folio_session_start/folio_save 的 arguments 提取客户名，记 sessionId→client |
-| 会话关闭 | `agent/disposed`（notification） | 对已知客户名自动 spawn `.venv python _cli.py save <client>`（60s 冷却防重复事件）——会话结束协议机械触发 |
+| 会话关闭 | `agent/disposed`（notification） | 从 `agent.session.events` 倒序扫描 `tool/call`（folio_session_start/folio_save 的 arguments）提取客户名，自动 spawn `.venv python _cli.py save <client>`（60s 冷却防重复事件）——会话结束协议机械触发 |
+
+> 作用域隔离（2026-08-15）：本插件挂在 pre-sales preset 层，仅「售前助手」模式生效；原 `session/event` 实时观察依赖 root scope 广播，preset 内收不到，故改为 disposed 时扫描会话事件。
 
 ## 2. 接口依据（rc.6 逐行核实）
 
 - `agent/session-start` / `agent/disposed`：dsh-agent 官方 live 词汇（non-vetoing）；
-- `session/event`：dsh-session 官方 live 服务事件（post-commit append 通知，持久事件镜像）；
+- `tool/call` 会话事件形状 `{turn, step, callId, name, arguments}`：dsh-agent-loop `appendToolCall`（`session.append("tool/call", ...)`）；
 - `agent.followup(message)`：dsh-agent 入队原语（next-turn FIFO 唤醒）；
 - `createUserMessage`：dsh-llm/message 依赖最小入口（mint MessageId，形状正确）；
 - spawn 形态保持 guard CLI 白名单契约（`.venv python _cli.py`）。
@@ -37,10 +38,10 @@
 ## 6. 目录
 
 ```
-.dsh/folio-events/
+plugins/folio-events/
   index.js         插件体
   state.js         纯逻辑（extractClientFromToolCall/makeCooldown，零依赖）
-  cordis.patch.yml 激活 patch
+  cordis.patch.yml 激活 patch（preset 层挂载由 install-folio-plugins.ps1 管理，此文件仅供参考）
   package.json
   test/run-check.mjs
   README.md
@@ -49,3 +50,4 @@
 ## 7. 变更记录
 
 - 0.1.0-rc.1（2026-08-14）：M3 初版——三条行为 + 纯逻辑单测；冷却器首次调用放行 bug 当场修复。
+- 1.0.1（2026-08-15）：作用域隔离改造——插件移入 pre-sales preset 层；`session/event` 实时观察改为 `agent/disposed` 扫描 `agent.session.events` 提取客户名；发布版保留 `FOLIO_HOME`/上溯 `_cli.py` 路径解析，不硬编码作者路径。

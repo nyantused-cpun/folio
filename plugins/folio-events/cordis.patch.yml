@@ -1,4 +1,5 @@
-# folio-events 激活 patch（profile 层；dsh.bundle.patch 声明于此）
+# folio-events 激活 patch（2026-08-15 起由 install-folio-plugins.ps1 挂到 pre-sales preset，
+# 不再经 profile 全局层；此文件保留 dsh.bundle 声明与旧 profile 写法参考）
 # 写法与 folio-tools 同：新增插件 entry 用「无 id 的 insert」
 - insert:
     - id: folio-events
