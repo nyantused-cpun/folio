@@ -19,7 +19,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 $scriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
-$projRoot = Split-Path -Parent $scriptRoot   # 发布版：脚本在 folio/setup/ 下，projRoot = folio 仓库根
+$projRoot = Split-Path -Parent (Split-Path -Parent $scriptRoot)
 $dshHome = Join-Path $env:USERPROFILE ".dsh"
 $profileNodeModules = Join-Path $dshHome "profiles\web\node_modules"
 $folioScopeDir = Join-Path $profileNodeModules "@folio"
@@ -28,22 +28,22 @@ $patchBak = Join-Path $dshHome "profiles\web\cordis.patch.yml.bak-folio"
 $lockPath = Join-Path $dshHome ".folio-plugins-install.lock"
 
 $plugins = @(
-    @{ Id = "folio-tools"; Name = "@folio/dsh-tools"; Src = Join-Path $projRoot "plugins\folio-tools" },
-    @{ Id = "folio-events"; Name = "@folio/dsh-events"; Src = Join-Path $projRoot "plugins\folio-events" }
+    @{ Id = "folio-tools"; Name = "@folio/dsh-tools"; Src = Join-Path $projRoot ".dsh\folio-tools" },
+    @{ Id = "folio-events"; Name = "@folio/dsh-events"; Src = Join-Path $projRoot ".dsh\folio-events" }
 )
 
 function Write-Step([string]$msg) { Write-Host "  $msg" }
 
 function Get-PatchEntryLines {
     return @(
-        "  # ── 兰亭（Folio）P1 插件层（install-folio-plugins.ps1 维护）──────────────────",
-        "  - insert:",
-        "      - id: folio-tools",
-        '        name: "@folio/dsh-tools"',
-        "        config: {}",
-        "      - id: folio-events",
-        '        name: "@folio/dsh-events"',
-        "        config: {}"
+        "# ── 兰亭（Folio）P1 插件层（install-folio-plugins.ps1 维护）──────────────────",
+        "- insert:",
+        "    - id: folio-tools",
+        '      name: "@folio/dsh-tools"',
+        "      config: {}",
+        "    - id: folio-events",
+        '      name: "@folio/dsh-events"',
+        "      config: {}"
     )
 }
 
