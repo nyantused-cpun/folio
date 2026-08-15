@@ -7,6 +7,34 @@
   "exports": {
     ".": "./index.js"
   },
+  "files": [
+    "index.js",
+    "state.js",
+    "cordis.patch.yml",
+    "README.md"
+  ],
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "deepseek-harness",
+    "folio",
+    "兰亭",
+    "consulting",
+    "document-generation",
+    "session-protocol"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nyantused-cpun/folio.git"
+  },
+  "homepage": "https://github.com/nyantused-cpun/folio",
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=18"
+  },
   "dsh": {
     "bundle": {
       "patch": "./cordis.patch.yml"
@@ -17,7 +45,6 @@
       "testedAt": "2026-08-14"
     }
   },
-  "license": "MIT",
   "peerDependencies": {
     "@deepseek-ai/dsh-agent": "^0.1.0-rc.6",
     "@deepseek-ai/dsh-llm": "^0.1.0-rc.6",
