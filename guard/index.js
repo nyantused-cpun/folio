@@ -60,29 +60,22 @@ function checkPythonExec(exec) {
 
 // shell 命令写受保护路径检测：dsh 的 fs/write-intent 只覆盖 write/edit 工具，
 // pwsh/bash 子进程的 Set-Content/Out-File/> 等直写完全绕开事件面（L4 实测确认）。
-// 绝对路径走 isProtectedWrite（含项目根 + output|_inbox + 交付物后缀）；
-// 相对路径/命令内路径段走 CMD_* 正则。CLI 白名单命令不受此限（引擎自写 output 合法）。
+// 命令内路径版（v3，修复 0.1.0-rc.2 漏判）：交付物后缀用词边界 \b 而非 $ 锚定——
+// 整条命令里 .html 后面往往还跟 -Value/编码等尾巴，$ 锚定会漏判（rc.2 L4 实测暴露）。
+// CLI 白名单命令不受此限（引擎自写 output 合法）。
 function checkShellWrite(exec) {
   if (exec.name !== "pwsh" && exec.name !== "bash") return null;
   const cmd = String(exec.arguments?.command ?? "");
   if (!SHELL_MUTATE_CMDS.test(cmd)) return null;
   const n = normalizePath(cmd);
-  if (n.includes(normalizePath(PROJECT_DIR))) {
-    if (isProtectedWrite(n)) {
-      return {
-        kind: "deny",
-        reason: "[presales-guard] 禁止 shell 直写受保护路径（output/ 交付物必须经 CLI 生成；refs/ 只读；文件操作请用 DSH 的 write/edit 工具或 _cli.py）"
-      };
-    }
-    return null;
-  }
+  const hasDeliverableSuffix = /\.(html|pptx|docx|xlsx)\b/i.test(n);
   if (CMD_REFS_RE.test(n)) {
     return {
       kind: "deny",
       reason: "[presales-guard] 禁止 shell 操作 refs/（只读目录；文件操作请用 DSH 的 write/edit 工具或 _cli.py）"
     };
   }
-  if (CMD_PROTECTED_RE.test(n) && DELIVERABLE_RE.test(n)) {
+  if (hasDeliverableSuffix && CMD_PROTECTED_RE.test(n)) {
     return {
       kind: "deny",
       reason: "[presales-guard] 禁止 shell 直写 output/ 交付物（必须经 CLI 生成；文件操作请用 DSH 的 write/edit 工具或 _cli.py）"
