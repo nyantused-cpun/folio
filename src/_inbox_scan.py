@@ -126,7 +126,7 @@ def _cooldown_elapsed(project_dir: str, hours: int = COOLDOWN_HOURS) -> bool:
 
 def _has_inbox_files(project_dir: str) -> bool:
     """inbox/ 根目录或 _uncategorized/ 至少各有一个文件。"""
-    inbox = os.path.join(project_dir, "_inbox")
+    inbox = os.path.join(project_dir, "inbox")
     if not os.path.exists(inbox):
         return False
     # 根目录
@@ -175,7 +175,7 @@ def _categorize_ext(filename: str) -> str:
 
 def _list_inbox_files(project_dir: str):
     """列出 inbox/ 根目录 + _uncategorized/ 下的所有文件。"""
-    inbox = os.path.join(project_dir, "_inbox")
+    inbox = os.path.join(project_dir, "inbox")
     results = []
     if os.path.exists(inbox):
         for f in os.listdir(inbox):
@@ -283,7 +283,7 @@ def archive_duplicate(report: ScanReport, project_dir: str, dry_run: bool = Fals
     """对 report.auto_candidate 执行归档（移入 _trash/）。返回已归档列表。"""
     archived = []
     trash_root = os.path.join(project_dir, DEFAULT_TRASH_DIR)
-    inbox = os.path.join(project_dir, "_inbox")
+    inbox = os.path.join(project_dir, "inbox")
 
     for fc in report.auto_candidate:
         src_dir = inbox if fc.location == "root" else os.path.join(inbox, "_uncategorized")
