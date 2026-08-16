@@ -1,4 +1,8 @@
 # -*- coding: utf-8 -*-
+
+import pytest
+
+pytestmark = pytest.mark.internal
 """错误路径退出码回归测试。
 
 背景：多个命令的错误路径曾是 print 错误信息后裸 return（exit 0），

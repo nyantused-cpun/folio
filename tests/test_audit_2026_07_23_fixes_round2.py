@@ -1,4 +1,8 @@
-﻿# -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
+
+import pytest
+
+pytestmark = pytest.mark.internal
 """audit_2026-07-23 报告 第二轮（剩余 bug + 机制项）修复的回归测试。
 
 覆盖：#3 #4 #9 #10 #11 #13 #14 #21 #22 M1 M3

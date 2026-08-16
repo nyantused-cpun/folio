@@ -1,4 +1,8 @@
 # -*- coding: utf-8 -*-
+
+import pytest
+
+pytestmark = pytest.mark.internal
 """§八 3.1 spec 版本快照：confirmed spec 渲染前快照到 spec 同目录 .versions/。
 
 挂接点在 CLI 生成命令（html-build / docx-build / pptd-gen）、Renderer 构造之前；

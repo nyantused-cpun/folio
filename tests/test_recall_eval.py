@@ -1,4 +1,8 @@
 # -*- coding: utf-8 -*-
+
+import pytest
+
+pytestmark = pytest.mark.internal
 """recall-eval 评估器单测。
 
 实施依据：docs/dev_plan_recall_eval_tasks_2026-07-19.md Issue 1+2+4

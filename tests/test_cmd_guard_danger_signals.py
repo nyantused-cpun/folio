@@ -1,4 +1,8 @@
-﻿# -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
+
+import pytest
+
+pytestmark = pytest.mark.internal
 """pretool_cmd_guard 危险信号判定 + ask 记忆（2026-08-11 增强）的回归测试。
 
 场景：

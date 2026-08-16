@@ -1,4 +1,8 @@
-﻿# -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
+
+import pytest
+
+pytestmark = pytest.mark.internal
 """pretool_path_guard output/** 细分（2026-08-11）的回归测试。
 
 - 最终交付物（.html/.pptx/.docx/.xlsx）-> deny（须走 CLI 生成）

@@ -1,4 +1,8 @@
 # -*- coding: utf-8 -*-
+
+import pytest
+
+pytestmark = pytest.mark.internal
 """audit_2026-07-23 报告 P0+P1 修复的回归测试。
 
 覆盖：#1 #2 #5 #6 #7 #8 #12 #16 #17 #18 #19 #23 #24 #25 #26 #27

@@ -1,4 +1,8 @@
 # -*- coding: utf-8 -*-
+
+import pytest
+
+pytestmark = pytest.mark.internal
 """pptd-build 命令与 _pptd 模块测试（C-2 重构后）。
 
 全部 mock：不触真实 PPT 转换、不调 PowerPoint COM、不写真实 output/。

@@ -1,4 +1,8 @@
 # -*- coding: utf-8 -*-
+
+import pytest
+
+pytestmark = pytest.mark.internal
 """spec-diff 结构化对比回归测试（§八 3.2）。
 
 退出码语义：0 无差异 / 1 有差异 / 2 错误。

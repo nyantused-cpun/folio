@@ -1,4 +1,8 @@
-﻿# -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
+
+import pytest
+
+pytestmark = pytest.mark.internal
 """D-118：skip 目录三处一致快照测试。
 
 单一数据源链条：_paths.OUTPUT_SKIP_DIRS（CLI）== .folio/hooks/_output_skip_dirs.json

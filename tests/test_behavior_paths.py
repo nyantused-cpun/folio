@@ -1,4 +1,8 @@
 # -*- coding: utf-8 -*-
+
+import pytest
+
+pytestmark = pytest.mark.internal
 """行为路径测试：_renderer/__init__.py、_cli.py、_cli_generate.py。
 
 优先覆盖：

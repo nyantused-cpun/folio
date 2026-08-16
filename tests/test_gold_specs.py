@@ -1,4 +1,8 @@
 # -*- coding: utf-8 -*-
+
+import pytest
+
+pytestmark = pytest.mark.internal
 """Gold spec 示范库资产回归（§8 v1.2 候选 4 三层示范库之 Gold spec 库）。
 
 库文件由 _tools/extract_gold_specs.py 从已验收产出反向切片生成。防回归：

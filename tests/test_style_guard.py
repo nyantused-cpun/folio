@@ -1,4 +1,8 @@
 # -*- coding: utf-8 -*-
+
+import pytest
+
+pytestmark = pytest.mark.internal
 """_style_guard 回归测试：正向必命中 + 负向防误报（2026-08-14 去AI化调研落地）。
 
 范式来源：human-copywrite tests/eval（require/forbid 正则 + self-test）、

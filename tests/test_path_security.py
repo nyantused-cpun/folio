@@ -1,4 +1,8 @@
 # -*- coding: utf-8 -*-
+
+import pytest
+
+pytestmark = pytest.mark.internal
 """路径安全回归测试：输出白名单前缀绕过 + 客户名路径穿越 + BM25 索引签名。"""
 
 import os

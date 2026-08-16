@@ -1,4 +1,8 @@
 # -*- coding: utf-8 -*-
+
+import pytest
+
+pytestmark = pytest.mark.internal
 """_layout_lint 版式 lint 测试（重构 Phase 2，§七 2.8；间距体系 v1 §四）。
 
 覆盖：

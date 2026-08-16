@@ -1,4 +1,8 @@
 # -*- coding: utf-8 -*-
+
+import pytest
+
+pytestmark = pytest.mark.internal
 """B-7 里程碑甘特（timeline/milestone_gantt）测试。"""
 
 from _renderer import schema

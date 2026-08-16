@@ -1,4 +1,8 @@
 # -*- coding: utf-8 -*-
+
+import pytest
+
+pytestmark = pytest.mark.internal
 """pptd-gen 命令与 _pptd_gen 模块测试。
 
 覆盖：守门链（未确认/出白名单/缺 spec exit 1）、主 pptd 结构
