@@ -1,0 +1,69 @@
+confirmed: true
+project: "蓝海集团数字化协同平台建设方案"
+author: "兰亭 · Folio"
+date: "2026-08"
+document:
+  title: "蓝海集团数字化协同平台建设方案"
+  subtitle: "从协同办公到经营一盘棋"
+style: "enterprise"
+theme:
+  colors:
+    heading: "#1B5E8A"
+    primary: "#1B5E8A"
+pages:
+  - id: p01
+    title: "为什么现在做"
+    composition: [full_claim]
+    elements:
+      - type: heading
+        text: "三个信号：协同散、数据断、经营看不见"
+        level: 2
+      - type: text
+        content: "蓝海集团现有 7 个业务系统各自为政：审批散落在邮件与群里，跨部门数据需要人工汇总，管理层每周只能看到滞后 5 天的经营数据。"
+      - type: cards
+        cards:
+          - {title: "协同散", body: "7 个系统、3 套账号，跨部门一件事要开两次会", tag: "协同", highlight: "效率损失 30%"}
+          - {title: "数据断", body: "订单、库存、财务口径不一致，月结需 6 天对账", tag: "数据", highlight: "月结 6 天"}
+          - {title: "看不见", body: "经营报表滞后 5 天，决策靠直觉与临时问数", tag: "经营", highlight: "滞后 5 天"}
+  - id: p02
+    title: "我们要建成什么"
+    composition: [architecture_board]
+    elements:
+      - type: heading
+        text: "一个平台、两类门户、三层能力"
+        level: 2
+      - type: bullets
+        items:
+          - "员工门户：一件事只进一个入口，待办统一触达"
+          - "管理门户：经营数据当天可见，异常自动预警"
+          - "统一底座：主数据、流程、权限一次治理"
+      - type: table
+        headers: ["能力层", "建设内容", "业务价值"]
+        rows:
+          - ["协同层", "统一待办、统一消息、统一知识库", "跨部门协作时效提升 40%"]
+          - ["数据层", "主数据治理 + 经营指标口径统一", "月结从 6 天缩短到 1 天"]
+          - ["平台层", "统一身份、统一流程、统一接口", "新系统接入从月级到周级"]
+  - id: p03
+    title: "分三步走"
+    composition: [flow_spine]
+    elements:
+      - type: phases
+        phases:
+          - {name: "第一步 · 筑基（1-2 月）", desc: "主数据治理 + 统一身份与门户", actions: ["梳理 7 个系统主数据", "上线员工门户"]}
+          - {name: "第二步 · 贯通（3-5 月）", desc: "核心流程贯通，经营指标入湖", actions: ["订单到回款主线全流程上线", "上线经营驾驶舱"]}
+          - {name: "第三步 · 智能（6-9 月）", desc: "数据驱动决策与自动化", actions: ["预警与自动化流转", "知识库与 AI 助手"]}
+  - id: p04
+    title: "值不值"
+    composition: [evidence_ledger]
+    elements:
+      - type: table
+        headers: ["指标", "现状", "建成后"]
+        rows:
+          - ["跨部门协作时效", "平均 2 天", "2 小时"]
+          - ["月结时间", "6 天", "1 天"]
+          - ["经营数据时滞", "5 天", "当天"]
+      - type: pullquote
+        content: "数字化不是再上一套系统，而是让经营数据当天说话。"
+        cite: "项目发起人"
+      - type: text
+        content: "以上数据均为演示样例（虚构），用于展示 Folio 引擎的渲染效果。"

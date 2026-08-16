@@ -1,4 +1,4 @@
-# Release Notes · Folio (兰亭) v1.0.1
+# Release Notes · Folio (兰亭) v1.0.2
 
 **Folio（兰亭）— a document-generation engine for consultants, built natively for DSH.**
 
@@ -16,6 +16,13 @@ Methodology is replaceable without touching code: Folio Packs (light / standard 
 Folio 是给 AI 宿主（DeepSeek Harness / Trae / Kimi 等）外挂的**长程任务执行引擎**，特化于一件事：从客户材料到咨询/汇报交付物的全链路——接入材料 → 建立记忆 → 应用方法论 → 生成产出 → 守住质量。
 
 **引擎做机械的，AI 做判断的，云端模型做按需补位的。** 凡是「错了要重来、客户可见、可复现」的环节全部由确定性代码执行，模型只在判断、理解、生成语言处出手。
+
+## v1.0.2（2026-08-16）社区友好与双语示例
+
+- CI 流水线（pytest + 插件 JS 自检）；Issue feature_request 模板 + PR 模板标准位；
+- `requirements-dev.txt`；文档 clone 地址替换为真实仓库；CONTRIBUTING 分支口径修正；
+- 运行时目录去宿主化：`.trae` → `.folio`；skills 自动挂载（skills-sync）；
+- 中英双语示例产出（HTML + PPTX）与英文产品说明；README 环境要求清单。
 
 ## v1.0.1（2026-08-16）更新
 

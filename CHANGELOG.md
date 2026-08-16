@@ -1,8 +1,15 @@
-﻿# Changelog
+# Changelog
 
 > 版本线说明：本仓库记录**对外发布线**（Folio），与内部工作区版本线（售前助手 v3.x）相互独立、不对齐。只有值得对外说的事才升版本。
 
-## [未发布] - 2026-08-16
+## [1.0.2] - 2026-08-16
+
+### 新增
+
+- **社区友好基建**：GitHub Actions CI（pytest + 插件 JS 自检/语法检查）；Issue feature_request 模板；PR 模板移入 `.github/` 标准位；`requirements-dev.txt`（pytest，playwright 可选）。
+- **双语示例产出**：中/英各一份演示方案 HTML + PPTX（5 页，verify PASS）；英文产品说明 `docs/product-brief_v4.0_en.md`。
+- **环境要求清单**：README Requirements 表（OS/PowerShell/Python ≥ 3.10/Git/网络/DSH/Node 不需要/PowerPoint 可选/零 key）。
+- **运行时目录去宿主化**：`.trae` → `.folio`；skills 自动挂载（install-folio-plugins 跑 skills-sync）。
 
 ### 修复
 

@@ -1,0 +1,69 @@
+confirmed: true
+project: "BlueOcean Digital Collaboration Platform Proposal"
+author: "Lanting · Folio"
+date: "2026-08"
+document:
+  title: "BlueOcean Digital Collaboration Platform Proposal"
+  subtitle: "From scattered tools to one operating picture"
+style: "enterprise"
+theme:
+  colors:
+    heading: "#1B5E8A"
+    primary: "#1B5E8A"
+pages:
+  - id: p01
+    title: "Why now"
+    composition: [full_claim]
+    elements:
+      - type: heading
+        text: "Three signals: fragmented collaboration, broken data, blind operations"
+        level: 2
+      - type: text
+        content: "BlueOcean runs 7 siloed business systems. Approvals live in emails and chat groups, cross-department data is reconciled manually, and management only sees operating figures with a 5-day lag."
+      - type: cards
+        cards:
+          - {title: "Fragmented", body: "7 systems, 3 account sets; one cross-team task takes two meetings", tag: "Collaboration", highlight: "30% efficiency loss"}
+          - {title: "Disconnected", body: "Order, inventory and finance use different definitions; month-end close takes 6 days", tag: "Data", highlight: "6-day close"}
+          - {title: "Blind", body: "Reports lag 5 days; decisions rely on intuition and ad-hoc requests", tag: "Operations", highlight: "5-day lag"}
+  - id: p02
+    title: "What we will build"
+    composition: [architecture_board]
+    elements:
+      - type: heading
+        text: "One platform, two portals, three capability layers"
+        level: 2
+      - type: bullets
+        items:
+          - "Employee portal: one entry for every task, unified notifications"
+          - "Management portal: same-day operating data with automatic alerts"
+          - "Unified foundation: master data, process and access governed once"
+      - type: table
+        headers: ["Capability layer", "Scope", "Business value"]
+        rows:
+          - ["Collaboration", "Unified to-dos, messaging and knowledge base", "40% faster cross-team turnaround"]
+          - ["Data", "Master data governance + one metric definition", "Month-end close: 6 days to 1 day"]
+          - ["Platform", "Unified identity, workflow and APIs", "New system onboarding: months to weeks"]
+  - id: p03
+    title: "Three-step roadmap"
+    composition: [flow_spine]
+    elements:
+      - type: phases
+        phases:
+          - {name: "Step 1 · Foundation (1-2 mo)", desc: "Master data governance + unified identity and portal", actions: ["Map master data across 7 systems", "Launch employee portal"]}
+          - {name: "Step 2 · Integration (3-5 mo)", desc: "Core process flows and operating metrics lake", actions: ["Order-to-cash main flow", "Launch management cockpit"]}
+          - {name: "Step 3 · Intelligence (6-9 mo)", desc: "Data-driven decisions and automation", actions: ["Alerts and automated routing", "Knowledge base and AI assistant"]}
+  - id: p04
+    title: "Is it worth it"
+    composition: [evidence_ledger]
+    elements:
+      - type: table
+        headers: ["Metric", "Today", "After"]
+        rows:
+          - ["Cross-team turnaround", "2 days on average", "2 hours"]
+          - ["Month-end close", "6 days", "1 day"]
+          - ["Operating data lag", "5 days", "Same day"]
+      - type: pullquote
+        content: "Digital transformation is not about another system — it is about making operating data speak the same day."
+        cite: "Project sponsor"
+      - type: text
+        content: "All figures above are fictional demo data, rendered to showcase the Folio engine output."

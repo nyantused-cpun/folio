@@ -110,6 +110,7 @@ folio/
 ## 文档
 
 - [产品说明 v4.0（DSH 原生版）](docs/兰亭_产品说明_v4.0.md)：它是什么、怎么装、为什么选 DSH——15 个原生工具 + 会话协议自动执行 + 换方法论不换引擎
+- [Product Brief v4.0 (English)](docs/product-brief_v4.0_en.md)：same content in English
 - [技术白皮书 v4.0（DSH 原生版）](docs/兰亭_技术白皮书_v4.0.md)：工具管线、事件机制、记忆双轨、已知限制如实说
 - [产品定位与三卖点](docs/产品定位与三卖点_2026-08-15.md)：定位纲领、五段价值链、命名族
 - [能力配置引导](docs/能力配置引导_v1_2026-08-15.md)：6 个能力槽位怎么配、不配会怎样、外部怎么补位
@@ -183,7 +184,7 @@ pwsh .\setup\install-community-plugins.ps1 -Verify
 
 ## 状态与路线
 
-- **v1.0.1（当前）**：guard 作用域隔离 + 插件包名 @nyantused/folio-dsh-* + preset 入仓。变更见 [CHANGELOG.md](CHANGELOG.md)。
+- **v1.0.2（当前）**：CI 流水线 + 社区友好基建（Issue/PR 模板、dev 依赖、真实仓库地址）+ 中英双语示例产出。变更见 [CHANGELOG.md](CHANGELOG.md)。
 - **v1.1 优先补全（开源后第一波）**
   1. 右侧预览区：接入 DSH-better-sidebar（或自研 folio-preview 兜底）
   2. GitHub 集成：`dsh-github-connector` 或自研 `folio_github` 工具
