@@ -268,8 +268,9 @@
 # 目录导入——必须指向 index.js 文件，2026-08-15 实测 ERR_UNSUPPORTED_DIR_IMPORT）；
 # 安装时脚本会把 __FOLIO_HOME__ 替换为实际仓库根；插件自身依赖经
 # __FOLIO_HOME__/node_modules/@deepseek-ai（AiBridge Junction）解析。
-# 注意：presales-guard 不在此列——fs/write-intent 事件从 root scope 发出，
-# preset 内监听不到，L0 防线保持 profile 全局挂载 + 项目内自检（guard/index.js）。
+# 注意：folio-guard 不在此列——fs/write-intent 事件从 root scope 发出，
+# preset 内监听不到，L0 防线保持 profile 全局挂载；2026-08-16 起 guard 已并入
+# @nyantused/folio-dsh-tools/guard 子入口，由 install-folio-plugins.ps1 挂到 profile 层。
 # vision-bridge 未随开源分发，内部场景自行追加。
 - id: folio-tools
   name: "__FOLIO_HOME__/plugins/folio-tools/index.js"

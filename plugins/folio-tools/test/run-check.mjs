@@ -1,12 +1,26 @@
-// @folio/dsh-tools 纯函数自检脚本（沙箱内可跑：无 spawn、无外部依赖）
+// @nyantused/folio-dsh-tools 纯函数自检脚本（沙箱内可跑：无 spawn、无外部依赖）
 // 用户终端可另跑 node --test test/cli-bridge.test.mjs（同一断言集合）。
 import assert from "node:assert/strict";
 import { TOOL_DEFS } from "../defs.js";
+import { createGuardRules } from "../guard.js";
 
 const byName = Object.fromEntries(TOOL_DEFS.map((d) => [d.name, d]));
 const CLI_WHITELIST_RE = /python\.exe"?\s+_cli\.py(?:\s+\S+)*\s*$/i;
 const PYTHON = "D:/folio/.venv/Scripts/python.exe";
 const cliCommandString = (def, args) => [PYTHON, "_cli.py", ...def.buildArgs(args)].join(" ");
+
+const PROJECT_DIR = "D:/folio";
+const rules = createGuardRules(PROJECT_DIR);
+const inProject = (name, command, extra = {}) => ({
+  name,
+  arguments: { command, ...extra },
+  agent: { session: { header: { cwd: PROJECT_DIR } } },
+});
+const outsideProject = (name, command) => ({
+  name,
+  arguments: { command },
+  agent: { session: { header: { cwd: "C:/other" } } },
+});
 
 let passed = 0;
 let failed = 0;
@@ -108,6 +122,48 @@ check("required 参数可被 buildArgs 消费（不抛异常）", () => {
       }
     }
   }
+});
+
+console.log("== guard 纯函数自检 ==");
+
+check("isProtectedWrite：output 交付物拦截 / refs 拦截 / 中间产物放行 / 项目外放行", () => {
+  assert.equal(rules.isProtectedWrite(`${PROJECT_DIR}/output/x/测试.html`), true);
+  assert.equal(rules.isProtectedWrite(`${PROJECT_DIR}/output/x/测试.pptx`), true);
+  assert.equal(rules.isProtectedWrite(`${PROJECT_DIR}/refs/a.md`), true);
+  assert.equal(rules.isProtectedWrite(`${PROJECT_DIR}/output/x/spec.yml`), false);
+  assert.equal(rules.isProtectedWrite("C:/other/output/x/测试.html"), false);
+});
+
+check("checkPythonExec：非 CLI python 直调 deny / CLI 白名单放行 / 项目外放行", () => {
+  const denied = rules.checkPythonExec(inProject("pwsh", "python -c \"print(1)\""));
+  assert.equal(denied?.kind, "deny");
+  assert.match(denied.reason, /folio-guard/);
+  assert.equal(rules.checkPythonExec(inProject("pwsh", `${PROJECT_DIR}/.venv/Scripts/python.exe _cli.py status`)), null);
+  assert.equal(rules.checkPythonExec(outsideProject("pwsh", "python -c \"print(1)\"")), null);
+});
+
+check("checkShellWrite：shell 直写 output 交付物 deny / refs 操作 deny / 普通命令放行", () => {
+  const out = rules.checkShellWrite(inProject("pwsh", `Set-Content "${PROJECT_DIR}/output/x/测试.html" -Value x`));
+  assert.equal(out?.kind, "deny");
+  assert.match(out.reason, /output/);
+  const refs = rules.checkShellWrite(inProject("pwsh", `Remove-Item "${PROJECT_DIR}/refs/a.md"`));
+  assert.equal(refs?.kind, "deny");
+  assert.match(refs.reason, /refs/);
+  assert.equal(rules.checkShellWrite(inProject("pwsh", "Get-ChildItem .")), null);
+});
+
+check("isCommandInProject：cwd/workdir 项目内 true / 项目外 false / 相对路径 false", () => {
+  assert.equal(rules.isCommandInProject(inProject("pwsh", "echo hi")), true);
+  assert.equal(rules.isCommandInProject({
+    name: "pwsh",
+    arguments: { command: "echo hi", workdir: `${PROJECT_DIR}/sub` },
+    agent: { session: { header: { cwd: "C:/elsewhere" } } },
+  }), true);
+  assert.equal(rules.isCommandInProject(outsideProject("pwsh", "echo hi")), false);
+  assert.equal(rules.isCommandInProject({
+    name: "pwsh",
+    arguments: { command: "echo hi", workdir: "relative/path" },
+  }), false);
 });
 
 console.log(`== 结果: ${passed} 通过 / ${failed} 失败 ==`);

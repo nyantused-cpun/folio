@@ -1,5 +1,5 @@
 {
-  "name": "@folio/dsh-events",
+  "name": "@nyantused/folio-dsh-events",
   "description": "兰亭会话协议事件插件：session-start 入口协议提醒 + disposed 自动 save（纪律变机械；preset 层挂载）",
   "version": "1.0.1",
   "type": "module",

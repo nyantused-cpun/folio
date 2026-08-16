@@ -1,4 +1,4 @@
-// @folio/dsh-events 纯逻辑模块（零外部依赖，可独立单测）
+// @nyantused/folio-dsh-events 纯逻辑模块（零外部依赖，可独立单测）
 
 /** 从 tool/call 会话事件提取客户名（folio_session_start / folio_save 的 client 参数）。 */
 export function extractClientFromToolCall(evt) {

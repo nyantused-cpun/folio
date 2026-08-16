@@ -1,4 +1,4 @@
-// @folio/dsh-events：兰亭会话协议事件插件（P1 实施 M3，2026-08-14；作用域隔离 2026-08-15）
+// @nyantused/folio-dsh-events：兰亭会话协议事件插件（P1 实施 M3，2026-08-14；作用域隔离 2026-08-15）
 //
 // 把 AGENTS.md 的会话纪律机械化（「纪律变机械」第一步）：
 //   1. agent/session-start → 注入入口协议提醒（每新会话自动唤醒模型跑 folio_session_start）

@@ -7,7 +7,7 @@
 ### 修复
 
 - **guard 0.1.0-rc.4（作用域隔离）**：guard 保持 profile 全局挂载（L0 防线不能进 preset），但 shell/python 拦截仅对「售前项目内」命令生效（`isCommandInProject` 按会话 cwd/workdir 判定），解决「切项目被兰亭污染」；发布版保留 `FOLIO_HOME` / `process.cwd()` 路径解析，不硬编码作者路径。
-- **@folio/dsh-events 1.0.1（作用域隔离改造）**：插件移入 pre-sales preset 层；原 `session/event` 实时观察（preset 内收不到 root scope 广播）改由 `agent/disposed` 扫描 `agent.session.events` 提取客户名。
+- **@nyantused/folio-dsh-events 1.0.1（作用域隔离改造）**：插件移入 pre-sales preset 层；原 `session/event` 实时观察（preset 内收不到 root scope 广播）改由 `agent/disposed` 扫描 `agent.session.events` 提取客户名。
 - **inbox 命名统一**：`src/_inbox_scan.py` 由 `_inbox` 改 `inbox`（无下划线=用户 I/O，下划线=引擎私有）。
 
 ### 新增
@@ -45,8 +45,8 @@ P1 插件层随 v1.0 发布线合入 `plugins/`（运行级验证待 dsh web 重
 
 ### 新增
 
-- **`@folio/dsh-tools`**：15 个 DSH 原生工具（defineTool 注册）——记忆面 9（status/pending/recall/read/chunk-read/graph-query/session-start/save/load）+ 质量面 6（verify/review/cite-audit/audit/theme-verify/spec-diff）；参数 schema 校验 + subprocess 桥 + 结构化输出；工具定义纯数据表（defs.js）可独立单测
-- **`@folio/dsh-events`**：会话协议事件插件——`agent/session-start` 注入入口协议提醒、`session/event` 提取客户名、`agent/disposed` 自动 save（60s 冷却）；纯逻辑（state.js）单测覆盖
+- **`@nyantused/folio-dsh-tools`**：15 个 DSH 原生工具（defineTool 注册）——记忆面 9（status/pending/recall/read/chunk-read/graph-query/session-start/save/load）+ 质量面 6（verify/review/cite-audit/audit/theme-verify/spec-diff）；参数 schema 校验 + subprocess 桥 + 结构化输出；工具定义纯数据表（defs.js）可独立单测
+- **`@nyantused/folio-dsh-events`**：会话协议事件插件——`agent/session-start` 注入入口协议提醒、`session/event` 提取客户名、`agent/disposed` 自动 save（60s 冷却）；纯逻辑（state.js）单测覆盖
 - **`setup/install-folio-plugins.ps1`**：幂等安装/验证/卸载（Junction ×2 + cordis.patch.yml insert，原子写 + 锁 + 备份）
 - 发布版插件 Folio 安装根自动解析（env FOLIO_HOME 优先，其次包位置上溯找 _cli.py，不硬编码路径）
 

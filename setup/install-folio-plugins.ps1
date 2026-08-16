@@ -1,13 +1,14 @@
-# install-folio-plugins：presales-guard + folio-tools + folio-events 一键安装/卸载/验证
-# （P1 装配，2026-08-14；作用域隔离拓扑 2026-08-15；v1.0.1 发布版）
+# install-folio-plugins：folio-tools（工具 + L0 守卫）+ folio-events 一键安装/卸载/验证
+# （P1 装配，2026-08-14；作用域隔离拓扑 2026-08-15；guard 子入口合并 2026-08-16）
 #
-# 拓扑（2026-08-15 作用域隔离修复，解决「兰亭全局污染其他项目」）：
-#   - folio-tools / folio-events → 挂载于 pre-sales preset
+# 拓扑（2026-08-15 作用域隔离修复 + 2026-08-16 guard 合并）：
+#   - folio-tools（主入口，15 工具）/ folio-events → 挂载于 pre-sales preset
 #     （~/.dsh/.agent-presets/pre-sales/agent.cordis.yml，绝对路径引用本仓库
 #     plugins/ 下的 index.js）：仅「售前助手」模式会话生效，其他项目零污染。
-#   - presales-guard → 保持 profile 全局（fs/write-intent 事件从 root scope 发出，
-#     preset 内监听不到，L0 防线不能进 preset）；拦截逻辑已加项目内自检
-#     （guard/index.js isCommandInProject），非售前项目完全放行。
+#   - folio-guard（@nyantused/folio-dsh-tools/guard 子入口）→ 保持 profile 全局
+#     （fs/write-intent 事件从 root scope 发出，preset 内监听不到，L0 防线不能进 preset）；
+#     拦截逻辑已加项目内自检（plugins/folio-tools/guard.js isCommandInProject），
+#     非售前项目完全放行。guard 不再是独立 @presales/dsh-guard 包，已并入 @nyantused/folio-dsh-tools。
 #   - vision-bridge → 未随开源分发（内部能力），需要时自备并手工在 preset 补一行；
 #     本脚本不管理它，也不会为它建 Junction。
 #
@@ -29,11 +30,12 @@ param(
 
 $ErrorActionPreference = "Stop"
 $scriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
-$projRoot = Split-Path -Parent (Split-Path -Parent $scriptRoot)
+$projRoot = Split-Path -Parent $scriptRoot
 $dshHome = Join-Path $env:USERPROFILE ".dsh"
 $profileNodeModules = Join-Path $dshHome "profiles\web\node_modules"
 $presalesScopeDir = Join-Path $profileNodeModules "@presales"
 $folioScopeDir = Join-Path $profileNodeModules "@folio"
+$nyantusedScopeDir = Join-Path $profileNodeModules "@nyantused"
 $patchPath = Join-Path $dshHome "profiles\web\cordis.patch.yml"
 $patchBak = Join-Path $dshHome "profiles\web\cordis.patch.yml.bak-folio"
 # preset 挂载点（2026-08-15 起，folio 两插件）
@@ -49,15 +51,20 @@ $dshAiLink = Join-Path $projRoot "node_modules\@deepseek-ai"
 # 路径转 file URL 风格（正斜杠；PresetTree.import 对绝对路径转 file URL）
 function ConvertTo-Fwd([string]$p) { return ($p -replace "\\", "/") }
 
-# guard：profile 层（Junction 包名解析）。Link 必须与包名 scope 后段一致。
-$guardPlugin = @{ Id = "presales-guard"; Name = "@presales/dsh-guard"; Link = "dsh-guard"; ScopeDir = $presalesScopeDir; Src = Join-Path $projRoot "guard" }
+# guard：profile 层（Junction 包名解析）。现在指向 @nyantused/folio-dsh-tools 包，
+# 通过子入口 @nyantused/folio-dsh-tools/guard 挂载；Link 为 @nyantused scope 下的 folio-dsh-tools。
+$guardPlugin = @{ Id = "folio-guard"; Name = "@nyantused/folio-dsh-tools/guard"; Link = "folio-dsh-tools"; ScopeDir = $nyantusedScopeDir; Src = Join-Path $projRoot "plugins\folio-tools" }
 # folio 两插件：preset 层（绝对路径引用，无需 Junction）
 $presetPlugins = @(
     @{ Id = "folio-tools";  Src = Join-Path $projRoot "plugins\folio-tools" },
     @{ Id = "folio-events"; Src = Join-Path $projRoot "plugins\folio-events" }
 )
 # 旧拓扑残留（2026-08-15 前的 Junction，安装/卸载时清理；含历史版本两种命名）
+# 注意：@nyantused/folio-dsh-tools（Link=folio-dsh-tools）现在是正式 guard Junction，不再视为 legacy；
+# @nyantused 旧名与 @folio 旧拓扑仍作为 legacy 清理。
 $legacyLinks = @(
+    @{ Dir = $nyantusedScopeDir; Link = "dsh-tools" },
+    @{ Dir = $nyantusedScopeDir; Link = "dsh-events" },
     @{ Dir = $folioScopeDir; Link = "dsh-tools" },
     @{ Dir = $folioScopeDir; Link = "dsh-events" },
     @{ Dir = $folioScopeDir; Link = "folio-tools" },
@@ -85,13 +92,14 @@ function Test-AiBridge {
 }
 
 function Get-ProfilePatchLines {
-    # guard 保持 profile 全局（root scope 事件监听，L0 防线）
+    # folio-guard 保持 profile 全局（root scope 事件监听，L0 防线），
+    # 通过 @nyantused/folio-dsh-tools/guard 子入口挂载（2026-08-16 合并）
     return @(
-        "# presales-guard（Folio L0 守卫，D-127）：拦 output/refs 直写 + 非 CLI python 直调。",
-        "# 2026-08-15 作用域隔离：仅对售前项目内命令生效（guard/index.js isCommandInProject）。",
+        "# folio-guard（Folio L0 守卫，D-127）：拦 output/refs 直写 + 非 CLI python 直调。",
+        "# 2026-08-16 并入 @nyantused/folio-dsh-tools/guard 子入口；作用域隔离仅对售前项目内命令生效。",
         "- insert:",
-        "    - id: presales-guard",
-        '      name: "@presales/dsh-guard"',
+        "    - id: folio-guard",
+        '      name: "@nyantused/folio-dsh-tools/guard"',
         "      config: {}"
     )
 }
@@ -124,7 +132,7 @@ function Test-GuardJunction {
 function Test-ProfilePatchLines {
     if (-not (Test-Path $patchPath)) { return $false }
     $content = Get-Content $patchPath -Raw -Encoding UTF8
-    return $content.Contains('name: "@presales/dsh-guard"')
+    return $content.Contains('name: "@nyantused/folio-dsh-tools/guard"')
 }
 
 function Test-PresetLines {
@@ -161,11 +169,11 @@ function Write-AtomicText([string]$path, [string]$content) {
 
 function Invoke-InstallPlan {
     if (Test-Installed -and (Test-AiBridge)) { Write-Step "已安装且一致（幂等跳过）"; return $false }
-    if (-not (Test-GuardJunction)) { Write-Step "计划：建 guard Junction（$presalesScopeDir\dsh-guard）" }
+    if (-not (Test-GuardJunction)) { Write-Step "计划：建 guard Junction（$nyantusedScopeDir\folio-dsh-tools → plugins\folio-tools）" }
     if (-not (Test-AiBridge)) { Write-Step "计划：建 @deepseek-ai 解析桥（$dshAiLink）" }
     if (-not (Test-ProfilePatchLines)) { Write-Step "计划：cordis.patch.yml 追加 guard insert（先备份 $patchBak）" }
     if (-not (Test-PresetLines)) { Write-Step "计划：pre-sales preset 追加 folio 两插件行（先备份 $presetBak）" }
-    if (-not (Test-NoLegacyJunctions)) { Write-Step "计划：清理旧拓扑 Junction（@folio / @presales/dsh-vision-bridge）" }
+    if (-not (Test-NoLegacyJunctions)) { Write-Step "计划：清理旧拓扑 Junction（@folio / @nyantused 旧名 / @presales/dsh-vision-bridge）" }
     if ($DryRun) { Write-Step "[DryRun] 不落盘"; return $false }
     return $true
 }
@@ -205,7 +213,7 @@ try {
         # import 冒烟：guard 走包名（profile 解析）；preset 插件走 file URL 直指 index.js
         $smokeOk = $true
         Push-Location (Split-Path $profileNodeModules)
-        $smokeGuard = node --input-type=module -e "await import('@presales/dsh-guard')" 2>&1
+        $smokeGuard = node --input-type=module -e "await import('@nyantused/folio-dsh-tools/guard')" 2>&1
         if ($LASTEXITCODE -ne 0) { Write-Host "  [Import] guard FAIL: $smokeGuard"; $smokeOk = $false } else { Write-Host "  [Import] guard OK" }
         Pop-Location
         foreach ($p in $presetPlugins) {
@@ -252,9 +260,9 @@ try {
             New-Item -ItemType Junction -Path $dshAiLink -Target $dshAiTarget | Out-Null
             Write-Step "AiBridge: $dshAiLink -> $dshAiTarget"
         }
-        # 1. guard Junction（profile 层）
+        # 1. guard Junction（profile 层，@nyantused/folio-dsh-tools 子入口解析）
         if (-not (Test-GuardJunction)) {
-            New-Item -ItemType Directory -Path $presalesScopeDir -Force | Out-Null
+            New-Item -ItemType Directory -Path $guardPlugin.ScopeDir -Force | Out-Null
             $gLink = Join-Path $guardPlugin.ScopeDir $guardPlugin.Link
             if (Test-Path $gLink) { Remove-Item $gLink -Force -Recurse }
             New-Item -ItemType Junction -Path $gLink -Target $guardPlugin.Src | Out-Null

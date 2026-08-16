@@ -1,4 +1,4 @@
-// @folio/dsh-events 纯逻辑自检（沙箱内可跑：无 spawn）
+// @nyantused/folio-dsh-events 纯逻辑自检（沙箱内可跑：无 spawn）
 import assert from "node:assert/strict";
 import { extractClientFromToolCall, makeCooldown } from "../state.js";
 

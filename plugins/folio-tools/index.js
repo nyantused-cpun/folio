@@ -1,4 +1,4 @@
-// @folio/dsh-tools：兰亭 CLI 命令工具化（P1 实施，2026-08-14）
+// @nyantused/folio-dsh-tools：兰亭 CLI 命令工具化（P1 实施，2026-08-14；guard 子入口 2026-08-16）
 //
 // 设计依据（兰亭xDSH原生插件化深度适配方案 §3 中工具化拍板）：
 //   判据 = 命令是不是「模型的决策点」。记忆面/质量面是模型高频决策点 → 工具化；
@@ -12,6 +12,9 @@
 //   - ctx.timeout：fiber 生命周期计时器（卸载自动清理）；
 //   - 工具执行不经过 pwsh/bash exec → 与 guard 的 tools/pre-execute（只查 pwsh/bash）无交叉；
 //     但 spawn 命令形态保持 .venv python _cli.py，与 guard CLI 白名单同一契约。
+//   - guard 合并：原 @presales/dsh-guard 作为本包的子入口 `@nyantused/folio-dsh-tools/guard` 提供
+//     （见 guard-entry.js），主入口只注册 15 个工具。安装时可按拓扑分别挂载：
+//     preset 层挂主入口（工具限售前模式），profile 层挂 guard 子入口（守卫收 root 事件）。
 //
 // 输出协议：CLI 多数命令支持 --json 结构化输出（status/recall/graph-query/session-start）；
 //   不支持 --json 的命令返回 stdout 原文（模型读文本）。工具 value 恒为
@@ -108,6 +111,8 @@ function apply(ctx) {
   for (const def of TOOL_DEFS) {
     ctx.tools.register(makeCliTool(ctx, def));
   }
+  // 注意：L0 守卫不在这里安装。守卫由子入口 `@nyantused/folio-dsh-tools/guard` 提供
+  // （guard-entry.js），以便按拓扑挂 profile 层；主入口可安全挂 preset 层。
 }
 
 export { apply, inject, name };

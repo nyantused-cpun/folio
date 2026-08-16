@@ -2,9 +2,14 @@
 #
 # 写法依据：cordis-plugin-include applyEntryPatches 语义（0.1.0-rc.6 逐行核实）
 #   - 新增插件 entry 必须用「无 id 的 insert」（直接追加到 entry 列表）
-#   - 安装：把本目录软链/复制到 profiles/<name>/node_modules/@folio/dsh-tools，
+#   - 安装：把本目录软链/复制到 profiles/<name>/node_modules/@nyantused/folio-dsh-tools，
 #     并在 profiles/<name>/cordis.patch.yml 顶层写同一段
+#   - 2026-08-16：并入原 @presales/dsh-guard 为子入口 @nyantused/folio-dsh-tools/guard，
+#     通过 dsh plugin add / dshmarket 安装本包时同时激活工具 + 守卫两个 entry。
 - insert:
     - id: folio-tools
-      name: "@folio/dsh-tools"
+      name: "@nyantused/folio-dsh-tools"
+      config: {}
+    - id: folio-guard
+      name: "@nyantused/folio-dsh-tools/guard"
       config: {}

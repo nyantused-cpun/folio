@@ -1,4 +1,4 @@
-# @folio/dsh-events —— 兰亭会话协议事件插件
+# @nyantused/folio-dsh-events —— 兰亭会话协议事件插件
 
 > P1 实施 M3（2026-08-14）。把 AGENTS.md 会话纪律机械化（「纪律变机械」第一步）。
 

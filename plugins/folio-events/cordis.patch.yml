@@ -3,5 +3,5 @@
 # 写法与 folio-tools 同：新增插件 entry 用「无 id 的 insert」
 - insert:
     - id: folio-events
-      name: "@folio/dsh-events"
+      name: "@nyantused/folio-dsh-events"
       config: {}

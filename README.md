@@ -65,7 +65,7 @@ HTML / DOCX / 报价三种格式零外部依赖，装完即用。**PPT 转换**�
 folio/
 ├── src/          # 内核（63 个 CLI 命令 + 渲染器 + 检索/记忆/质量链）
 ├── skills/       # 11 个方法论 skill（含 packs-authoring 创作指南）
-├── guard/        # DSH 守卫插件（L0 机械拦截，0.1.0-rc.4 含 shell 直写检测 + 作用域隔离）
+├── guard/        # 历史独立守卫插件（已并入 plugins/folio-tools 的 @nyantused/folio-dsh-tools/guard 子入口，保留作参考）
 ├── plugins/      # DSH 插件层：folio-tools（15 个原生工具）+ folio-events（会话协议，preset 挂载）
 ├── preset/       # 兰亭 agent preset 模板（install-folio-plugins.ps1 安装时落盘/替换占位符）
 ├── setup/        # 一键安装脚本（install.ps1 内核 + install-folio-plugins.ps1 插件层）

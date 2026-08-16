@@ -1,4 +1,4 @@
-// @folio/dsh-tools 工具定义表（纯数据 + 纯函数，零外部依赖，可独立单测）
+// @nyantused/folio-dsh-tools 工具定义表（纯数据 + 纯函数，零外部依赖，可独立单测）
 //
 // buildArgs 是纯函数：把模型传入的 typed args 映射为 CLI argv 片段。
 // 命令形态契约：spawn 时拼在 [PYTHON, "_cli.py", ...] 之后，

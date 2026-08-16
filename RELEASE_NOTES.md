@@ -33,8 +33,8 @@ Folio 是给 AI 宿主（DeepSeek Harness / Trae / Kimi 等）外挂的**长程�
 
 ### DSH 深度适配（P1 插件层随本版发布）
 
-- **15 个原生工具**（`@folio/dsh-tools`）：记忆面 9 + 质量面 6，defineTool 注册、参数 schema 校验、结构化返回
-- **会话协议事件插件**（`@folio/dsh-events`）：新会话自动提醒入口协议、工具调用提取客户名、会话关闭自动保存档案
+- **15 个原生工具**（`@nyantused/folio-dsh-tools`）：记忆面 9 + 质量面 6，defineTool 注册、参数 schema 校验、结构化返回
+- **会话协议事件插件**（`@nyantused/folio-dsh-events`）：新会话自动提醒入口协议、工具调用提取客户名、会话关闭自动保存档案
 - **L0 守卫插件**（guard 0.1.0-rc.2）：拦产出物直写、拦非 CLI python 直调、补 shell 直写检测
 - **agent preset**：兰亭模式（persona + 五段 SOP + 精选工具）
 - **LLM_MODE=host**：DSH 下 5 个 LLM 命令不依赖云端 key，推理交由宿主 AI 执行；读图/搜索/独立审查由宿主原生覆盖——**零 key 起步**
