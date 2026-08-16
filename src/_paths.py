@@ -20,7 +20,11 @@ import os
 import hashlib
 import pickle
 
-SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+# 发布版目录契约（2026-08-16）：代码在 src/，用户工作区在仓库根。
+# CODE_DIR  = src/（styles.json / assets 等代码资源所在）
+# SCRIPT_DIR = 仓库根（.env / output / inbox / _knowledge / .trae 等用户数据所在）
+CODE_DIR = os.path.dirname(os.path.abspath(__file__))
+SCRIPT_DIR = os.path.dirname(CODE_DIR)
 
 # 客户与知识库
 CLIENTS_DIR = os.path.join(SCRIPT_DIR, "_knowledge", "clients")
@@ -34,7 +38,7 @@ TASK_HISTORY = os.path.join(LOGS_DIR, "task_history.json")
 # 渲染相关
 PPT_WORKSPACE = os.path.join(SCRIPT_DIR, "ppt_workspace")
 OUTPUT_DIR = os.path.join(SCRIPT_DIR, "output")
-STYLES_PATH = os.path.join(SCRIPT_DIR, "_renderer", "styles.json")
+STYLES_PATH = os.path.join(CODE_DIR, "_renderer", "styles.json")
 PROFILE_PATH = os.path.join(SCRIPT_DIR, "_knowledge", "me", "profile.md")
 
 # 产出扫描跳过目录（D-118：audit / stop_verify 单一数据源）
@@ -64,8 +68,10 @@ BANNED_PHRASES = ["综上所述", "总而言之", "不难看出", "可以说"]
 # 世界书（spec 第三块）
 INSIGHTS_DIR = os.path.join(LOGS_DIR, "insights")
 
-# 技能（.trae/skills 唯一事实源 + 已读哨兵）
+# 技能（内部布局 .trae/skills 事实源 + 发布版根 skills/ 兼容）
 SKILLS_DIR = os.path.join(SCRIPT_DIR, ".trae", "skills")
+if not os.path.isdir(SKILLS_DIR) and os.path.isdir(os.path.join(SCRIPT_DIR, "skills")):
+    SKILLS_DIR = os.path.join(SCRIPT_DIR, "skills")
 SKILL_READ_DIR = os.path.join(LOGS_DIR, "skill_read")
 
 

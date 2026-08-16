@@ -27,7 +27,7 @@ from pathlib import Path
 from typing import List, Optional
 
 
-SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+SCRIPT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # 仓库根
 INBOX_DIR = os.path.join(SCRIPT_DIR, "inbox")
 UNCATEGORIZED_DIR = os.path.join(INBOX_DIR, "_uncategorized")
 REPORTS_DIR = os.path.join(INBOX_DIR, "_scan_reports")

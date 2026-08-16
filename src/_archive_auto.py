@@ -19,7 +19,7 @@ import os
 import shutil
 from datetime import datetime
 
-SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+SCRIPT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # 仓库根
 LOG_DIR = os.path.join(SCRIPT_DIR, ".trae", "logs")
 SESSION_START_LOG = os.path.join(LOG_DIR, "session_start_time.txt")
 PENDING_LOG = os.path.join(LOG_DIR, "archive_pending.json")

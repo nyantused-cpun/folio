@@ -3,7 +3,7 @@ import os
 import re
 import math
 
-SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+SCRIPT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # 仓库根
 
 MIN_PPTX_SIZE = 5 * 1024
 MIN_HTML_SIZE = 500

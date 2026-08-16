@@ -55,13 +55,15 @@ if ($missing.Count -eq 0) {
     Write-Host "  [WARN] Missing imports: $($missing -join ', ')" -ForegroundColor Yellow
 }
 
-# ---------- Step 4: node (optional, PPT conversion chain) ----------
-$node = Get-Command node -ErrorAction SilentlyContinue
-if ($node) {
-    Write-Host "  [OK] node found: PPT conversion chain available" -ForegroundColor Green
+# ---------- Step 4: PPT conversion backend ----------
+# 2026-08-16 更新：转换后端为自研 python-pptx（Step 3 的 pptx import 即检查）；
+# 不再依赖 node 工具链。--shots 截图目检需要本机 PowerPoint（COM），无则跳过。
+$hasPptx = & $pip -c "import pptx" 2>$null
+if ($LASTEXITCODE -eq 0) {
+    Write-Host "  [OK] python-pptx found: PPT conversion backend available" -ForegroundColor Green
 } else {
-    Write-Host "  [WARN] node not found. HTML/DOCX/quote work; PPT conversion needs the node toolchain." -ForegroundColor Yellow
-    Write-Host "         (See README 'PPT 转换工具链' section.)" -ForegroundColor Yellow
+    Write-Host "  [WARN] python-pptx import failed. PPT conversion unavailable until deps are fixed." -ForegroundColor Yellow
+    Write-Host "         Run: $pip -m pip install -r requirements.txt" -ForegroundColor Yellow
 }
 
 # ---------- Step 5: .env generation ----------

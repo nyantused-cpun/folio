@@ -6,7 +6,7 @@ from _cloud_llm import chat, _parse_json, LLM_MODE
 from _pipeline import read_batch
 from _outline_to_spec import _recall_evidence
 
-SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+SCRIPT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # 仓库根
 
 QUOTE_EXTRACT_SYSTEM = """你是报价需求提取助手。从客户材料中提取报价相关需求，输出 JSON。
 规则：

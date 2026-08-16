@@ -6,7 +6,7 @@ import re
 
 import jieba
 
-SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+SCRIPT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # 仓库根
 CACHE_DIR = os.path.join(SCRIPT_DIR, "_knowledge", ".cache")
 BM25_INDEX_PATH = os.path.join(CACHE_DIR, "bm25_index.pkl")
 

@@ -20,7 +20,7 @@ import threading
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+SCRIPT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # 仓库根
 OUTLINES_DIR = os.path.join(SCRIPT_DIR, "_knowledge", "templates", "outlines")
 
 # role → layout 映射（spec.yml 的 layout 字段）

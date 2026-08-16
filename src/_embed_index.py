@@ -19,7 +19,7 @@ import json
 
 import numpy as np
 
-SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+SCRIPT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # 仓库根
 CACHE_DIR = os.path.join(SCRIPT_DIR, "_knowledge", ".cache")
 # 新格式
 EMBED_MATRIX_PATH = os.path.join(CACHE_DIR, "embeddings_matrix.npy")
@@ -352,13 +352,11 @@ def scan_corpus_with_warnings():
     docs_dir = os.path.join(SCRIPT_DIR, "docs")
     # D-122：叙事/4A skill 方法论一并进索引（专家化——生成前召回
     # 十二种构图母板与 4A 及格线）
+    from _paths import SKILLS_DIR
     METHOD_SKILL_FILES = (
-        os.path.join(SCRIPT_DIR, ".trae", "skills",
-                     "presentation-content-design", "SKILL.md"),
-        os.path.join(SCRIPT_DIR, ".trae", "skills",
-                     "presentation-content-design", "reference.md"),
-        os.path.join(SCRIPT_DIR, ".trae", "skills",
-                     "architecture-diagram-builder", "SKILL.md"),
+        os.path.join(SKILLS_DIR, "presentation-content-design", "SKILL.md"),
+        os.path.join(SKILLS_DIR, "presentation-content-design", "reference.md"),
+        os.path.join(SKILLS_DIR, "architecture-diagram-builder", "SKILL.md"),
     )
     all_method_files = [os.path.join(docs_dir, dn) for dn in METHOD_DOCS]
     all_method_files += [sf for sf in METHOD_SKILL_FILES

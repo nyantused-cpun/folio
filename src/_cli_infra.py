@@ -2,7 +2,7 @@
 """CLI 基础设施：环境加载、环境检查、文件打开。"""
 import os
 
-SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+SCRIPT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # 仓库根（.env 等用户数据）
 
 
 def _load_dotenv():
@@ -31,26 +31,12 @@ _load_dotenv()
 
 
 def _check_env():
-    """检查关键环境变量，缺失时打印警告。"""
-    required = {
-        "TAVILY_API_KEY": "Tavily 联网搜索（第一检索引擎）→ 缺失：web-search 仅剩字节搜索可用",
-        "ZHIPU_API_KEY": "智谱 LLM（embedding/chat/rerank）→ 缺失：语义召回降级为 BM25，LLM 类功能不可用",
-    }
-    missing = []
-    for var, desc in required.items():
-        if not os.environ.get(var):
-            missing.append(f"  {var} ({desc})")
-    if missing:
-        print("[环境检查] 以下环境变量未设置，对应功能按降级矩阵处理：")
-        for m in missing:
-            print(m)
-        print("  排查 key 来源与可用性：python _cli.py key-doctor")
-    
-    has_byte_search = os.environ.get("ASK_ECHO_SEARCH_INFINITY_API_KEY") or \
-                      (os.environ.get("VOLCENGINE_ACCESS_KEY") and os.environ.get("VOLCENGINE_SECRET_KEY"))
-    if not has_byte_search:
-        print("[环境检查] 字节搜索未配置（第二检索引擎），搜索仅使用 Tavily。")
-        print("  如需启用字节搜索，请设置 ASK_ECHO_SEARCH_INFINITY_API_KEY 或 VOLCENGINE_ACCESS_KEY/SECRET_KEY。")
+    """发布版口径（2026-08-16）：零 key 是正常状态，不再每次启动刷缺失警告。
+
+    能力降级矩阵保留（不配 key 自动降级 BM25/宿主能力）；「建议配什么 key」
+    只在 key-doctor 与 .env.example / docs/能力配置引导 中呈现。
+    """
+    pass
 
 
 _check_env()

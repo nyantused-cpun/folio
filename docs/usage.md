@@ -66,5 +66,5 @@ AI 执行 `save`：写客户记忆、归档窗口内文件、更新世界书图�
 想体验语义召回（L1）：按 `docs/能力配置引导` 配 1 个 embedding key，然后重建索引：
 
 ```powershell
-.venv\Scripts\python.exe src\_cli.py embed-rebuild
+.venv\Scripts\python.exe _cli.py embed-rebuild
 ```

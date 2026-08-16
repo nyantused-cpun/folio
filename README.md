@@ -29,7 +29,7 @@ dsh plugin --profile web add @nyantused/folio-dsh-events
 .\setup\install-folio-plugins.ps1 -Install
 
 # 4. 看自检结果
-#    输出示例：✅ Python 3.12  ✅ 依赖齐全  ⚠️ PPT 转换工具链未装（HTML/DOCX 不受影响）
+#    输出示例：✅ Python 3.12  ✅ 依赖齐全  ✅ python-pptx（PPT 转换后端可用）
 #              当前能力等级 L0：零 key 可跑（DSH 下读图/搜索/审查走宿主原生）
 ```
 
@@ -42,12 +42,13 @@ dsh plugin --profile web add @nyantused/folio-dsh-events
 | 等级 | 配置 | 得到什么 |
 |---|---|---|
 | L0 | 无 | 切片 + BM25 + 生成渲染 + 质量门禁；DSH 下读图/搜索/独立审查走宿主原生 |
-| L1 | +1 个 embedding key | 语义召回（"那个做化工的客户"→ 找到对应档案） |
+| L1 | +1 个 embedding key | 语义召回（"那个做化工的客户"→ 找到对应档案）；不配自动降级纯 BM25 |
 | L2 | +读图/搜索 key | 独立 CLI 场景全量（非 DSH 宿主） |
+| L3 | +独立审查 chat key | review 的独立 LLM 会话（DSH 下可用子代理替代，零 key） |
 
-## PPT 转换工具链（v0.1 说明）
+## PPT 转换（python-pptx 自研后端）
 
-HTML / DOCX / 报价三种格式零外部依赖，装完即用。**PPT 转换**依赖 node 工具链（HTML→PPTX 转换器）：install 脚本会检测 node，缺失时标黄提示但不阻断安装——其余功能不受影响。工具链本身随 v0.2 发布（vendor 或 npm 分发），v0.1 期间 PPT 由 `html-build` 同源生成 `.pptd` 工程，转换步骤见 install 输出提示。
+HTML / DOCX / 报价三种格式零外部依赖，装完即用。**PPT 转换**由自研 python-pptx 后端完成（`PPTD_BACKEND=python_pptx`，随 requirements 安装），**不依赖 node 工具链**；`pptd-build --shots` 逐页截图目检需要本机 PowerPoint（COM），没有则跳过截图。PPT 工程由 `html-build` 同源生成 `.pptd`，再 `pptd-build` 转 PPTX。
 
 ## 产品结构：五段价值链
 
@@ -71,12 +72,11 @@ HTML / DOCX / 报价三种格式零外部依赖，装完即用。**PPT 转换**�
 folio/
 ├── src/          # 内核（63 个 CLI 命令 + 渲染器 + 检索/记忆/质量链）
 ├── skills/       # 11 个方法论 skill（含 packs-authoring 创作指南）
-├── guard/        # 历史独立守卫插件（已并入 plugins/folio-tools 的 @nyantused/folio-dsh-tools/guard 子入口，保留作参考）
-├── plugins/      # DSH 插件层：folio-tools（15 个原生工具）+ folio-events（会话协议，preset 挂载）
+├── plugins/      # DSH 插件层：folio-tools（15 个原生工具 + L0 守卫子入口）+ folio-events（会话协议，preset 挂载）
 ├── preset/       # 兰亭 agent preset 模板（install-folio-plugins.ps1 安装时落盘/替换占位符）
 ├── setup/        # 一键安装脚本（install.ps1 内核 + install-folio-plugins.ps1 插件层）
 ├── docs/         # 定位 / 能力引导 / usage 快速上手教程
-└── tests/        # 测试套件（63 个文件；基线含客户材料已裁，见下）
+└── tests/        # 测试套件（61 个文件；基线含客户材料已裁，见下）
 ```
 
 ## 测试
@@ -124,8 +124,6 @@ Folio 聚焦「长程材料生成」，不重复造社区已经做好的轮子�
   - dsh-memory-evolve（长期记忆设计参考）
   - ModLens / dsh-qwen-mm（社区读图方案参考）
 
-> 详细对比见 [docs/社区插件排查与兰亭友情链接建议_2026-08-15.md](docs/社区插件排查与兰亭友情链接建议_2026-08-15.md)。
-
 P0 社区插件（右侧预览 / GitHub / Token / 团队）脚本已提供，但 **2026-08-15 起暂缓启用（装而未挂）**：peer 依赖在 profile node_modules 缺失或双副本会引发 `dsh-scope Symbol` 分裂，官方 plugin 通道稳定后再开启。当前不要直接跑 `-Install`，可先 `-DryRun` / `-Verify` 看计划：
 
 ```powershell
@@ -169,14 +167,13 @@ pwsh .\setup\install-community-plugins.ps1 -Verify
 
 ## 状态与路线
 
-- **v1.0.0（当前）**：首个正式发布——五段价值链全链路 + DSH 深度适配 + LLM host 模式（0 key 起步）+ 安装脚本/自检。变更见 [CHANGELOG.md](CHANGELOG.md)。
+- **v1.0.1（当前）**：guard 作用域隔离 + 插件包名 @nyantused/folio-dsh-* + preset 入仓。变更见 [CHANGELOG.md](CHANGELOG.md)。
 - **v1.1 优先补全（开源后第一波）**
   1. 右侧预览区：接入 DSH-better-sidebar（或自研 folio-preview 兜底）
   2. GitHub 集成：`dsh-github-connector` 或自研 `folio_github` 工具
   3. Token 可视化：`context-vista` 或自研会话 Token 面板
   4. 团队可视化：`dsh-agent-teams` 或基于 DSH subagent 事件的自研面板
 - **v1.1 其余规划**：`domain-pack.yml` 方法论包契约（机械校验）+ 市场营销冒烟包 + PPT 工具链正式分发
-  - 实施细节见 [docs/兰亭P0插件补全计划_2026-08-15.md](docs/兰亭P0插件补全计划_2026-08-15.md)
 - 平台：Windows 首发（macOS/Linux 安装脚本待补，欢迎社区贡献 install.sh / 环境适配；或等待官方工具链更成熟后跟进）；PPT 转换工具链要求见安装脚本输出
 
 ## 许可证

@@ -362,9 +362,10 @@ def cmd_index_rebuild(args):
 
 
 def cmd_skills_sync(args):
-    """.trae/skills/ -> .agents/skills/ 单向镜像（事实源在前者）。"""
+    """.trae/skills/（或发布版 skills/）-> .agents/skills/ 单向镜像（事实源在前者）。"""
+    from _paths import SKILLS_DIR
     from _skills_sync import sync_skills
-    src = os.path.join(SCRIPT_DIR, ".trae", "skills")
+    src = SKILLS_DIR
     dst = os.path.join(SCRIPT_DIR, ".agents", "skills")
     if not os.path.isdir(src):
         print(f"错误: 技能源目录不存在: {src}")
@@ -402,9 +403,10 @@ def cmd_load_skill(args):
         print("  用法: python _cli.py load-skill <技能名> | list")
         sys.exit(1)
 
-    skill_path = os.path.join(SCRIPT_DIR, ".trae", "skills", skill, "SKILL.md")
+    from _paths import SKILLS_DIR
+    skill_path = os.path.join(SKILLS_DIR, skill, "SKILL.md")
     if not os.path.isfile(skill_path):
-        print(f"错误: 未找到技能 {skill}（.trae/skills/{skill}/SKILL.md 不存在）")
+        print(f"错误: 未找到技能 {skill}（{SKILLS_DIR}/{skill}/SKILL.md 不存在）")
         print("  用法: python _cli.py load-skill <技能名> | list")
         sys.exit(1)
 

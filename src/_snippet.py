@@ -10,7 +10,7 @@ import json
 import re
 from datetime import datetime
 
-SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+SCRIPT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # 仓库根
 SNIPPETS_DIR = os.path.join(SCRIPT_DIR, "_knowledge", "snippets")
 INDEX_PATH = os.path.join(SNIPPETS_DIR, "index.json")
 

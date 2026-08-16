@@ -8,7 +8,7 @@ PDF/DOCX/PPTX 通过本脚本转换为纯文本后交 AI 理解。
 import os
 import sys
 
-SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+SCRIPT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # 仓库根
 
 
 def read_txt(path):

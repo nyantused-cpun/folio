@@ -28,7 +28,7 @@ Workflow:
 1. Generate draft spec (via `spec-gen` / `outline-to-spec` / manual write)
 2. **Show the draft to the user** and explicitly ask: "spec 草稿已生成，请确认内容是否正确？确认后我会加 `confirmed: true` 并开始生成。"
 3. Only after the user confirms, add `confirmed: true` to the spec top level
-4. Then call `html-build` / `ppt-build` / etc.
+4. Then call `html-build`（同出 .pptd 工程）/ `pptd-build` / etc.（`ppt-build` 已退役 D-090）
 
 Never set `confirmed: true` proactively without user confirmation. This is the L3 boundary — spec 中没有的内容一律不写.
 
@@ -341,7 +341,7 @@ User: "出一份报价 spec"
 | DOCX 里出现 `[架构图：...] 请见 HTML/PPT 版` | diagram/占位卡在 DOCX 端无原生渲染（预期降级） | 预期行为；要 DOCX 出架构内容改用 `architecture_4a` 或文字元素 |
 | HTML/PPT 里出现 `[4A 架构图] 本节内容请见 Word 版` | `architecture_4a` 仅 DOCX 原生 | 改用 `diagram`（architecture/4a、layered 子类型） |
 | `theme-verify` low coverage | Spec content missing permanent-theme keywords from `theme-guard` output | Add keywords to page content, rebuild |
-| `ppt-build` crashes on page N | Element type mismatch for that page's layout | Run `ppt-page spec.yml <page>` to isolate, fix element schema |
+| `pptd-build` 报错 on page N | Element type mismatch for that page's layout | 用 `html-build` 双输出重建 .pptd 工程，核对该页元素 schema 后重跑 `pptd-build` |
 | Quote `total_label` missing | Section lacks `total_label` field | Add `total_label: <合计标签>` to each section |
 | `--style` rejected | Not one of `education/enterprise/tech/gov` | Use a valid style or omit (uses spec `style` field) |
 

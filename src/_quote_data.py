@@ -7,7 +7,7 @@
 import os
 import yaml
 
-SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+SCRIPT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # 仓库根
 LIBRARY_DIR = os.path.join(SCRIPT_DIR, "_knowledge", "quote_library")
 TEMPLATE_DIR = os.path.join(SCRIPT_DIR, "_knowledge", "templates", "报价版式")
 

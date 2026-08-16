@@ -197,16 +197,17 @@
         toolName: subagent_fork
         backgroundMode: continuable
 
-    # 售前助手定制：轻量档子代理固定 deepseek-v4-flash（主代理仍 v4-pro）。
+    # 售前助手定制：轻量档子代理。发布版不硬编码内部 provider/model——
+    # 需要轻量档的用户请按自己的 DSH Models 配置补充 agentOptions：
+    #   agentOptions:
+    #     provider: <你的 provider>
+    #     model: <你的轻量模型>
     - id: tool-subagent-flash
       name: '@deepseek-ai/dsh-tool-subagent'
       config:
         provider: spawn
         toolName: subagent_flash
         backgroundMode: continuable
-        agentOptions:
-          provider: deepseek-official
-          model: deepseek-v4-flash
 
     # Product providers are host-plane singletons. Copy this preset, then
     # remove `disabled` from either ordinary tool row to expose that product

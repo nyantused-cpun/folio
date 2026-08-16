@@ -101,7 +101,7 @@ description: "非固定部分（页眉页脚/布局/配色/组件）的统一 UI
 ## 5. 调试指引
 
 - **HTML 调试**：`python _cli.py html-build <spec> --client <客户>` 后用浏览器打开 output 文件
-- **PPT 调试**：`python _cli.py ppt-page <spec> <page>` 单页热替换，修改 spec 后重新 build 该页
+- **PPT 调试**：改单页走 HTML 可编辑模式（`html-build` 双输出），再 `python _cli.py pptd-build <工程目录>/<主>.pptd` 重建；旧命令 `ppt-page`/`ppt-build`/`html-to-ppt` 已退役（D-090）
 - **styles.json 修改后**：重新 build 即可生效（每次 `Renderer.__init__` 重读 styles.json）
 - **verify 只检查格式**：不检查 UI 质量。UI 质量靠 `python _cli.py review <文件> --client <客户>` 审查
 - **配色检查**：用浏览器开发者工具检查 CSS 变量是否正确加载

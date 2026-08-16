@@ -27,7 +27,7 @@ class OutputPathNotAllowedError(Exception):
     pass
 
 
-SCRIPT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+SCRIPT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))  # 仓库根（output 白名单）
 
 # outline-to-spec 提取失败占位页的标记串（生成点：_outline_to_spec.py
 # 失败章节的占位 text 元素 content），Renderer init 据此进 report.warnings
@@ -57,7 +57,7 @@ def _validate_output_path(output_path):
 
 def _resolve_style(style_name):
     """解析风格名称，返回 styles.json 中对应的配置。"""
-    styles_path = os.path.join(SCRIPT_DIR, "_renderer", "styles.json")
+    styles_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "styles.json")
     if os.path.exists(styles_path):
         with open(styles_path, "r", encoding="utf-8") as f:
             styles = json.load(f)
