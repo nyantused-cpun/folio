@@ -174,7 +174,7 @@ pwsh .\setup\install-community-plugins.ps1 -Verify
   3. Token 可视化：`context-vista` 或自研会话 Token 面板
   4. 团队可视化：`dsh-agent-teams` 或基于 DSH subagent 事件的自研面板
 - **v1.1 其余规划**：`domain-pack.yml` 方法论包契约（机械校验）+ 市场营销冒烟包 + PPT 工具链正式分发
-- 平台：Windows 首发（macOS/Linux 安装脚本待补，欢迎社区贡献 install.sh / 环境适配；或等待官方工具链更成熟后跟进）；PPT 转换工具链要求见安装脚本输出
+- 平台：Windows 首发（macOS/Linux 安装脚本待补，欢迎社区贡献 install.sh / 环境适配；或等待官方工具链更成熟后跟进）；PPT 转换的 PowerPoint 截图要求见安装脚本输出
 
 ## 许可证
 

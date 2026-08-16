@@ -73,5 +73,5 @@ P1 插件层随 v1.0 发布线合入 `plugins/`（运行级验证待 dsh web 重
 ### 已知限制（v1.0）
 
 - 首发平台 Windows；macOS/Linux 安装脚本待补
-- PPT 转换工具链依赖 node，v0.1 期间需自备（HTML/DOCX/报价不受影响）
+- PPT 转换为自研 python-pptx 后端（`PPTD_BACKEND=python_pptx`）；`--shots` 截图目检需本机 PowerPoint，无则跳过（HTML/DOCX/报价不受影响）
 - `domain-pack.yml` 方法论包契约（机械校验）计划 v1.1
