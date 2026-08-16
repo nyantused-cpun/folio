@@ -90,6 +90,8 @@ Three selling points:
 
 ## 8. Getting started
 
+**Prerequisites**: Windows 10/11, PowerShell, Python ≥ 3.10, Git and network access to PyPI. Node.js is not required; PowerPoint is optional (only `--shots` needs it). API keys are optional — zero keys is a supported L0 setup.
+
 1. **Install**: run `setup/install.ps1` (kernel) → `setup/install-folio-plugins.ps1 -Install` (plugin layer) → restart dsh web
 2. **Use**: a new session auto-injects the entry protocol reminder; just ask "which folio tools do I have"
 3. **Swap**: install the Folio Pack for your industry; change the SOP section of the preset for your way of working

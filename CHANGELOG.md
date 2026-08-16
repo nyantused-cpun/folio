@@ -6,17 +6,18 @@
 
 ### 新增
 
-- **社区友好基建**：GitHub Actions CI（pytest + 插件 JS 自检/语法检查）；Issue feature_request 模板；PR 模板移入 `.github/` 标准位；`requirements-dev.txt`（pytest，playwright 可选）。
-- **双语示例产出**：中/英各一份演示方案 HTML + PPTX（5 页，verify PASS）；英文产品说明 `docs/product-brief_v4.0_en.md`。
+- **社区友好基建**：GitHub Actions CI（pytest + 插件 JS 自检/语法检查）；Issue feature_request 模板；PR 模板移入 `.github/` 标准位；`requirements-dev.txt`（pytest，playwright 可选）；README 顶部 English TL;DR。
+- **双语示例产出**：中/英各一份演示方案 HTML + PPTX（5 页，verify PASS），演示 spec 源文件入仓 `samples/`；英文产品说明 `docs/product-brief_v4.0_en.md`。
 - **环境要求清单**：README Requirements 表（OS/PowerShell/Python ≥ 3.10/Git/网络/DSH/Node 不需要/PowerPoint 可选/零 key）。
-- **运行时目录去宿主化**：`.trae` → `.folio`；skills 自动挂载（install-folio-plugins 跑 skills-sync）。
+- **运行时目录去宿主化**：`.trae` → `.folio`（代码/tests/文档全量）；skills 自动挂载（install-folio-plugins 跑 skills-sync）；`.gitignore` 忽略 `.folio/` 与 `.agents/`。
+- **spec 协议入仓**：`docs/spec_protocol_v1.md` 随发布版分发，内部死链与 `.trae` 路径改写为发布版口径。
 
 ### 修复
 
 - **发布版路径契约统一为「仓库根 = 用户工作区」**：根级 `_cli.py` 转发入口（插件/guard/skills 的 `python _cli.py` 口径全部可用）；`.env`、output、inbox、_knowledge、.folio 从 `src/` 内迁回仓库根；`load-skill`/`skills-sync` 兼容发布版根 `skills/` 布局。
 - **PPT 后端口径更正**：README/RELEASE_NOTES/install.ps1 由「依赖 node」更正为自研 python-pptx 后端（`--shots` 截图需本机 PowerPoint）。
 - **skill 废弃命令清理**：`ui-design-system` 与 `spec-writing-guide` 中残留的 `ppt-page`/`ppt-build` 用法改为 `html-build` 双输出 + `pptd-build`（D-090）。
-- **文档冲突清理**：技术白皮书事件机制更新为 `agent/disposed` 扫描；产品定位 8 命令工具化更正为 15 个；guard 版本对外口径统一为「随 folio-dsh-tools 1.1.0 分发」；README 死链/测试数/版本状态修正；preset 移除内部模型硬编码。
+- **文档冲突清理**：技术白皮书事件机制更新为 `agent/disposed` 扫描；产品定位 8 命令工具化更正为 15 个；产品说明/白皮书「minimal 蓝本」更正为实际基线 standard（Windows PTY 兼容）且日期同步 08-16；guard 版本对外口径统一为「随 folio-dsh-tools 1.1.0 分发」；README 死链/测试数/版本状态修正；preset 移除内部模型硬编码；CONTRIBUTING 分支口径 main→master、clone 地址替换、测试安装说明补齐；run-check 测试桩移除作者机器路径。
 - **启动降噪**：`_check_env` 不再每次刷缺失 key 警告（零 key 是正常状态；建议配置集中在 key-doctor 与 .env.example/能力配置引导）。
 
 ## [1.0.1] - 2026-08-15

@@ -1,5 +1,7 @@
 # 兰亭（Folio）· 咨询/汇报材料生成引擎
 
+> **English TL;DR** — Folio is a DSH-native material-generation engine for consultants: 15 schema-validated `folio_*` tools, session-protocol auto-save, an L0 guard, and a swappable methodology-pack system. Zero API keys to start (L0); one embedding key unlocks semantic recall (L1). Requirements: Windows 10/11, PowerShell, Python ≥ 3.10 — **Node.js not required**. See the [English product brief](docs/product-brief_v4.0_en.md), or open the bilingual demo outputs in the [v1.0.2 release](https://github.com/nyantused-cpun/folio/releases/tag/v1.0.2).
+
 > **材料生成引擎 + 可组合方法论包，首发深度适配 DSH。**
 > Folio = 对开本/作品集：把客户扔进来的材料，装订成能送达的汇报材料。
 
@@ -184,7 +186,9 @@ pwsh .\setup\install-community-plugins.ps1 -Verify
 
 ## 状态与路线
 
-- **v1.0.2（当前）**：CI 流水线 + 社区友好基建（Issue/PR 模板、dev 依赖、真实仓库地址）+ 中英双语示例产出。变更见 [CHANGELOG.md](CHANGELOG.md)。
+- **v1.0.2（当前，2026-08-16）**：CI 流水线 + 社区友好基建（Issue/PR 模板、dev 依赖、真实仓库地址）+ 运行时目录去宿主化（`.trae` → `.folio`）+ 中英双语示例产出（HTML/PPTX）。变更见 [CHANGELOG.md](CHANGELOG.md)，示例见 [GitHub Release v1.0.2](https://github.com/nyantused-cpun/folio/releases/tag/v1.0.2)。
+- **v1.0.1**：guard 作用域隔离 + 插件包名 @nyantused/folio-dsh-* + preset 入仓。
+- **v1.0.0**：首个正式发布——五段价值链全链路 + DSH 深度适配 + LLM host 模式（0 key 起步）+ 安装脚本/自检。
 - **v1.1 优先补全（开源后第一波）**
   1. 右侧预览区：接入 DSH-better-sidebar（或自研 folio-preview 兜底）
   2. GitHub 集成：`dsh-github-connector` 或自研 `folio_github` 工具
