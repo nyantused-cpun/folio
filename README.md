@@ -19,7 +19,13 @@ cd folio
 # 2. 一条命令安装内核（建 venv + 装依赖 + 生成配置 + 自检）
 .\setup\install.ps1
 
-# 3. DSH 插件层（可选但推荐）：15 个原生工具 + 会话协议事件 + agent preset + L0 守卫
+# 3. DSH 插件层（可选但推荐）——两种方式任选：
+
+#    方式 A：npm 一键安装（插件已发布 npm；安装 folio-dsh-tools 即含 15 工具 + L0 守卫）
+dsh plugin --profile web add @nyantused/folio-dsh-tools
+dsh plugin --profile web add @nyantused/folio-dsh-events
+
+#    方式 B：仓库脚本安装（额外做 pre-sales preset 作用域隔离，推荐完整使用）
 .\setup\install-folio-plugins.ps1 -Install
 
 # 4. 看自检结果
