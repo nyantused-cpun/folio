@@ -1,192 +1,192 @@
 # Architecture Diagram Builder - Reference
 
-本文件是 [SKILL.md](./SKILL.md) 的配套详细方法论。SKILL.md 是入口（快速定位），本文件是详情（按需查阅）。
+Companion detailed methodology for [SKILL.md](./SKILL.md). SKILL.md is the entry point (quick lookup); this file is the detail (read on demand).
 
 ---
 
-## methodology：方法论基础
+## methodology: Methodology Foundations
 
-> 四域设计的公共底座：视角、分层骨架、编号规则。各域细节见对应章节。
+> Shared base for four-domain design: viewpoints, layering skeleton, numbering rules. See each domain section for details.
 
-### 两种视角与翻译机制
+### Two Viewpoints and the Translation Mechanism
 
-- **APQC 是流程视角**（落地对象 = 人）：关注业务怎么流转。即使没有信息系统，人用 Excel 和计算器也能完成工作。
-- **4A 是系统视角**（落地对象 = 系统）：关注系统怎么替代人的工作。
-- **从 APQC 到 4A 的翻译机制是"自动化"**：能替代人的工作 → 功能项；不能替代的 → 不进清单。自动化有两个维度——自动化（替代人的执行，如余额自动计算）+ 智能化（替代人的判断，如风控自动审批）。
-- **关键原则**：流程层级由组织分工决定，不由执行者决定——即使 AI 完全替代了人的协作，该活动在流程上仍然是 L4。
+- **APQC is the process viewpoint** (landing object = people): focuses on how business flows. Even without information systems, people can complete work with Excel and calculators.
+- **4A is the system viewpoint** (landing object = systems): focuses on how systems replace human work.
+- **The APQC-to-4A translation mechanism is "automation"**: work that can replace people → functional item; work that cannot → excluded. Automation has two dimensions—automation (replaces human execution, e.g. automatic balance calculation) + intelligence (replaces human judgment, e.g. automatic risk-control approval).
+- **Key principle**: process levels are decided by organizational division of labor, not by the performer—even if AI fully replaces human collaboration, the activity remains L4 in the process.
 
-（来源：[discussions/2026-07-07 APQC到4A映射深度讨论](./discussions/2026-07-07_APQC到4A映射深度讨论.md)）
+(Source: [discussions/2026-07-07 APQC to 4A mapping deep dive](./discussions/2026-07-07_APQC到4A映射深度讨论.md))
 
-### 四域分层骨架
+### Four-Domain Layering Skeleton
 
-| 域 | 分层 | 细节章节 |
+| Domain | Layers | Details section |
 |---|---|---|
-| BA 业务架构 | APQC L1 Category → L2 Group → L3 Process → L4 Activity → L5 Task（APQC 官方只提供到 L3，L4/L5 企业自填） | #BA |
-| DA 数据架构 | L1 数据域 → L2 主题 → L3 概念实体 → L4 逻辑实体 → L5 属性 | #DA |
-| AA 应用架构 | AD → AG → APP → ABB → 功能项 → 功能子项（6 层） | #AA |
-| TA 技术架构 | 三横两纵 + 部署节点 | #TA |
+| BA Business Architecture | APQC L1 Category → L2 Group → L3 Process → L4 Activity → L5 Task (APQC officially provides only through L3; L4/L5 are filled by the enterprise) | #BA |
+| DA Data Architecture | L1 Data Domain → L2 Subject → L3 Conceptual Entity → L4 Logical Entity → L5 Attribute | #DA |
+| AA Application Architecture | AD → AG → APP → ABB → Functional Item → Functional Sub-Item (6 layers) | #AA |
+| TA Technology Architecture | Three horizontals, two verticals + deployment nodes | #TA |
 
-APQC ↔ 4A 完整 6 层对应表（组织分工视角 vs 系统视角）见 #function-identification。
+The full APQC ↔ 4A 6-layer correspondence table (organizational-division viewpoint vs system viewpoint) is in #function-identification.
 
-### APQC L1 参照
+### APQC L1 Reference
 
-运营流程（直接创造价值）：1.0 愿景战略 / 2.0 产品与服务开发 / 3.0 市场与销售 / 4.0 产品与服务交付 / 5.0 客户服务
+Operating processes (direct value creation): 1.0 Vision & Strategy / 2.0 Products & Services Development / 3.0 Marketing & Sales / 4.0 Products & Services Delivery / 5.0 Customer Service
 
-管理支持流程（保障运营）：6.0 人力资本 / 7.0 信息技术 / 8.0 财务资源 / 9.0 资产 / 10.0 风险合规 / 11.0 外部关系 / 12.0 业务能力
+Management and support processes (support operations): 6.0 Human Capital / 7.0 Information Technology / 8.0 Financial Resources / 9.0 Assets / 10.0 Risk & Compliance / 11.0 External Relationships / 12.0 Business Capabilities
 
-用法：不自己发明分类，直接对 APQC L1 做映射，再按企业规模和行业精简（合并或不单列）。逐类说明、精简示例（100 人化工 vs 大集团汽配）和对甲方话术见 `_knowledge/refs/apqc_pcf.md`。
+Usage: do not invent categories—map directly to APQC L1, then streamline by enterprise size and industry (merge or omit). Per-category explanations, streamlining examples (100-person chemical company vs large-group auto-parts), and client-facing wording are in `_knowledge/refs/apqc_pcf.md`.
 
-### L 编号与步骤编号规则
+### L Numbering and Step Numbering Rules
 
-- **层级编号**：L1-L5 表示分层深度，用于跨域对齐（APQC L4 = 4A ABB，APQC L5 = 4A 功能项）。
-- **步骤编号**：设计步骤用 1.0/2.0/3.0，子步骤用 1.1/1.2 二级嵌套（checklist 结构项强制检查）。
-- 每个设计步骤必须带"输入 / 任务 / 输出"三件套；每节末尾做三性验证（完整性 / 合理性 / 集成性）。
+- **Level numbering**: L1-L5 indicate layering depth, used for cross-domain alignment (APQC L4 = 4A ABB, APQC L5 = 4A functional item).
+- **Step numbering**: design steps use 1.0/2.0/3.0; sub-steps use 1.1/1.2 second-level nesting (checklist structure items are mandatory checks).
+- Every design step must have an "Input / Task / Output" triplet; at the end of each section run the three-property validation (completeness / reasonableness / integration).
 
 ---
 
-## execution-flow：执行流与锁定机制
+## execution-flow: Execution Flow and Locking Mechanism
 
-### 三阶段与执行顺序
+### Three Phases and Execution Order
 
-三阶段：① 写文档（Step 1-7）→ ② 合并检查（Step 8-9）→ ③ 画图（Step 10）。阶段一完成前不生成任何 HTML；阶段二未通过不进阶段三；阶段三发现文档问题必须回阶段一改，不能直接在 HTML 里改。
+Three phases: ① write documents (Step 1-7) → ② merge check (Step 8-9) → ③ draw diagrams (Step 10). Do not generate any HTML before phase 1 completes; do not enter phase 3 if phase 2 fails; if phase 3 finds document issues, return to phase 1 to fix—do not edit directly in HTML.
 
-文档顺序：需求识别 → BA → DA → AA → TA → 治理演进 → 产品映射。**禁止并行**。原因：BA 是输入，DA/AA 依赖 BA 的业务对象与流程步骤，TA 依赖 AA 的 APP 清单；并行生成等于各自臆造，跨域必然对不上。
+Document order: requirements identification → BA → DA → AA → TA → governance evolution → product mapping. **Parallel work is forbidden.** Reason: BA is the input; DA/AA depend on BA's business objects and process steps; TA depends on AA's APP list; parallel generation means each domain invents its own view, so cross-domain mismatches are inevitable.
 
-### 锁定机制（🔒）
+### Locking Mechanism (🔒)
 
-每步完成后输出**锁定清单**，用户确认才能进下一步。锁定清单 = 本步产出的关键结论，是下一步跨域检查的比对基准。
+After each step, output a **lock list**; user confirmation is required before the next step. Lock list = the key conclusions produced by this step and the comparison baseline for the next step's cross-domain check.
 
-格式（每域一张表）：
+Format (one table per domain):
 
-| 字段 | 内容 |
+| Field | Content |
 |---|---|
-| 步骤 | 如 Step 2 BA |
-| 产出物 | 本步交付的文档/清单名 |
-| 关键条目 | 供下一步比对的原子条目——BA：L1 域清单 + 流程步骤清单 + 业务对象清单；DA：概念实体清单；AA：APP/ABB/功能项清单；TA：部署节点清单 |
-| 状态 | 待确认 / 已确认（含确认日期） |
+| Step | e.g. Step 2 BA |
+| Deliverable | Document/list name delivered by this step |
+| Key items | Atomic items for the next step to compare—BA: L1 domain list + process step list + business object list; DA: conceptual entity list; AA: APP/ABB/functional item list; TA: deployment node list |
+| Status | Pending confirmation / Confirmed (with confirmation date) |
 
-规则：
+Rules:
 
-- 状态为"已确认"才允许进下一步；用户有异议则返回修改，修改后重新锁定。
-- 作用域仅当前会话；跨会话续作需重新确认（防止凭记忆续写）。
-- 锁定后发现错误，回到对应步骤修改，后续各步连锁重查。
+- Enter the next step only when status is "Confirmed"; if the user objects, return to modify and re-lock.
+- Scope is the current session only; cross-session continuation requires re-confirmation (prevents continuing from memory).
+- If an error is found after locking, return to the corresponding step to fix, then chain re-check all subsequent steps.
 
-### 逐步跨域检查
+### Incremental Cross-Domain Checks
 
-每次锁定后立刻做对应的跨域检查，不留到最后：
+Run the corresponding cross-domain check immediately after each lock; do not defer to the end:
 
-- DA 锁定后：BA→DA（业务对象 = 概念实体，同名）
-- AA 锁定后：BA→AA（流程步骤有对应 APP）+ DA→AA（逻辑实体有对应功能项）
-- TA 锁定后：AA→TA（每个 APP 有对应部署节点）
+- After DA lock: BA→DA (business object = conceptual entity, same name)
+- After AA lock: BA→AA (process step has corresponding APP) + DA→AA (logical entity has corresponding functional item)
+- After TA lock: AA→TA (every APP has a corresponding deployment node)
 
-检查规则与失败处理见 #cross-domain。逐步检查查"相邻域对得上"；阶段二的跨域总检查查"全局自洽"（传递一致性、范围闭合、遗漏发现、术语漂移），两者不重复。
+Check rules and failure handling see #cross-domain. Incremental checks verify "adjacent domains align"; phase-2 cross-domain total check verifies "global self-consistency" (transitive consistency, scope closure, gap discovery, terminology drift); the two do not duplicate.
 
 ---
 
-## BA：业务架构完整设计步骤
+## BA: Business Architecture Complete Design Steps
 
-### 原则（3-5 条）
+### Principles (3-5)
 
-| 编号 | 原则 | 含义 |
+| ID | Principle | Meaning |
 |---|---|---|
-| OP-1 | 战略驱动 | 业务架构必须从企业战略推导，不是从现有系统反推 |
-| OP-2 | 价值导向 | 每个业务能力必须对应可量化的业务价值 |
-| OP-3 | 端到端 | 流程必须覆盖从触发到完成的完整链路，不截断 |
-| OP-4 | 对象清晰 | 业务对象必须有明确定义（谁创建 / 谁使用 / 谁维护）|
-| OP-5 | 角色分离 | 决策角色 / 执行角色 / 监督角色必须分离 |
+| OP-1 | Strategy-driven | Business architecture must be derived from enterprise strategy, not reverse-engineered from existing systems |
+| OP-2 | Value-oriented | Every business capability must correspond to quantifiable business value |
+| OP-3 | End-to-end | Processes must cover the complete chain from trigger to completion, not truncated |
+| OP-4 | Clear objects | Business objects must have explicit definitions (who creates / who uses / who maintains) |
+| OP-5 | Role separation | Decision roles / execution roles / supervision roles must be separated |
 
-### 输入
+### Input
 
-- 企业战略文档（愿景 / 目标 / 关键成功因素）
-- 现有业务流程文档（AS-IS）
-- 组织架构（部门 / 岗位 / 职责）
-- 行业最佳实践（APQC / 行业标杆）
+- Enterprise strategy documents (vision / objectives / critical success factors)
+- Existing business process documents (AS-IS)
+- Organization structure (departments / positions / responsibilities)
+- Industry best practices (APQC / industry benchmarks)
 
-### 设计步骤
+### Design Steps
 
-| 步骤 | 任务 | 输出 |
+| Step | Task | Output |
 |---|---|---|
-| 1.0 | 价值链分析 | 价值链图（主价值流 + 支持活动）|
-| 2.0 | 业务能力识别 | 业务能力清单（L1/L2/L3 分层）|
-| 3.0 | 流程架构设计 | 流程架构图（L1 流程组 / L2 流程 / L3 活动）|
-| 4.0 | 业务对象清单 | 业务对象表（名称 / 定义 / 创建者 / 使用者）|
-| 5.0 | 角色职责矩阵 | RACI 矩阵（角色 × 流程步骤）|
+| 1.0 | Value chain analysis | Value chain diagram (primary value streams + support activities) |
+| 2.0 | Business capability identification | Business capability list (L1/L2/L3 layered) |
+| 3.0 | Process architecture design | Process architecture diagram (L1 process groups / L2 processes / L3 activities) |
+| 4.0 | Business object list | Business object table (name / definition / creator / user) |
+| 5.0 | Role-responsibility matrix | RACI matrix (roles × process steps) |
 
-### 1.0 价值链分析
+### 1.0 Value Chain Analysis
 
-**做法**：
-- 主价值流：从客户需求到客户满意的端到端链路（如"订单到现金"）
-- 支持活动：人力资源 / 财务 / IT / 采购等
-- 输出：价值链图（横版，主价值流在上，支持活动在下）
+**How**:
+- Primary value streams: end-to-end chain from customer need to customer satisfaction (e.g. "order to cash")
+- Support activities: HR / finance / IT / procurement, etc.
+- Output: value chain diagram (landscape; primary value streams on top, support activities below)
 
-**校验**：
-- [ ] 主价值流是否覆盖从触发到完成的完整链路
-- [ ] 支持活动是否都对应到主价值流的某个环节
+**Checks**:
+- [ ] Do primary value streams cover the full chain from trigger to completion?
+- [ ] Does every support activity map to a link in the primary value stream?
 
-### 2.0 业务能力识别
+### 2.0 Business Capability Identification
 
-**做法**：
-- L1 能力：战略级能力（如"采购管理"，对应 APQC L1 Category）
-- L2 能力：领域级能力（如"供应商管理"，对应 APQC L2 Group）
-- L3 能力：活动级能力（如"供应商准入"，对应 APQC L3 Process）
+**How**:
+- L1 capability: strategy-level capability (e.g. "procurement management", corresponding to APQC L1 Category)
+- L2 capability: domain-level capability (e.g. "supplier management", corresponding to APQC L2 Group)
+- L3 capability: activity-level capability (e.g. "supplier onboarding", corresponding to APQC L3 Process)
 
-> **术语澄清**：能力的 L3 叫"活动级能力"（是能力，不是流程活动）。流程的层级术语见 3.0。两者不要混用"活动"一词。
+> **Terminology clarification**: an L3 capability is called an "activity-level capability" (it is a capability, not a process activity). Process-level terminology is in 3.0. Do not mix the word "activity" between the two.
 
-**校验**：
-- [ ] 每个 L1 能力是否有明确的业务价值
-- [ ] L2/L3 是否属于且仅属于一个上级能力
+**Checks**:
+- [ ] Does every L1 capability have explicit business value?
+- [ ] Does every L2/L3 belong to exactly one parent capability?
 
-### 3.0 流程架构设计
+### 3.0 Process Architecture Design
 
-**做法**：
-- L1 流程组：对应 APQC L1 Category（参照 [APQC 13 个 L1 参照表](#apqc-pcf-13-个-l1-category-参照表)）
-- L2 流程：对应 APQC L2 Group
-- L3 子流程：对应 APQC L3 Process
-- L4 活动：从客户材料实际提取（APQC 不提供 L4）
-- L5 任务（task）：从客户材料实际提取（APQC 不提供 L5，task 是 BA 5.1 task→服务映射的输入）
-- 输出：流程架构图（树状或泳道图）
+**How**:
+- L1 process groups: correspond to APQC L1 Category (see [APQC L1 reference](#apqc-l1-reference))
+- L2 processes: correspond to APQC L2 Group
+- L3 subprocesses: correspond to APQC L3 Process
+- L4 activities: actually extracted from client materials (APQC does not provide L4)
+- L5 tasks: actually extracted from client materials (APQC does not provide L5; task is the input to BA 5.1 task→service mapping)
+- Output: process architecture diagram (tree or swimlane)
 
-**校验**：
-- [ ] 每个流程是否有明确的触发条件和完成条件
-- [ ] 流程之间的接口是否清晰（输入/输出）
+**Checks**:
+- [ ] Does every process have explicit trigger and completion conditions?
+- [ ] Are interfaces between processes clear (input/output)?
 
-### 4.0 业务对象清单
+### 4.0 Business Object List
 
-**做法**：
-- 从流程的每个步骤提取业务对象（如"采购申请单"）
-- 每个对象记录：名称 / 定义 / 创建者 / 使用者 / 维护者
-- 输出：业务对象表
+**How**:
+- Extract business objects from every process step (e.g. "procurement request form")
+- For each object record: name / definition / creator / user / maintainer
+- Output: business object table
 
-**校验**：
-- [ ] 每个业务对象是否有明确的创建者
-- [ ] 每个业务对象是否有明确的使用者
+**Checks**:
+- [ ] Does every business object have an explicit creator?
+- [ ] Does every business object have an explicit user?
 
-### 5.0 角色职责矩阵
+### 5.0 Role-Responsibility Matrix
 
-**做法**：
-- 横坐标：流程步骤（L3 活动）
-- 纵坐标：角色（岗位）
-- 单元格：R（主责）/ A（决策）/ C（咨询）/ I（知情）
-- 输出：RACI 矩阵
+**How**:
+- X-axis: process steps (L3 activities)
+- Y-axis: roles (positions)
+- Cells: R (responsible) / A (accountable) / C (consulted) / I (informed)
+- Output: RACI matrix
 
-**校验**：
-- [ ] 每个流程步骤是否有且仅有一个 R（主责）
-- [ ] 每个流程步骤是否有且仅有一个 A（决策）
+**Checks**:
+- [ ] Does every process step have exactly one R (responsible)?
+- [ ] Does every process step have exactly one A (accountable)?
 
-### 验证（三性 · 设计时自检）
+### Validation (Three Properties · Design-Time Self-Check)
 
-| 验证维度 | 检查项 | 典型判据 |
+| Validation dimension | Check item | Typical criterion |
 |---|---|---|
-| 完整性 | 是否覆盖全部业务流程 | 所有 L1 能力都有对应流程 |
-| 完整性 | 是否输出 5.1 流程-服务-单据映射图 | BA 必出此图（MANDATORY），未输出则 BA 未完成 |
-| 合理性 | 颗粒度是否合理 | L3 活动可分配给具体岗位 |
-| 集成性 | 与数据架构/应用架构的接口 | 业务对象在 DA 有对应概念实体 |
+| Completeness | Does it cover all business processes? | All L1 capabilities have corresponding processes |
+| Completeness | Is 5.1 process-service-document mapping diagram produced? | BA must produce this diagram (MANDATORY); BA is incomplete without it |
+| Reasonableness | Is granularity reasonable? | L3 activities can be assigned to specific positions |
+| Integration | Interface with data/application architecture | Business objects have corresponding conceptual entities in DA |
 
-### 5.1 BA→AA 映射：task 到系统服务（MANDATORY · 业务到 IT 的核心桥梁）
+### 5.1 BA→AA Mapping: Task to System Service (MANDATORY · Core Bridge from Business to IT)
 
-**定位**：这是业务架构到应用架构的映射方法论。企业管理系统的本质是业务流程的数字化，业务流程拆到最小任务（task）后，每个 task 要判断"需不需要 IT 支持、需要什么 IT 支持"，由此推导出应用服务候选清单，作为 AA 的输入。**先完成 5.1 推导，再画 5.2 映射图。**
+**Positioning**: This is the mapping methodology from business architecture to application architecture. An enterprise management system is essentially the digitalization of business processes. After a business process is decomposed into minimal tasks, each task must be judged "does it need IT support and what IT support", producing the application-service candidate list as AA input. **Complete the 5.1 derivation first, then draw the 5.2 mapping diagram.**
 
-**通用链路**：
+**Generic chain**:
 
 ```
 业务流（BA 3.0 产出）
@@ -198,819 +198,819 @@ IT 系统支持服务候选清单（AA 7.0 应用服务设计的输入）
 IT 系统架构（AA 6 层 + TA）
 ```
 
-**核心规则：每个 task 必须判断执行方式**
+**Core rule: every task must determine its execution mode**
 
-| 执行方式 | 判断标准 | 映射到什么 | 举例 |
+| Execution mode | Judgment criteria | Maps to | Example |
 |---|---|---|---|
-| **系统自动** | 无需人工介入，系统按规则执行 | → 应用服务（独立功能）| 预算占用校验、凭证推送、审批流转 |
-| **人工操作** | 纯人决策，系统不干预 | → 工作流节点（不独立成服务）| 审批决策、投资判断、预算调整 |
-| **人机协同** | 人填单/确认，系统处理 | → 表单功能（应用服务的一部分）| 填预算单、录入发票、确认对账 |
+| **System automatic** | No human intervention; system executes by rules | → Application service (standalone function) | Budget-occupancy validation, voucher push, approval flow |
+| **Manual operation** | Pure human decision; system does not intervene | → Workflow node (not a standalone service) | Approval decision, investment judgment, budget adjustment |
+| **Human-machine collaboration** | Human fills form/confirms; system processes | → Form function (part of an application service) | Fill budget form, enter invoice, confirm reconciliation |
 
-**禁止**：把"人工操作"的 task 当成应用服务。例如"审批决策"是人的动作，不是系统服务；系统只提供"审批流转"服务支撑它。
+**Forbidden**: treat a "manual operation" task as an application service. For example, "approval decision" is a human action, not a system service; the system only provides an "approval flow" service to support it.
 
-**映射步骤**：
+**Mapping steps**:
 
-1. **列 task 清单**：从 BA 3.0 的 L3 活动继续拆到 task 级（每个 task 是一个可执行的最小动作）
-2. **判执行方式**：每个 task 标记"系统自动/人工/人机协同"
-3. **提服务候选**：系统自动 + 人机协同的 task → 提取为应用服务候选
-4. **聚成模块**：相关服务聚合成 APP 候选（粒度判断见 [#function-identification](#function-identification功能识别详解cbmapqc)）
-5. **输出给 AA**：应用服务候选清单作为 AA 1.0 AD/AG/APP 初分的输入
+1. **List tasks**: continue decomposing L3 activities from BA 3.0 to task level (each task is a minimal executable action)
+2. **Determine execution mode**: mark each task as "system automatic / manual / human-machine collaboration"
+3. **Extract service candidates**: system-automatic + human-machine collaboration tasks → extract as application-service candidates
+4. **Cluster into modules**: group related services into APP candidates (granularity judgment see [#function-identification](#function-identification))
+5. **Output to AA**: the application-service candidate list is the input to AA 1.0 AD/AG/APP initial classification
 
-**示例**（某集团预算费控）：
+**Example** (a group's budget expense control):
 
-| task（BA 3.0 拆出）| 执行方式 | 映射到 | 说明 |
+| task (from BA 3.0) | Execution mode | Maps to | Notes |
 |---|---|---|---|
-| 编制投资预算 | 人机协同 | 预算编制服务（表单功能）| 人填设备明细，系统算金额 |
-| 预算占用校验 | 系统自动 | 预算占用服务（应用服务）| 系统按规则自动校验 |
-| 审批决策 | 人工操作 | 工作流节点（不独立成服务）| 人决策，系统只流转 |
-| 推凭证到 ERP | 系统自动 | 凭证推送服务（应用服务）| 系统自动推 |
+| Prepare investment budget | Human-machine collaboration | Budget preparation service (form function) | Human fills equipment details; system calculates amount |
+| Budget occupancy validation | System automatic | Budget occupancy service (application service) | System validates automatically by rules |
+| Approval decision | Manual operation | Workflow node (not standalone service) | Human decides; system only routes |
+| Push voucher to ERP | System automatic | Voucher push service (application service) | System pushes automatically |
 
-**校验**：
-- [ ] 每个 task 是否标记了执行方式
-- [ ] 系统自动 + 人机协同的 task 是否都提取为服务候选
-- [ ] 人工操作的 task 是否避免被当成独立应用服务
+**Checks**:
+- [ ] Is every task marked with its execution mode?
+- [ ] Are all system-automatic + human-machine collaboration tasks extracted as service candidates?
+- [ ] Are manual-operation tasks avoided being treated as standalone application services?
 
-### 5.2 流程-服务-单据映射图（MANDATORY · BA 必出图 · 5.1 推导完成后画）
+### 5.2 Process-Service-Document Mapping Diagram (MANDATORY · BA Must Produce · Draw after 5.1)
 
-**定位**：BA→AA→DA 的衔接层。基于 ArchiMate 三层建模语言，可视化展示业务流程、应用服务、数据对象的映射关系。此图是 BA 的必出制品，**在 5.1 task→系统服务推导完成后输出**，验证映射是否完整落地。
+**Positioning**: The bridging layer between BA→AA→DA. Based on ArchiMate's three-layer modeling language, it visualizes the mapping among business processes, application services, and data objects. This is a mandatory BA deliverable, **output after the 5.1 task→system service derivation**, verifying the mapping lands completely.
 
-**触发条件**：5.1 推导完成后必须输出此图，不需要用户特别要求。
+**Trigger**: Must be output after 5.1 derivation; no special user request needed.
 
-**输入**：
-- BA 流程架构（L1 流程组 / L2 流程 / L3 活动）
-- BA 业务对象清单
-- AA 应用服务清单（SVC）
+**Input**:
+- BA process architecture (L1 process groups / L2 processes / L3 activities)
+- BA business object list
+- AA application service list (SVC)
 
-**输出**：三层映射图（业务流程层 + 应用服务层 + 单据流层）+ 彩色连线关联（HTML 单页）
+**Output**: three-layer mapping diagram (business process layer + application service layer + document flow layer) + colored connection relationships (HTML single page)
 
-**ArchiMate 三层定义**：
+**ArchiMate three-layer definitions**:
 
-| 层级 | ArchiMate 元素类型 | 放什么 | 颜色标记 | 示例 |
+| Layer | ArchiMate element type | What goes here | Color marker | Example |
 |---|---|---|---|---|
-| **第一层：业务流程** | 行为元素（业务流程/业务功能/业务事件） | 业务人员主动发起的动作 | 蓝=人工操作、橙=决策/审批、绿=系统自动 | QCA 立项申请、投资预算编制、采购申请 |
-| **第二层：应用服务** | 行为元素（应用服务/应用功能） | 从流程节点反推的系统能力 | 每服务一种颜色 | QCA 审批服务、预算编制服务、预算占用服务 |
-| **第三层：单据流** | 被动结构元素（业务对象/数据对象） | 被服务操作的业务单据/数据实体 | — | QCA 审批表、投资预算单、预算码、采购申请单 |
+| **Layer 1: Business process** | Behavior element (business process / business function / business event) | Actions actively initiated by business people | Blue = manual operation, orange = decision/approval, green = system automatic | QCA project initiation request, investment budget preparation, procurement request |
+| **Layer 2: Application service** | Behavior element (application service / application function) | System capabilities inferred backward from process nodes | One color per service | QCA approval service, budget preparation service, budget occupancy service |
+| **Layer 3: Document flow** | Passive structure element (business object / data object) | Business documents/data entities operated by services | — | QCA approval form, investment budget form, budget code, procurement request form |
 
-**6 步画法**：
+**6-step drawing method**:
 
-| 步骤 | 任务 | 要点 |
+| Step | Task | Key points |
 |---|---|---|
-| 1 拆阶段 | 按业务状态跃迁切 3-6 个阶段 | 按"未知→已知→商机→订单→经营"切，不按系统切 |
-| 2 标节点 | 每阶段 3-5 个圆点，箭头串联 | 蓝=人工操作、橙=决策/审批、绿=系统自动 |
-| 3 抽服务 | 从节点反推系统能力，抽象 5-8 个服务 | 问"这个节点靠什么系统能力支撑？" |
-| 4 列单据 | 列出服务操作的业务对象/数据对象 | 问"这个服务产生/更新什么单据？" |
-| 5 连彩线 | 流程→服务→单据，三层连线 | 流程节点 ──触发──→ 应用服务 ──操作──→ 单据对象 |
-| 6 标异常 | 异常流/回流用红色虚线标注 | 如预算不足驳回、审批退回 |
+| 1 Split phases | Split 3-6 phases by business-state transitions | Split by "unknown → known → opportunity → order → operation", not by system |
+| 2 Mark nodes | 3-5 dots per phase, arrows in sequence | Blue = manual operation, orange = decision/approval, green = system automatic |
+| 3 Extract services | Infer system capabilities from nodes, abstract 5-8 services | Ask "what system capability supports this node?" |
+| 4 List documents | List business/data objects operated by services | Ask "what documents does this service produce/update?" |
+| 5 Connect colored lines | Three-layer connections: process → service → document | Process node ──triggers──→ application service ──operates──→ document object |
+| 6 Mark exceptions | Exception/return flows with red dashed lines | e.g. budget-insufficient rejection, approval return |
 
-**关键规则**：
-- **禁止**把系统自动执行的任务（如"预算占用校验"、"凭证推送"）放在业务流程层。它们是应用服务，不是业务流程。
-- 业务流程层只放业务人员主动发起的动作（填写表单、提交申请）和审批决策节点。
-- 应用服务层放所有系统能力，包括自动校验、计算、推送等。
-- 单据流层放产生的业务单据，连线从服务连到单据，不是从流程连到单据。
+**Key rules**:
+- **Forbidden** to put system-automatic tasks (e.g. "budget occupancy validation", "voucher push") in the business process layer. They are application services, not business processes.
+- The business process layer only contains actions actively initiated by business people (fill forms, submit requests) and approval decision nodes.
+- The application service layer contains all system capabilities, including automatic validation, calculation, push, etc.
+- The document flow layer contains produced business documents; connections go from services to documents, not from processes to documents.
 
-**布局参数**：整体宽度 1500px、阶段 ≥ 260px、节点 16px、箭头 ≥ 32px、标签放节点下方。
+**Layout parameters**: overall width 1500px, phase ≥ 260px, node 16px, arrow ≥ 32px, labels below nodes.
 
-**校验**：
-- [ ] 阶段数 3-6 个，每个阶段 3-5 个节点
-- [ ] 服务数 5-8 个，命名不超过 8 字
-- [ ] 单据数与 BA 业务对象清单一致
-- [ ] 节点标签不重叠（拉宽或减节点）
-- [ ] 连线交叉 ≤ 3 条（调整服务排列顺序）
-- [ ] 异常流/回流用红色虚线标注
-- [ ] 三层严格对应 ArchiMate 元素类型（流程=行为元素、服务=行为元素、单据=被动结构元素）
+**Checks**:
+- [ ] 3-6 phases, 3-5 nodes per phase
+- [ ] 5-8 services, names no longer than 8 characters
+- [ ] Number of documents consistent with BA business object list
+- [ ] Node labels do not overlap (widen or reduce nodes)
+- [ ] Line crossings ≤ 3 (adjust service order)
+- [ ] Exception/return flows marked with red dashed lines
+- [ ] Three layers strictly match ArchiMate element types (process = behavior element, service = behavior element, document = passive structure element)
 
-**注意**：此图是简化版 BA+AA+DA，不替代完整架构四件套。客户认可流程和服务后，再补充完整 BA/AA/DA。
+**Note**: This diagram is a simplified BA+AA+DA; it does not replace the full four-architecture deliverable. After the client approves processes and services, supplement the complete BA/AA/DA.
 
-### 5.3 自动化提升分析（5.1 映射的反向视角 · 价值展现）
+### 5.3 Automation Improvement Analysis (Reverse View of 5.1 Mapping · Value Demonstration)
 
-**定位**：这是 BA 5.1 task→系统服务映射的**反向视角**。5.1 正向看"业务流程需要哪些系统功能支撑"，5.3 反向看"系统功能能替代多少人工"。不是独立分析，是 5.1 映射表的进一步细化和价值展现。
+**Positioning**: This is the **reverse view** of BA 5.1 task→system service mapping. 5.1 looks forward at "which system functions do business processes need"; 5.3 looks backward at "how much manual work can system functions replace". It is not independent analysis—it is further refinement and value demonstration of the 5.1 mapping table.
 
-**默认前提**：系统功能本身就带自动化能力——如预算编制功能默认带预算汇总自动计算，否则系统无法运行。5.3 不是问"系统能不能自动化"，而是问"相对现状人工，系统能替代多少"。
+**Default premise**: System functions inherently carry automation capabilities—e.g. the budget preparation function defaults to automatic budget aggregation, otherwise the system cannot run. 5.3 does not ask "can the system automate?" but "relative to the current manual baseline, how much can the system replace?"
 
-**分析对象**：BA 5.1 标记为"人工操作"和"人机协同"的 task（"系统自动"的 task 已是自动化，不需再分析）。
+**Analysis object**: BA 5.1 tasks marked "manual operation" and "human-machine collaboration" (system-automatic tasks are already automated and need no further analysis).
 
-**做法**：
-1. **列现状人工 task**：从 5.1 的 task 清单筛出"人工操作"和"人机协同"
-2. **AI 建议自动化方案**：根据常见自动化技术清单初步匹配
-3. **顾问调整**：顾问根据产品能力/技术方案确认或修正 AI 建议
-4. **标替代程度**：完全替代 / 部分替代（人复核）/ 不替代（需人判断）
-5. **输出**：自动化提升清单
+**How**:
+1. **List current manual tasks**: filter "manual operation" and "human-machine collaboration" from 5.1's task list
+2. **AI suggests automation solutions**: initial match against the common automation technology list
+3. **Consultant adjusts**: consultant confirms or corrects AI suggestions based on product capability / technical solution
+4. **Mark replacement degree**: full replacement / partial replacement (human review) / no replacement (requires human judgment)
+5. **Output**: automation improvement list
 
-**常见自动化技术清单**（AI 按表初匹配，顾问调整）：
+**Common automation technology list** (AI initial match by table, consultant adjusts):
 
-| 技术 | 能解决的人工动作 | 适用 task |
+| Technology | Manual action it solves | Applicable tasks |
 |---|---|---|
-| OCR 识别 | 人工录入票据/单据信息 | 发票录入、合同录入、报销单填写 |
-| 规则引擎 | 人工按规则计算/校验 | 预算汇总、费用校验、额度计算 |
-| RPA | 人工跨系统搬运/录入 | 凭证推送、数据同步、报表汇总 |
-| API 集成 | 人工跨系统传递数据 | 系统间数据推送、状态同步 |
-| 工作流引擎 | 人工流转审批 | 审批流转、任务分派、催办 |
-| 自动归档 | 人工整理归档 | 单据归档、凭证归档 |
+| OCR recognition | Manual entry of tickets/documents | Invoice entry, contract entry, expense form filling |
+| Rule engine | Manual rule-based calculation/validation | Budget aggregation, expense validation, quota calculation |
+| RPA | Manual cross-system transfer/entry | Voucher push, data sync, report aggregation |
+| API integration | Manual cross-system data transfer | Data push between systems, status sync |
+| Workflow engine | Manual approval routing | Approval flow, task assignment, reminders |
+| Auto archiving | Manual sorting/archiving | Document archiving, voucher archiving |
 
-**自动化提升清单模板**：
+**Automation improvement list template**:
 
-| task | 现状执行 | AI 建议自动化方案 | 顾问调整 | 替代程度 | 省工时（可选）|
+| task | Current execution | AI-suggested automation solution | Consultant adjustment | Replacement degree | Hours saved (optional) |
 |---|---|---|---|---|---|
-| 发票信息录入 | 人工上传+手填 | OCR 识别发票字段 | 顾问确认产品支持 | 部分替代（人复核）| 高 |
-| 预算统计 | 人工汇总 | 规则引擎自动汇总 | 顾问确认计算规则 | 完全替代 | 高 |
-| 审批决策 | 人工决策 | — | 无法替代（需人判断）| 不替代 | — |
-| 单据归档 | 人工归档 | RPA 自动归档 | 顾问确认 RPA 可行 | 完全替代 | 中 |
-| 预算占用校验 | 人工核对额度 | 规则引擎自动校验 | 顾问确认校验规则 | 完全替代 | 高 |
+| Invoice info entry | Manual upload + manual fill | OCR recognizes invoice fields | Consultant confirms product support | Partial (human review) | High |
+| Budget statistics | Manual aggregation | Rule engine auto-aggregation | Consultant confirms calculation rules | Full | High |
+| Approval decision | Manual decision | — | Cannot replace (requires human judgment) | None | — |
+| Document archiving | Manual archiving | RPA auto-archiving | Consultant confirms RPA feasibility | Full | Medium |
+| Budget occupancy validation | Manual quota check | Rule engine auto-validation | Consultant confirms validation rules | Full | High |
 
-**关键规则**：
-- 不是所有人工 task 都能自动化——审批决策、投资判断这类需要人脑的，标"不替代"
-- 替代程度分三档：完全替代 / 部分替代（人复核）/ 不替代
-- 顾问输入是关键——AI 按技术清单初匹配，顾问根据产品能力确认或修正
-- 系统功能默认带基础自动化（如预算编制自带汇总），5.3 只分析"相对现状的增量自动化价值"
+**Key rules**:
+- Not all manual tasks can be automated—tasks requiring human brains such as approval decisions and investment judgment are marked "no replacement"
+- Replacement degree has three tiers: full replacement / partial replacement (human review) / no replacement
+- Consultant input is key—AI does initial match against the technology list; consultant confirms or corrects based on product capability
+- System functions default to basic automation (e.g. budget preparation includes aggregation); 5.3 only analyzes "incremental automation value relative to the current baseline"
 
-**产出喂给谁**：
-- **演进路线（Step 6）**：自动化提升清单 = 一期/二期项目依据（高替代的一期做，部分替代的二期做）
-- **产品映射（Step 7）**：自动化方案对应的产品功能（OCR 对应发票识别模块）
-- **投资回报**：替代程度 × 人工工时 = 省下的人力成本（说服客户买单）
+**Who consumes the output**:
+- **Evolution roadmap (Step 6)**: automation improvement list = basis for phase 1/phase 2 projects (high-replacement items in phase 1, partial-replacement items in phase 2)
+- **Product mapping (Step 7)**: product functions corresponding to automation solutions (OCR corresponds to invoice recognition module)
+- **ROI**: replacement degree × manual hours = labor cost saved (to persuade the client to buy)
 
-**校验**：
-- [ ] 是否覆盖 5.1 所有"人工操作"和"人机协同" task
-- [ ] 每个 task 是否标了替代程度
-- [ ] 顾问是否确认/调整了 AI 建议的自动化方案
-- [ ] "不替代"的 task 是否说明原因（需人判断/需人决策）
+**Checks**:
+- [ ] Does it cover all 5.1 "manual operation" and "human-machine collaboration" tasks?
+- [ ] Is every task marked with replacement degree?
+- [ ] Did the consultant confirm/adjust the AI-suggested automation solutions?
+- [ ] Do "no replacement" tasks state the reason (requires human judgment/decision)?
 
-### 5.4 业务架构总图（可选 · 客户汇报用）
+### 5.4 Business Architecture Overview (Optional · Client Reporting)
 
-**定位**：BA 1.0-5.3 的可视化总览图。当客户需要"一张图看懂业务架构全貌"时输出，不是必出制品。用 `.biz-arch-flow` 组件（组件 9）。
+**Positioning**: A visual overview of BA 1.0-5.3. Output when the client needs "one diagram to understand the whole business architecture"; not a mandatory deliverable. Use the `.biz-arch-flow` component (component 9).
 
-**触发条件**：客户明确要求"业务架构总图"或"一张图看懂流程"时输出。
+**Trigger**: Output when the client explicitly asks for a "business architecture overview" or "one diagram to understand processes".
 
-**输入**：BA 1.0 价值链 + 3.0 流程架构 + 5.1 task→服务映射
+**Input**: BA 1.0 value chain + 3.0 process architecture + 5.1 task→service mapping
 
-**输出**：编号方框链（6 个左右阶段）+ 底部执行带（关键控制点）
+**Output**: numbered box chain (about 6 phases) + bottom execution band (key control points)
 
-**校验**：
-- [ ] 阶段数 5-8 个，每个阶段有编号圆 + 方框 + 描述
-- [ ] 底部执行带标注关键控制点（如预算占用/扣除）
-- [ ] 颜色区分阶段类型（蓝=数据/红=审批/紫=管控/橙=输出）
+**Checks**:
+- [ ] 5-8 phases, each with numbered circle + box + description
+- [ ] Bottom execution band marks key control points (e.g. budget occupancy/deduction)
+- [ ] Colors distinguish phase types (blue = data / red = approval / purple = control / orange = output)
 
-### 5.5 特殊流程图（可选 · 客户特定流程）
+### 5.5 Special Flow Diagram (Optional · Client-Specific Processes)
 
-**定位**：当客户有特殊流程（如三入口预算编制、多渠道订单流转）时，用专门流程图展示。用 `.tri-entry-flow` 组件（组件 10）或其他适合的流程组件。
+**Positioning**: When the client has special processes (e.g. three-entry budget preparation, multi-channel order flow), show them with a dedicated flow diagram. Use the `.tri-entry-flow` component (component 10) or another suitable process component.
 
-**触发条件**：客户材料里出现"多入口"/"多分支"/"特殊流程"时输出。
+**Trigger**: Output when client materials contain "multi-entry" / "multi-branch" / "special process".
 
-**输入**：客户的特殊流程描述
+**Input**: client's special process description
 
-**输出**：分层流程图（入口层 → 中间层 → 步骤层 → 输出层）
+**Output**: layered flow diagram (entry layer → middle layer → step layer → output layer)
 
-**校验**：
-- [ ] 入口数与客户描述一致
-- [ ] 每个步骤有明确的前置条件和输出
-- [ ] 控制点（如强控规则）显式标注
+**Checks**:
+- [ ] Number of entries matches client description
+- [ ] Every step has explicit preconditions and outputs
+- [ ] Control points (e.g. mandatory control rules) are explicitly marked
 
 ---
 
-## DA：数据架构完整设计步骤
+## DA: Data Architecture Complete Design Steps
 
-### 原则（5 条）
+### Principles (5)
 
-| 编号 | 原则 | 含义 |
+| ID | Principle | Meaning |
 |---|---|---|
-| OP-1 | 按对象管理 | 数据以业务对象为核心组织，不是以系统为核心 |
-| OP-2 | 全局视角 | 数据架构覆盖企业全部数据，不是单个项目 |
-| OP-3 | 遵从分类 | 数据必须按标准分类（数据域/主题/实体）|
-| OP-4 | 概念实体结构化 | 概念实体必须有明确的属性定义 |
-| OP-5 | 数据服务化同源共享 | 同一数据只存一份，通过服务共享 |
+| OP-1 | Object-oriented management | Data is organized around business objects, not systems |
+| OP-2 | Global view | Data architecture covers all enterprise data, not a single project |
+| OP-3 | Classification compliance | Data must follow standard classification (data domain/subject/entity) |
+| OP-4 | Conceptual entity structured | Conceptual entities must have explicit attribute definitions |
+| OP-5 | Data servitization same-source sharing | Same data stored once, shared through services |
 
-### 输入
+### Input
 
-- 业务架构的业务对象清单
-- 现有系统的数据字典
-- 数据标准文档（如有）
-- 行业数据模型（如有）
+- Business object list from business architecture
+- Data dictionary of existing systems
+- Data standard documents (if any)
+- Industry data models (if any)
 
-### 5 层数据资产目录
+### 5-Layer Data Asset Catalog
 
-| 层级 | 名称 | 含义 | 示例 |
+| Layer | Name | Meaning | Example |
 |---|---|---|---|
-| L1 | 数据域 | 最高层分类 | 财务数据域 |
-| L2 | 数据主题 | 域内分组 | 预算数据主题 |
-| L3 | 概念实体 | 业务对象的数据化 | 预算单 |
-| L4 | 逻辑实体 | 带属性的实体 | 预算单（编号/金额/状态/...）|
-| L5 | 属性 | 实体的字段 | 预算单.编号（VARCHAR(20)）|
+| L1 | Data domain | Top-level classification | Finance data domain |
+| L2 | Data subject | Grouping within domain | Budget data subject |
+| L3 | Conceptual entity | Data-ized business object | Budget form |
+| L4 | Logical entity | Entity with attributes | Budget form (ID/amount/status/...) |
+| L5 | Attribute | Entity field | Budget form.ID (VARCHAR(20)) |
 
-### 设计步骤
+### Design Steps
 
-| 步骤 | 任务 | 输出 |
+| Step | Task | Output |
 |---|---|---|
-| 1.0 | 资产目录（含主题域）| 5 层数据资产目录表 |
-| 2.0 | 概念模型 | 概念实体关系图（ER 图，无属性）|
-| 3.0 | 逻辑模型（三范式）| 逻辑实体关系图（带属性 + 主外键）|
-| 4.0 | 数据分布 | 数据流图 / 数据源图 / CRUD 矩阵 |
-| 5.0 | 整体蓝图 | 跨域主题域模型（企业级数据蓝图）|
+| 1.0 | Asset catalog (incl. subject domains) | 5-layer data asset catalog table |
+| 2.0 | Conceptual model | Conceptual entity relationship diagram (ER diagram, no attributes) |
+| 3.0 | Logical model (third normal form) | Logical entity relationship diagram (with attributes + primary/foreign keys) |
+| 4.0 | Data distribution | Data flow diagram / data source diagram / CRUD matrix |
+| 5.0 | Overall blueprint | Cross-domain subject-domain model (enterprise-level data blueprint) |
 
-### 1.0 资产目录
+### 1.0 Asset Catalog
 
-**做法**：
-- 从业务架构的业务对象清单出发
-- 按数据域 → 数据主题 → 概念实体分层
-- 输出：5 层目录表
+**How**:
+- Start from the business object list in business architecture
+- Layer by data domain → data subject → conceptual entity
+- Output: 5-layer catalog table
 
-**校验**：
-- [ ] 每个 L3 概念实体（DA-L3）是否对应 BA 的一个业务对象
-- [ ] 每个 L2 数据主题是否属于且仅属于一个 L1 数据域
+**Checks**:
+- [ ] Does every L3 conceptual entity (DA-L3) correspond to a BA business object?
+- [ ] Does every L2 data subject belong to exactly one L1 data domain?
 
-### 2.0 概念模型
+### 2.0 Conceptual Model
 
-**做法**：
-- 画出 L3 概念实体之间的关系（1:1 / 1:N / M:N）
-- 不画属性，只画实体和关系
-- 输出：概念 ER 图
+**How**:
+- Draw relationships among L3 conceptual entities (1:1 / 1:N / M:N)
+- Do not draw attributes; only entities and relationships
+- Output: conceptual ER diagram
 
-**校验**：
-- [ ] 每个关系是否有明确的方向和基数
-- [ ] 是否存在孤立实体（没有关系连接的实体）
+**Checks**:
+- [ ] Does every relationship have explicit direction and cardinality?
+- [ ] Are there orphan entities (entities with no relationship)?
 
-### 3.0 逻辑模型
+### 3.0 Logical Model
 
-**做法**：
-- 在概念模型基础上加属性
-- 按三范式规范化（消除冗余）
-- 定义主键 / 外键
-- 输出：逻辑 ER 图
+**How**:
+- Add attributes on top of the conceptual model
+- Normalize to third normal form (eliminate redundancy)
+- Define primary/foreign keys
+- Output: logical ER diagram
 
-**校验**：
-- [ ] 每个实体是否有主键
-- [ ] 外键是否都对应到另一个实体的主键
+**Checks**:
+- [ ] Does every entity have a primary key?
+- [ ] Does every foreign key map to another entity's primary key?
 
-### 4.0 数据分布
+### 4.0 Data Distribution
 
-**做法**：
-- 数据流图：数据在系统之间的流向
-- 数据源图：每个数据的源头系统
-- CRUD 矩阵：业务单据 × 数据实体的增删改查关系
-- 输出：三张图/表
+**How**:
+- Data flow diagram: flow of data between systems
+- Data source diagram: source system of each data item
+- CRUD matrix: create/read/update/delete relationships between business documents × data entities
+- Output: three diagrams/tables
 
-**校验**：
-- [ ] 每个数据实体是否有明确的源头系统
-- [ ] CRUD 矩阵是否覆盖全部业务单据
+**Checks**:
+- [ ] Does every data entity have an explicit source system?
+- [ ] Does the CRUD matrix cover all business documents?
 
-### 5.0 整体蓝图
+### 5.0 Overall Blueprint
 
-**做法**：
-- 跨域主题域模型：展示全部数据域之间的关系
-- 输出：企业级数据蓝图
+**How**:
+- Cross-domain subject-domain model: show relationships among all data domains
+- Output: enterprise-level data blueprint
 
-**校验**：
-- [ ] 是否覆盖全部 L1 数据域
-- [ ] 域间关系是否清晰
+**Checks**:
+- [ ] Does it cover all L1 data domains?
+- [ ] Are inter-domain relationships clear?
 
-### 验证（三性）
+### Validation (Three Properties)
 
-| 验证维度 | 检查项 | 典型判据 |
+| Validation dimension | Check item | Typical criterion |
 |---|---|---|
-| 完整性 | 是否覆盖全部业务对象 | 所有 BA 业务对象都有对应 L3 概念实体 |
-| 合理性 | 颗粒度是否合理 | L5 属性可指导数据库设计 |
-| 集成性 | 与应用架构的接口 | L4 逻辑实体在 AA 有对应功能项 |
+| Completeness | Does it cover all business objects? | All BA business objects have corresponding L3 conceptual entities |
+| Reasonableness | Is granularity reasonable? | L5 attributes can guide database design |
+| Integration | Interface with application architecture | L4 logical entities have corresponding functional items in AA |
 
 ---
 
-## AA：应用架构完整设计步骤
+## AA: Application Architecture Complete Design Steps
 
-### 原则（3 条）
+### Principles (3)
 
-| 编号 | 原则 | 含义 |
+| ID | Principle | Meaning |
 |---|---|---|
-| OP-1 | 分层解耦 | 应用按层组织（域/组/模块），层间松耦合 |
-| OP-2 | 体验驱动 | 应用设计从用户体验出发，不是从技术出发 |
-| OP-3 | 服务化实现 | 应用功能通过服务暴露，支持复用 |
+| OP-1 | Layered decoupling | Applications are organized by layers (domain/group/module), loosely coupled between layers |
+| OP-2 | Experience-driven | Application design starts from user experience, not technology |
+| OP-3 | Service-based implementation | Application functions are exposed through services, supporting reuse |
 
-### 输入
+### Input
 
-- 业务架构的流程架构图 + 业务对象清单
-- 数据架构的概念实体清单
-- 现有系统清单
-- 功能需求清单
+- Business architecture process architecture diagram + business object list
+- Data architecture conceptual entity list
+- Existing system list
+- Functional requirements list
 
-### 6 层应用架构元素
+### 6-Layer Application Architecture Elements
 
-| 层级 | 名称 | 含义 | 判断标准 | 示例 |
+| Layer | Name | Meaning | Judgment criteria | Example |
 |---|---|---|---|---|
-| AD | 应用域 | 企业级应用分组 | 对应 BA 的 L1 能力域 | 预算费控域 |
-| AG | 应用组 | 域内分组 | 对应 BA 的 L2 能力组 | 预算编制组 |
-| APP | 一级模块 | 单一业务能力的完整支撑 | 有独立业务用例（谁用/做什么/输出什么） | 预算控制应用 |
-| ABB | 二级模块 | **APQC L4 活动的系统化** | **需要流程 owner 协调多人的协作单元** | 预算占用审批 |
-| 功能项 | 功能点 | **分配给一个人就结束的任务** | **系统替代的最小工作单元** | 余额自动计算 |
-| 功能子项 | 实现方式 | 功能项的具体实现 | 系统怎么替代（自动化/智能化） | 自动汇总+扣减 |
+| AD | Application domain | Enterprise-level application grouping | Corresponds to BA L1 capability domain | Budget expense-control domain |
+| AG | Application group | Grouping within domain | Corresponds to BA L2 capability group | Budget preparation group |
+| APP | Level-1 module | Complete support for a single business capability | Has an independent business use case (who uses / what it does / what it outputs) | Budget control application |
+| ABB | Level-2 module | **Systematization of APQC L4 activity** | **Collaboration unit requiring the process owner to coordinate multiple people** | Budget occupancy approval |
+| Functional item | Function point | **A task that ends when assigned to one person** | **The minimal work unit the system replaces** | Automatic balance calculation |
+| Functional sub-item | Implementation method | Concrete implementation of a functional item | How the system replaces (automation/intelligence) | Auto aggregation + deduction |
 
-**关键原则**：
-- **ABB 的边界 = 流程 owner 的协调范围**：一个 owner 负责协调的多人协作 = 一个 ABB
-- **功能项的边界 = 任务分配的最小单元**：分配给一个人就结束 = 功能项；需要再协调别人 = ABB
-- **流程层级由组织分工决定，不由执行者决定**：即使 AI 完全替代了人的协作，该活动在流程上仍然是 L4
-- **跨层连接显性化（D-6）**：分层架构图（4A 分层图 / layered）必须标层间数据流/调用关系，不允许纯堆层——每层之间至少标一条层间连接（数据流方向 + 调用关系），层与层之间是「谁调用谁、传什么数据」，不是孤立叠放的色块
+**Key principles**:
+- **ABB boundary = process owner's coordination scope**: multi-person collaboration coordinated by one owner = one ABB
+- **Functional item boundary = minimal task assignment unit**: ends when assigned to one person = functional item; needs coordination with others = ABB
+- **Process levels are decided by organizational division of labor, not by the performer**: even if AI fully replaces human collaboration, the activity remains L4 in the process
+- **Make cross-layer connections explicit (D-6)**: layered architecture diagrams (4A layered / layered) must mark inter-layer data flows/call relationships; pure stacked layers are not allowed—mark at least one inter-layer connection between every pair of layers (data flow direction + call relationship). Layers are "who calls whom, what data is passed", not isolated stacked color blocks
 
-### 8 步设计
+### 8-Step Design
 
-| 步骤 | 任务 | 输出 |
+| Step | Task | Output |
 |---|---|---|
-| 1.0 | AD/AG/APP 初分 | 应用域/组/模块清单 |
-| 2.0 | ABB 初识 | 二级模块清单 |
-| 3.0 | 功能项识别 | 功能项清单 |
-| 4.0 | 功能子项梳理 | 功能子项清单 |
-| 5.0 | 调整划分 | 调整后的应用架构（合并/拆分）|
-| 6.0 | 与业务关系描述 | RACI 矩阵（角色 × 功能）|
-| 7.0 | 应用服务设计 | 服务清单（接口定义）|
-| 8.0 | 系统适配与集成 | 集成架构图 |
+| 1.0 | Initial AD/AG/APP classification | Application domain/group/module list |
+| 2.0 | Initial ABB identification | Level-2 module list |
+| 3.0 | Functional item identification | Functional item list |
+| 4.0 | Functional sub-item cleanup | Functional sub-item list |
+| 5.0 | Adjust partitioning | Adjusted application architecture (merge/split) |
+| 6.0 | Business relationship description | RACI matrix (roles × functions) |
+| 7.0 | Application service design | Service list (interface definitions) |
+| 8.0 | System adaptation and integration | Integration architecture diagram |
 
-### 1.0 AD/AG/APP 初分（Top-down）
+### 1.0 Initial AD/AG/APP Classification (Top-down)
 
-**做法**：
-- 从业务架构的 L1 业务能力推导 AD
-- 从 L2 业务能力推导 AG
-- 从 L3 业务能力推导 APP（L3 提供流程框架）
-- 从 L4 活动推导 ABB（L4 活动拆解为协作单元）
-- 输出：AD/AG/APP 清单
+**How**:
+- Derive AD from BA L1 business capabilities
+- Derive AG from L2 business capabilities
+- Derive APP from L3 business capabilities (L3 provides process framework)
+- Derive ABB from L4 activities (L4 activities decomposed into collaboration units)
+- Output: AD/AG/APP list
 
-**校验**：
-- [ ] 每个 AD 是否对应 BA 的一个 L1 能力
-- [ ] 每个 AG 是否属于且仅属于一个 AD
-- [ ] 每个 APP 是否有独立业务用例（谁用 / 做什么 / 输出什么）
+**Checks**:
+- [ ] Does every AD correspond to a BA L1 capability?
+- [ ] Does every AG belong to exactly one AD?
+- [ ] Does every APP have an independent business use case (who uses / what it does / what it outputs)?
 
-### 2.0 ABB 初识
+### 2.0 Initial ABB Identification
 
-**做法**：
-- 从 APP 拆解 ABB（按业务对象或流程步骤）
-- 输出：ABB 清单
+**How**:
+- Decompose ABB from APP (by business object or process step)
+- Output: ABB list
 
-**校验**：
-- [ ] 每个 ABB 是否属于且仅属于一个 APP
+**Checks**:
+- [ ] Does every ABB belong to exactly one APP?
 
-### 3.0 功能项识别（Bottom-up）
+### 3.0 Functional Item Identification (Bottom-up)
 
-**做法**：
-- 从业务流程的每个步骤提取候选功能项
-- 从业务对象反推 CRUD 功能
-- 从数据架构的逻辑实体反推功能
-- 输出：功能项清单
+**How**:
+- Extract functional item candidates from every business process step
+- Infer CRUD functions from business objects
+- Infer functions from data architecture logical entities
+- Output: functional item list
 
-**校验**：
-- [ ] 每个功能项是否可独立测试（有输入/处理/输出）
-- [ ] 是否避免把功能子项抬到功能项级
+**Checks**:
+- [ ] Is every functional item independently testable (has input/processing/output)?
+- [ ] Are functional sub-items avoided being promoted to functional item level?
 
-**功能识别详解** → [function-identification](#function-identification)
+**Functional identification details** → [function-identification](#function-identification)
 
-### 4.0 功能子项梳理
+### 4.0 Functional Sub-Item Cleanup
 
-**做法**：
-- 为每个功能项定义实现方式（图形化/Excel 导入/API...）
-- 输出：功能子项清单
+**How**:
+- Define an implementation method for each functional item (graphical / Excel import / API...)
+- Output: functional sub-item list
 
-**校验**：
-- [ ] 每个功能子项是否是功能项的实现方式（不是独立功能）
+**Checks**:
+- [ ] Is every functional sub-item an implementation method of a functional item (not an independent function)?
 
-### 5.0 调整划分
+### 5.0 Adjust Partitioning
 
-**做法**：
-- 用 CBM 的"高内聚低耦合"原则校验 APP 边界
-- 合并/拆分/调整
-- 输出：调整后的应用架构
+**How**:
+- Use CBM's "high cohesion, low coupling" principle to validate APP boundaries
+- Merge/split/adjust
+- Output: adjusted application architecture
 
-**校验**：
-- [ ] 每个 APP 是否高内聚（内部功能紧密相关）
-- [ ] APP 之间是否低耦合（接口清晰）
+**Checks**:
+- [ ] Is every APP highly cohesive (internal functions closely related)?
+- [ ] Are APPs loosely coupled (clear interfaces)?
 
-### 6.0 与业务关系描述
+### 6.0 Business Relationship Description
 
-**做法**：
-- RACI 矩阵：角色 × 功能项
-- 输出：RACI 矩阵表
+**How**:
+- RACI matrix: roles × functional items
+- Output: RACI matrix table
 
-**校验**：
-- [ ] 每个功能项是否有且仅有一个 R（主责）
+**Checks**:
+- [ ] Does every functional item have exactly one R (responsible)?
 
-### 7.0 应用服务设计
+### 7.0 Application Service Design
 
-**做法**：
-- 定义 APP 暴露的服务（接口）
-- 输出：服务清单（服务名 / 输入 / 输出 / 调用方）
+**How**:
+- Define services (interfaces) exposed by APPs
+- Output: service list (service name / input / output / caller)
 
-**校验**：
-- [ ] 每个服务是否有明确的输入和输出
+**Checks**:
+- [ ] Does every service have explicit inputs and outputs?
 
-### 8.0 系统适配与集成
+### 8.0 System Adaptation and Integration
 
-**做法**：
-- 画出 APP 之间的调用关系
-- 画出 APP 与外部系统的集成关系
-- 每个集成接口标三要素（D-6）：**流向**（谁调谁）+ **协议/端口**（走什么）+ **失败边界**（断了怎么办）
-- 输出：集成架构图
+**How**:
+- Draw call relationships among APPs
+- Draw integration relationships between APPs and external systems
+- Mark three elements for each integration interface (D-6): **direction** (who calls whom) + **protocol/port** (what it uses) + **failure boundary** (what happens if it breaks)
+- Output: integration architecture diagram
 
-**校验**：
-- [ ] 每个 APP 的集成接口是否清晰
-- [ ] 每个集成接口是否标全三要素（流向 / 协议端口 / 失败边界）
+**Checks**:
+- [ ] Are integration interfaces of every APP clear?
+- [ ] Does every integration interface have all three elements (direction / protocol-port / failure boundary)?
 
-### 验证（三性）
+### Validation (Three Properties)
 
-| 验证维度 | 检查项 | 典型判据 |
+| Validation dimension | Check item | Typical criterion |
 |---|---|---|
-| 完整性 | 是否覆盖全部业务流程 | 所有 BA 流程步骤都有对应功能项 |
-| 合理性 | 颗粒度是否合理 | APP 可分配给开发团队 |
-| 集成性 | 与技术架构的接口 | 每个 APP 在 TA 有对应部署节点 |
+| Completeness | Does it cover all business processes? | All BA process steps have corresponding functional items |
+| Reasonableness | Is granularity reasonable? | APPs can be assigned to development teams |
+| Integration | Interface with technology architecture | Every APP has a corresponding deployment node in TA |
 
 ---
 
-## TA：技术架构完整设计步骤
+## TA: Technology Architecture Complete Design Steps
 
-### 原则（3-5 条）
+### Principles (3-5)
 
-| 编号 | 原则 | 含义 |
+| ID | Principle | Meaning |
 |---|---|---|
-| OP-1 | 标准化 | 技术选型遵循企业标准，不随意引入新技术 |
-| OP-2 | 可扩展 | 架构支持水平扩展，应对业务增长 |
-| OP-3 | 高可用 | 关键系统 99.9% 可用性 |
-| OP-4 | 安全合规 | 符合行业安全标准（等保/ISO27001）|
-| OP-5 | 成本可控 | 技术选型考虑总拥有成本（TCO）|
+| OP-1 | Standardization | Technology choices follow enterprise standards; do not introduce new technologies casually |
+| OP-2 | Scalability | Architecture supports horizontal scaling for business growth |
+| OP-3 | High availability | Critical systems 99.9% availability |
+| OP-4 | Security and compliance | Meets industry security standards (MLPS/ISO27001) |
+| OP-5 | Cost control | Technology choices consider total cost of ownership (TCO) |
 
-### 输入
+### Input
 
-- 应用架构的 APP 清单 + 部署需求
-- 现有基础设施清单
-- 技术栈约束（企业标准）
-- 安全合规要求
+- Application architecture APP list + deployment requirements
+- Existing infrastructure list
+- Technology stack constraints (enterprise standards)
+- Security and compliance requirements
 
-### 6 步设计
+### 6-Step Design
 
-| 步骤 | 任务 | 输出 |
+| Step | Task | Output |
 |---|---|---|
-| 1.0 | 技术框架 | 技术栈选型（语言/框架/中间件）|
-| 2.0 | 技术组件 | 组件清单（数据库/缓存/消息队列...）|
-| 3.0 | 技术服务 | 服务清单（认证/日志/监控...）|
-| 4.0 | 技术平台 | 三横两纵平台图 |
-| 5.0 | 部署节点 | 部署架构图 |
-| 6.0 | 整体蓝图 | 技术架构蓝图 |
+| 1.0 | Technology framework | Technology stack selection (language/framework/middleware) |
+| 2.0 | Technology components | Component list (database/cache/message queue...) |
+| 3.0 | Technology services | Service list (authentication/logging/monitoring...) |
+| 4.0 | Technology platform | Three-horizontal-two-vertical platform diagram |
+| 5.0 | Deployment nodes | Deployment architecture diagram |
+| 6.0 | Overall blueprint | Technology architecture blueprint |
 
-### 1.0 技术框架
+### 1.0 Technology Framework
 
-**做法**：
-- 根据应用架构的 APP 清单确定技术栈（语言/框架/中间件）
-- 标注每个 APP 用的技术栈
-- 遵循企业技术标准，不随意引入新技术
-- 输出：技术栈选型表（APP / 语言 / 框架 / 中间件 / 选型理由）
+**How**:
+- Determine technology stack (language/framework/middleware) from the AA APP list
+- Mark the technology stack used by each APP
+- Follow enterprise technology standards; do not introduce new technologies casually
+- Output: technology stack selection table (APP / language / framework / middleware / rationale)
 
-**示例**：
+**Example**:
 
-| APP | 语言 | 框架 | 中间件 | 选型理由 |
+| APP | Language | Framework | Middleware | Rationale |
 |---|---|---|---|---|
-| 预算管理 | Java | Spring Boot | OA 平台 平台 | 客户已有OA 平台，沿用 |
-| 凭证推送 | Java | Spring Boot | ERP PO | 对接 ERP 标准方式 |
+| Budget management | Java | Spring Boot | OA Platform | Client already has OA Platform; reuse it |
+| Voucher push | Java | Spring Boot | ERP PO | Standard ERP integration method |
 
-**校验**：
-- [ ] 每个 APP 是否标注了技术栈
-- [ ] 技术选型是否符合企业标准
-- [ ] 新引入技术是否有充分理由
+**Checks**:
+- [ ] Is every APP marked with its technology stack?
+- [ ] Do technology choices comply with enterprise standards?
+- [ ] Do newly introduced technologies have sufficient rationale?
 
-### 2.0 技术组件
+### 2.0 Technology Components
 
-**做法**：
-- 列出系统用到的技术组件（数据库/缓存/消息队列/文件存储/搜索引擎...）
-- 标注每个组件的用途和承载的 APP
-- 输出：组件清单（组件名 / 类型 / 用途 / 承载 APP）
+**How**:
+- List technology components used by the system (database/cache/message queue/file storage/search engine...)
+- Mark each component's purpose and hosted APPs
+- Output: component list (component / type / purpose / hosted APP)
 
-**示例**：
+**Example**:
 
-| 组件 | 类型 | 用途 | 承载 APP |
+| Component | Type | Purpose | Hosted APP |
 |---|---|---|---|
-| MySQL | 数据库 | 存储预算数据 | 预算管理 |
-| Redis | 缓存 | 缓存预算占用状态 | 预算控制 |
-| RabbitMQ | 消息队列 | 凭证推送异步处理 | 凭证推送 |
-| MinIO | 文件存储 | 存储附件 | 预算管理 |
+| MySQL | Database | Store budget data | Budget management |
+| Redis | Cache | Cache budget occupancy status | Budget control |
+| RabbitMQ | Message queue | Async voucher push processing | Voucher push |
+| MinIO | File storage | Store attachments | Budget management |
 
-**校验**：
-- [ ] 每个技术组件是否标注了用途和承载 APP
-- [ ] 组件选型是否与 1.0 技术框架一致
+**Checks**:
+- [ ] Is every technology component marked with purpose and hosted APP?
+- [ ] Are component choices consistent with 1.0 technology framework?
 
-### 3.0 技术服务
+### 3.0 Technology Services
 
-**做法**：
-- 列出系统需要的技术服务（认证/授权/日志/监控/配置/任务调度...）
-- 标注每个服务的实现方式（自建/采购/云服务）
-- 输出：技术服务清单（服务名 / 用途 / 实现方式 / 使用方）
+**How**:
+- List technology services required by the system (authentication/authorization/logging/monitoring/configuration/task scheduling...)
+- Mark each service's implementation method (build in-house / purchase / cloud service)
+- Output: technology service list (service / purpose / implementation method / user)
 
-**示例**：
+**Example**:
 
-| 服务 | 用途 | 实现方式 | 使用方 |
+| Service | Purpose | Implementation method | User |
 |---|---|---|---|
-| 统一认证 | 单点登录 | OA 平台 自带 | 全部 APP |
-| 集中日志 | 日志收集 | ELK 自建 | 全部 APP |
-| 监控告警 | 系统监控 | Prometheus+Grafana | 运维团队 |
-| 任务调度 | 定时任务 | Quartz | 凭证推送 |
+| Unified authentication | Single sign-on | Built into OA Platform | All APPs |
+| Centralized logging | Log collection | ELK self-built | All APPs |
+| Monitoring and alerting | System monitoring | Prometheus+Grafana | Operations team |
+| Task scheduling | Scheduled tasks | Quartz | Voucher push |
 
-**校验**：
-- [ ] 每个技术服务是否标注了实现方式
-- [ ] 认证/授权服务是否覆盖全部 APP
+**Checks**:
+- [ ] Is every technology service marked with implementation method?
+- [ ] Do authentication/authorization services cover all APPs?
 
-### 4.0 技术平台（三横两纵）
+### 4.0 Technology Platform (Three Horizontals, Two Verticals)
 
-**三横**：
-- 基础设施层：云/计算/存储/网络
-- 数字平台层：数据中台/业务中台/技术中台
-- 公共服务层：认证/消息/文件/日志
+**Three horizontals**:
+- Infrastructure layer: cloud/compute/storage/network
+- Digital platform layer: data middle platform / business middle platform / technology middle platform
+- Public service layer: authentication/message/file/log
 
-**两纵**：
-- 运维运营：监控/告警/自动化
-- 信息安全：防火墙/加密/审计
+**Two verticals**:
+- Operations: monitoring/alerting/automation
+- Information security: firewall/encryption/audit
 
-### 5.0 部署节点
+### 5.0 Deployment Nodes
 
-**做法**：
-- 每个 AA APP 对应一个部署节点（服务器/容器/集群）
-- 标注节点承载的 APP、SVC、规格、高可用方案
-- 输出：部署架构图（节点分组 + 承载关系 + 连线）
+**How**:
+- Each AA APP maps to one deployment node (server/container/cluster)
+- Mark the APP, SVC, specification, and high-availability plan hosted by the node
+- Output: deployment architecture diagram (node groups + hosting relationships + connections)
 
-### 6.0 整体蓝图
+### 6.0 Overall Blueprint
 
-**做法**：
-- 把 1.0-5.0 的产出整合成一张技术架构总图
-- 包含：技术栈 + 组件 + 服务 + 三横两纵 + 部署节点 + 集成关系
-- 输出：技术架构蓝图（一张总图 + 图例说明）
+**How**:
+- Integrate 1.0-5.0 outputs into one overall technology architecture diagram
+- Includes: technology stack + components + services + three horizontals/two verticals + deployment nodes + integration relationships
+- Output: technology architecture blueprint (one overview diagram + legend)
 
-**校验**：
-- [ ] 蓝图是否整合了 1.0-5.0 全部产出
-- [ ] 图例是否完整（颜色/线型/图标含义）
-- [ ] 是否能从蓝图追溯到每个 APP 的技术栈、组件、服务、部署节点
+**Checks**:
+- [ ] Does the blueprint integrate all 1.0-5.0 outputs?
+- [ ] Is the legend complete (color/line/icon meanings)?
+- [ ] Can every APP be traced from the blueprint to its technology stack, components, services, and deployment nodes?
 
-### 验证（三性）
+### Validation (Three Properties)
 
-| 验证维度 | 检查项 | 典型判据 |
+| Validation dimension | Check item | Typical criterion |
 |---|---|---|
-| 完整性 | 是否覆盖全部 APP 的部署需求 | 所有 APP 都有对应部署节点 |
-| 合理性 | 技术选型是否合理 | 符合企业标准 + 成本可控 |
-| 集成性 | 与外部系统的接口 | 集成接口技术可行，且标全三要素（流向 / 协议端口 / 失败边界） |
+| Completeness | Does it cover all APP deployment needs? | All APPs have corresponding deployment nodes |
+| Reasonableness | Are technology choices reasonable? | Complies with enterprise standards + cost controlled |
+| Integration | Interface with external systems | Integration interfaces are technically feasible and have all three elements (direction / protocol-port / failure boundary) |
 
 ---
 
-## governance：治理责任矩阵与演进路线
+## governance: Governance Responsibility Matrix and Evolution Roadmap
 
-> 定位：可选章节，需人决策，AI 只出草稿。
-> 默认形态是"责任与系统覆盖矩阵"（适配企业管理→信息化系统场景）；三治×三维仅集团级客户汇报管控体系时启用。
+> Positioning: optional section requiring human decisions; AI only produces a draft.
+> Default form is the "responsibility and system coverage matrix" (adapted to enterprise management → information system scenarios); the three-governance × three-dimension is enabled only when a group-level client reports the governance system.
 
-### 责任与系统覆盖矩阵（默认）
+### Responsibility and System Coverage Matrix (Default)
 
-回答一个问题：**系统上线后，每条流程、每类数据、每个模块归谁管。**
+Answers one question: **after the system goes live, who owns each process, each data type, and each module?**
 
-| 业务对象/流程 | 流程 Owner | 支撑 APP/模块 | 部署节点 |
+| Business object/process | Process Owner | Supporting APP/module | Deployment node |
 |---|---|---|---|
-| 预算单 | 财务经理 | 预算编制 APP | OA 平台 应用服务器 |
-| 发票 | 财务专员 | 收票登记 APP | OA 平台 应用服务器 |
-| 采购申请单 | 采购员 | 预算占用 APP | OA 平台 应用服务器 |
+| Budget form | Finance manager | Budget preparation APP | OA Platform app server |
+| Invoice | Finance specialist | Invoice registration APP | OA Platform app server |
+| Procurement request form | Procurement officer | Budget occupancy APP | OA Platform app server |
 
-**硬规则：治理章节不许新造内容。** 矩阵每行必须来自已锁定的 BA/AA/TA 文档和 #cross-domain 对账表：
+**Hard rule: the governance section must not invent new content.** Every matrix row must come from already locked BA/AA/TA documents and the #cross-domain reconciliation table:
 
-- 业务对象/流程：取自 BA 4.0 业务对象清单 / 3.0 流程架构
-- 流程 Owner：取自 BA 5.0 RACI 矩阵的 R（主责）
-- 支撑 APP/模块 + 部署节点：取自 AA/TA 与跨域对账结果
-- 对账表里没有的行，先回对应域补齐，再进矩阵
+- Business object/process: from BA 4.0 business object list / 3.0 process architecture
+- Process Owner: from the R (responsible) in BA 5.0 RACI matrix
+- Supporting APP/module + deployment node: from AA/TA and cross-domain reconciliation results
+- Rows not in the reconciliation table: first fill the corresponding domain, then add to the matrix
 
-与 5.2 流程-服务-单据映射图的分工：5.2 验证"流程有没有落到系统能力"（行为视角，服务粒度）；本矩阵回答"谁负责、在哪个模块"（管理视角，APP 粒度）。同一份映射的两种切片，数据必须一致。
+Division of labor with the 5.2 process-service-document mapping diagram: 5.2 verifies "whether processes land on system capabilities" (behavioral view, service granularity); this matrix answers "who is responsible and in which module" (management view, APP granularity). Two slices of the same mapping; data must be consistent.
 
-### 集团级变体：三治×三维（可选 · 仅集团级客户向高层汇报管控体系时启用，中小客户默认不用）
+### Group-Level Variant: Three Governance × Three Dimensions (Optional · Only for group-level clients reporting governance systems to senior management; not default for mid/small clients)
 
-> 来源：运营商/超大型企业 EA 蓝图参考（`_knowledge/templates/outlines/架构图/reference.md` 实例 2），非本场景默认。
+> Source: operator/very-large-enterprise EA blueprint reference (`_knowledge/templates/outlines/架构图/reference.md` instance 2), not default in this scenario.
 
-**双腿模型**：左腿（技术）= BA/AA/DA/TA；右腿（治理）= 架构治理 / 项目治理 / 运维治理；双脚（落地）= 实施分工 + 制度规范。
+**Two-leg model**: left leg (technology) = BA/AA/DA/TA; right leg (governance) = architecture governance / project governance / operations governance; feet (implementation) = implementation division of labor + institutional norms.
 
-**三治×三维 9 格**（至少答 6 格，答不满说明哪格客户现状不支撑）：
+**Three governance × three dimensions 9-grid** (answer at least 6; if fewer, state which grid the client's current state does not support):
 
-|  | 组织（谁负责） | 流程（什么机制） | 技能（要什么能力） |
+|  | Organization (who is responsible) | Process (what mechanism) | Skills (what capability) |
 |---|---|---|---|
-| 架构治理 | 架构委员会 / 架构师角色 | 架构评审、合规检查、例外申请 | EA 方法（TOGAF / ArchiMate） |
-| 项目治理 | PMO / 项目 Owner | 立项门禁、里程碑评审、变更管理 | CMMI / IPD / PMP / Prince2 |
-| 运维治理 | 运维负责人 / 数据管家 | 发布流程、巡检、SLA 考核 | ITIL / SFIA5 |
+| Architecture governance | Architecture committee / architect role | Architecture review, compliance check, exception request | EA methods (TOGAF / ArchiMate) |
+| Project governance | PMO / project owner | Project initiation gate, milestone review, change management | CMMI / IPD / PMP / Prince2 |
+| Operations governance | Operations owner / data steward | Release process, inspection, SLA assessment | ITIL / SFIA5 |
 
-治理体系三层：L1 三治 → L2 下属模块（如架构治理下属"企业架构管控 / SOA 治理 / 云治理 / 架构演进实施治理"）→ 原子能力（CMMI / IPD / PMP / Prince2 / SFIA5 等）。
+Governance system three layers: L1 three governance → L2 subordinate modules (e.g. architecture governance includes "enterprise architecture control / SOA governance / cloud governance / architecture evolution implementation governance") → atomic capabilities (CMMI / IPD / PMP / Prince2 / SFIA5 etc.).
 
-**双态 IT 决策**（给系统定治理口径时用）：
+**Two-mode IT decision** (used when setting governance scope for systems):
 
-| 决策维度 | 稳态（SOR） | 敏态（SOI） |
+| Decision dimension | Steady state (SOR) | Agile state (SOI) |
 |---|---|---|
-| 业务特征 | 战略明确 / 流程成熟 | 试错探索 / 快速迭代 |
-| IT 特征 | 标准化 / 集中 | 分布式 / DevOps |
-| 决策流程 | IPD / CMMI | Scrum / DevOps |
-| KPI | 稳定运营 / 成本控制 | 上市时间 / 创新率 |
-| 治理 | 集中式 + 联邦式混合 | 业务单元式 |
+| Business characteristics | Clear strategy / mature processes | Trial-and-error exploration / rapid iteration |
+| IT characteristics | Standardized / centralized | Distributed / DevOps |
+| Decision process | IPD / CMMI | Scrum / DevOps |
+| KPI | Stable operations / cost control | Time-to-market / innovation rate |
+| Governance | Centralized + federated hybrid | Business-unit based |
 
-### 演进路线（必答 5 步，不跳步）
+### Evolution Roadmap (Must Answer 5 Steps, No Skipping)
 
-固定链条：**差距诊断 → 关键任务 → 项目组合 → 路线图 → 价值预估**。
+Fixed chain: **gap diagnosis → key tasks → project portfolio → roadmap → value estimate**.
 
-- 跳步 = 价值不显：不能跳过"差距分析"直接给路线图，没有差距的路线图是无本之木。
-- 价值预估必须对应前面的差距，每条差距解多少，不是列新东西。
-- 第一节说的痛点，价值页要能对回去。
+- Skipping steps hides value: do not jump straight to a roadmap without gap analysis; a roadmap without gaps has no foundation.
+- Value estimates must correspond to the earlier gaps—how much each gap is resolved, not new items.
+- Pain points mentioned in the first section must be traceable on the value page.
 
-**As-Is → To-Be 比较轴（D-6 · 弱 timeline 升级）**：演进路线不只画「将来做什么」，先画「现在是什么」→「将来变成什么」的比较轴——每个阶段用 As-Is 现状 vs To-Be 目标两列对照，让人一眼看出「变在哪」。
+**As-Is → To-Be comparison axis (D-6 · weak timeline upgrade)**: the evolution roadmap should not only draw "what to do in the future"—first draw a comparison axis of "what it is now" → "what it will become", with each phase comparing As-Is current state vs To-Be target in two columns, so the change is visible at a glance.
 
-**阶段门（D-6 · 每阶段必答进入/退出条件）**：每个阶段（P1/P2/P3…）必须写清：
+**Phase gates (D-6 · every phase must state entry/exit conditions)**: every phase (P1/P2/P3…) must clearly state:
 
-| 阶段 | 进入条件 | 退出条件 | 责任 | 风险与建议 |
+| Phase | Entry conditions | Exit conditions | Responsibility | Risks and recommendations |
 |---|---|---|---|---|
-| P1 | 现状诊断完成、关键差距已定 | 核心数据贯通、主流程贯通验收 | 项目组 | 数据迁移风险 → 建议先试点 |
+| P1 | Current-state diagnosis complete, key gaps defined | Core data connected, main process connection acceptance | Project team | Data migration risk → recommend pilot first |
 
-> 阶段门 = 可判断「能不能进入下一阶段」的客观条件，不是「完成第一阶段」这种空话。配套 B-7 milestone_gantt（任务轨×里程碑×依赖，按周铺）替换 ≤4 里程碑弱 timeline（见 SKILL.md 组合体写法）。
+> Phase gate = objective conditions that determine "can we enter the next phase", not empty phrases like "complete phase 1". Pair with B-7 milestone_gantt (task tracks × milestones × dependencies, laid out by week) to replace weak timelines with ≤4 milestones (see SKILL.md combined-figure guidance).
 
-三种详略形式：
+Three detail levels:
 
-| 形式 | 适用 | 内容 |
+| Form | Applicable to | Content |
 |---|---|---|
-| A 简版（5 页） | 给老板汇报 | 只画 P1/P2/P3 三条主线 + 时间窗口 |
-| B 完整版（10+ 页） | 立项 / 可研 | 差距二维表 → 关键任务（A1-An）→ 紧急×重要 + 战略性×潜力排序 → 项目组合（P1-Pn）→ 路线图 → 项目卡片（每卡片答目的/范围/周期/资源/风险/收益）→ 预算总表 → 实施计划 |
-| C 时间窗口版 | 汇报口径 | 0-3 月现状调研/架构诊断 → 3-6 月一期（核心数据 + 流程贯通）→ 6-12 月二期（平台搭建 + 应用迁移）→ 12-24 月三期（治理体系 + 全域推广）→ 24+ 月持续优化 |
+| A Simple version (5 pages) | Reporting to executives | Only draw P1/P2/P3 three main lines + time windows |
+| B Full version (10+ pages) | Project initiation / feasibility study | Gap 2D table → key tasks (A1-An) → urgency × importance + strategic × potential ranking → project portfolio (P1-Pn) → roadmap → project cards (each card answers purpose/scope/cycle/resources/risks/benefits) → budget summary → implementation plan |
+| C Time-window version | Reporting wording | 0-3 months current-state research/architecture diagnosis → 3-6 months phase 1 (core data + process connection) → 6-12 months phase 2 (platform build + application migration) → 12-24 months phase 3 (governance system + full rollout) → 24+ months continuous optimization |
 
 ---
 
-## function-identification：功能识别详解（CBM/APQC）
+## function-identification: Functional Identification Deep Dive (CBM/APQC)
 
-> 这是 **AA 的方法论参考库**（AA 子步骤，非独立 Step）。有用的是操作规则（粒度判断 + 功能识别步骤），方法论理论详见 [methodology](#methodology方法论基础)。
+> This is the **AA methodology reference library** (AA sub-step, not an independent Step). The useful parts are operating rules (granularity judgment + functional identification steps); methodology theory details are in [methodology](#methodology-methodology-foundations).
 
-### CBM 摘要（仅例外路径用）
+### CBM Summary (Exception Path Only)
 
-IBM CBM（Component Business Model，2003）= 3 行（Direct 战略 / Control 管理 / Execute 执行）× N 列（业务能力）的二维表，用于能力推导。**仅当客户讲"能力体系"时用**，用"高内聚低耦合"原则校验 APP 边界。理论详解略，画图时不需要。
+IBM CBM (Component Business Model, 2003) = 3 rows (Direct strategy / Control management / Execute) × N columns (business capabilities) 2D table for capability derivation. **Use only when the client talks about "capability systems"**; use "high cohesion, low coupling" to validate APP boundaries. Theory details omitted; not needed for diagramming.
 
-### APQC PCF 详解
+### APQC PCF Deep Dive
 
-APQC PCF（Process Classification Framework）是跨行业流程分类框架，5 层结构。**L1-L3 是 APQC 标准参照，L4-L5 是企业自填（APQC 不提供）**：
+APQC PCF (Process Classification Framework) is a cross-industry process classification framework with a 5-layer structure. **L1-L3 are APQC standard references; L4-L5 are enterprise-filled (APQC does not provide them)**:
 
-| 层级 | 名称 | 谁定 | 含义 | 示例 |
+| Layer | Name | Defined by | Meaning | Example |
 |---|---|---|---|---|
-| L1 | Category | APQC 标准 | 最高层分类（13 个）| 9.0 管理财务资源 |
-| L2 | Group | APQC 标准 | 流程组 | 预算管理 |
-| L3 | Process | APQC 标准 | 流程 | 预算编制与执行 |
-| L4 | Activity | **企业自填** | 活动 | 收票登记（示例，非 APQC 标准）|
-| L5 | Task | **企业自填** | 任务 | 核对发票信息 / 录入系统（示例，非 APQC 标准）|
+| L1 | Category | APQC standard | Top-level classification (13) | 9.0 Manage financial resources |
+| L2 | Group | APQC standard | Process group | Budget management |
+| L3 | Process | APQC standard | Process | Budget preparation and execution |
+| L4 | Activity | **Enterprise-filled** | Activity | Invoice registration (example, not APQC standard) |
+| L5 | Task | **Enterprise-filled** | Task | Check invoice info / enter into system (example, not APQC standard) |
 
-**与 4A 的对应**（本 skill 的推断，非任何一方官方标准）：
+**Correspondence with 4A** (inferred by this skill, not any official standard):
 
-| APQC | 4A | 组织分工视角 | 系统视角 |
+| APQC | 4A | Organizational-division viewpoint | System viewpoint |
 |---|---|---|---|
-| L1 Category | AD 应用域 | 主干价值链 | 企业级应用分组 |
-| L2 Group | AG 应用组 | 业务模式分组 | 域内应用分组 |
-| L3 Process | APP 一级模块 | 端到端流程 | 独立业务能力的完整支撑 |
-| **L4 Activity** | **ABB 二级模块** | **跨人协作单元**（需流程 owner 协调） | **协作活动的系统化** |
-| **L5 Task** | **功能项** | **单人任务**（分配给一个人就结束） | **系统替代的最小工作单元** |
-| — | **功能子项** | 无对应 | 系统怎么替代（自动化/智能化） |
+| L1 Category | AD application domain | Main value chain | Enterprise-level application grouping |
+| L2 Group | AG application group | Business model grouping | Application grouping within domain |
+| L3 Process | APP level-1 module | End-to-end process | Complete support for an independent business capability |
+| **L4 Activity** | **ABB level-2 module** | **Cross-person collaboration unit** (requires process owner coordination) | **Systematization of collaboration activities** |
+| **L5 Task** | **Functional item** | **Single-person task** (ends when assigned to one person) | **Minimal work unit the system replaces** |
+| — | **Functional sub-item** | No correspondence | How the system replaces (automation/intelligence) |
 
-**L4 vs L5 的判断标准**：
-- **L4（ABB）**：需要跨人/跨角色/跨部门协作，有流程 owner 负责协调推进
-- **L5（功能项）**：分配给一个人（或一个岗位）就结束，不需要再协调他人
-- 即使只有 BPM 没有 OA，人手动查 Excel 也能完成协作，这个活动仍然是 L4
+**L4 vs L5 judgment criteria**:
+- **L4 (ABB)**: requires cross-person/cross-role/cross-department collaboration, with a process owner responsible for coordinating progress
+- **L5 (functional item)**: ends when assigned to one person (or one position); no further coordination needed
+- Even if there is only BPM and no OA, and people manually check Excel to complete collaboration, the activity is still L4
 
-### 功能识别步骤（APQC 默认 / CBM 例外）
+### Functional Identification Steps (APQC Default / CBM Exception)
 
-**先判路径**（默认 APQC，仅当客户讲"能力体系"时切 CBM，详见 [methodology 主次规则 2](#methodology方法论基础)）：
+**First decide path** (default APQC; switch to CBM only when the client talks about "capability systems", see [methodology primary/secondary rule 2](#methodology-methodology-foundations)):
 
-| 客户类型 | 材料特征 | 路径 | 推导起点 |
+| Client type | Material characteristics | Path | Derivation starting point |
 |---|---|---|---|
-| 流程驱动型（默认）| 讲"业务流程""流程步骤""流转" | **APQC 路径**（流程推导）| 业务流程步骤 |
-| 能力驱动型（例外）| 讲"业务能力""核心能力""能力体系" | **CBM 路径**（能力推导）| 业务能力清单 |
+| Process-driven (default) | Talks about "business process", "process steps", "flow" | **APQC path** (process derivation) | Business process steps |
+| Capability-driven (exception) | Talks about "business capability", "core capability", "capability system" | **CBM path** (capability derivation) | Business capability list |
 
-**APQC 路径**（默认 · 企业管理系统主路径，配合 [BA 5.2 节](#52-baaa-映射task-到系统服务mandatory-业务到-it-的核心桥梁) 使用）：
-1. 从 BA 5.2 的应用服务候选清单出发，遍历 task 提取候选功能项（Bottom-up）
-2. 从业务对象反推 CRUD 功能（Bottom-up）
-3. 合并/拆分/调整，用 APQC 流程分类校验 APP 边界
+**APQC path** (default · main path for enterprise management systems, use with [BA 5.2 section](#52-process-service-document-mapping-diagram-mandatory-ba-must-produce-draw-after-51)):
+1. Start from BA 5.2's application-service candidate list, traverse tasks to extract functional item candidates (Bottom-up)
+2. Infer CRUD functions from business objects (Bottom-up)
+3. Merge/split/adjust, validate APP boundaries with APQC process classification
 
-**CBM 路径**（例外 · 仅当客户讲能力体系时）：
-1. 从 BA 的 L1/L2/L3 能力（BA-CAP-L1/L2/L3）推导 AD/AG/APP（Top-down）
-2. 从业务对象反推 CRUD 功能（Bottom-up）
-3. 合并/拆分/调整，用 CBM"高内聚低耦合"原则校验 APP 边界
+**CBM path** (exception · only when client talks about capability systems):
+1. Derive AD/AG/APP from BA L1/L2/L3 capabilities (BA-CAP-L1/L2/L3) (Top-down)
+2. Infer CRUD functions from business objects (Bottom-up)
+3. Merge/split/adjust, validate APP boundaries with CBM "high cohesion, low coupling" principle
 
-### 粒度判断规则
+### Granularity Judgment Rules
 
-> 详见 [6 层应用架构元素](#6-层应用架构元素) 的定义和判断标准。此处仅列反模式示例。
+> See the definitions and judgment criteria in [6-layer application architecture elements](#6-layer-application-architecture-elements). Here only anti-pattern examples.
 
-| 层级 | 反模式 |
+| Layer | Anti-pattern |
 |---|---|
-| **APP** | 把功能项抬到 APP 级（如"OCR 识别"不是 APP） |
-| **ABB** | 把 ABB 拆成功能项（如"预算占用审批"不是功能项，是跨人协作单元） |
-| **功能项** | 把功能子项抬到功能项（如"图形化填写"不是功能项） |
-| **功能子项** | 把实现方式当成功能（如"Excel 导入"不是独立功能） |
+| **APP** | Promoting a functional item to APP level (e.g. "OCR recognition" is not an APP) |
+| **ABB** | Decomposing an ABB into functional items (e.g. "budget occupancy approval" is not a functional item; it is a cross-person collaboration unit) |
+| **Functional item** | Promoting a functional sub-item to functional item (e.g. "graphical fill-in" is not a functional item) |
+| **Functional sub-item** | Treating an implementation method as a function (e.g. "Excel import" is not an independent function) |
 
-### 示例：收票登记的三轨分类
+### Example: Three-Track Classification of Invoice Registration
 
-| 方法论 | 分类 | 层级 | 含义 |
+| Methodology | Classification | Level | Meaning |
 |---|---|---|---|
-| IBM CBM | Execute 级活动 | 业务组件内的活动 | 具体工作事项，不是独立组件 |
-| APQC PCF | Activity（L4）| 流程分类第 4 层 | 跨人协作单元，需流程 owner 协调 |
-| 4A 架构 | ABB（二级模块）| 应用架构第 4 层 | APQC L4 活动的系统化 |
+| IBM CBM | Execute-level activity | Activity within a business component | Concrete work item, not an independent component |
+| APQC PCF | Activity (L4) | Layer 4 of process classification | Cross-person collaboration unit, requires process owner coordination |
+| 4A architecture | ABB (level-2 module) | Layer 4 of application architecture | Systematization of APQC L4 activity |
 
-**关键洞察**：
-- CBM 的"活动(Execute)" ≈ APQC 的"Process(L3)" ≈ 4A 的"AG 应用组"
-- CBM 的"子活动" ≈ APQC 的"Activity(L4)" ≈ 4A 的"**ABB 二级模块**"
-- 三者都在描述"一组紧密关联的工作事项"
-- 但粒度不同：CBM 最粗（战略视角），APQC 中等（流程视角），4A 最细（系统实现视角）
+**Key insights**:
+- CBM's "activity (Execute)" ≈ APQC's "Process (L3)" ≈ 4A's "AG application group"
+- CBM's "sub-activity" ≈ APQC's "Activity (L4)" ≈ 4A's "**ABB level-2 module**"
+- All three describe "a tightly related set of work items"
+- But granularity differs: CBM is coarsest (strategy view), APQC is medium (process view), 4A is finest (system implementation view)
 
-### CBM 能力矩阵图（可选 · 成品软件销售展示能力覆盖）
+### CBM Capability Matrix Diagram (Optional · Packaged Software Sales Showing Capability Coverage)
 
-**定位**：当客户是能力驱动型，或成品软件销售需要展示"软件能力覆盖客户哪些业务域"时输出。用 `.cbm-matrix` 组件（组件 11）。
+**Positioning**: Output when the client is capability-driven, or packaged software sales need to show "which client business domains the software covers". Use the `.cbm-matrix` component (component 11).
 
-**触发条件**：
-- 客户讲"业务能力""核心能力""能力体系"（能力驱动型）
-- 成品软件销售需要展示能力覆盖度
-- 客户要求"一张矩阵图看懂能力分布"
+**Triggers**:
+- Client talks about "business capability", "core capability", "capability system" (capability-driven)
+- Packaged software sales need to show capability coverage
+- Client asks for "one matrix diagram to understand capability distribution"
 
-**输入**：CBM 的三层（决策战略/管理运营/支持服务）× 管理域划分 + 系统tag标注
+**Input**: CBM three layers (decision strategy / management operations / support services) × management domain division + system tag annotations
 
-**输出**：3行×N列矩阵图，每格含能力项 + 系统 tag badge + 投资重点红框
+**Output**: 3-row × N-column matrix diagram; each cell contains capability item + system tag badge + red-frame investment focus
 
-**校验**：
-- [ ] 管理层级严格 3 行（决策战略/管理运营/支持服务）
-- [ ] 每格标注系统 tag（绿=已覆盖/蓝=新平台/橙=新模块/紫=其他系统）
-- [ ] 投资重点用红框高亮（★ 标注）
-- [ ] 图例紧跟图后
+**Checks**:
+- [ ] Strictly 3 management rows (decision strategy / management operations / support services)
+- [ ] Each cell marked with system tag (green = covered / blue = new platform / orange = new module / purple = other system)
+- [ ] Investment focus highlighted with red frame (★ marker)
+- [ ] Legend immediately follows the diagram
 
 ---
 
-## product-mapping：产品映射三件套（成品软件销售专用）
+## product-mapping: Product Mapping Trio (Packaged Software Sales Only)
 
-### 核心思路
+### Core Idea
 
-你是成品软件销售，不是从零设计架构。你的架构图 = **客户需求 × 软件功能** 的对应关系。
+You are a packaged software salesperson, not designing architecture from scratch. Your architecture diagram = **client requirements × software functions** correspondence.
 
-4A 是方法论语言，你的产品是工程语言，两者不能硬套。产品映射三件套是独立于 4A 架构图的附加制品。
+4A is a methodology language; your product is an engineering language; the two cannot be force-fitted. The product mapping trio is an additional deliverable independent of the 4A architecture diagram.
 
-### 三件套
+### The Trio
 
-| 制品 | 含义 | 类比 | 输出形式 |
+| Deliverable | Meaning | Analogy | Output form |
 |---|---|---|---|
-| **Solution Architecture Diagram** | 展示你的软件模块如何对应客户的业务流程 | ERP 的 FI/CO/SD/MM 映射图 | 架构图（在 4A 图上标注你的软件模块）|
-| **Business Capability Map** | 客户的业务能力 → 你的软件模块的映射表 | ERP 的 Capability Map | 映射表（Excel/Markdown）|
-| **Fit-Gap Analysis** | 客户需求 vs 你的软件标准功能，标注 Fit / Partial / Gap | ERP 的 Fit-Gap 分析 | 分析表（Excel/Markdown）|
+| **Solution Architecture Diagram** | Shows how your software modules map to client business processes | ERP FI/CO/SD/MM mapping diagram | Architecture diagram (annotate your software modules on the 4A diagram) |
+| **Business Capability Map** | Client business capabilities → your software module mapping table | ERP Capability Map | Mapping table (Excel/Markdown) |
+| **Fit-Gap Analysis** | Client requirements vs your software standard functions, marking Fit / Partial / Gap | ERP Fit-Gap analysis | Analysis table (Excel/Markdown) |
 
-### 映射步骤
+### Mapping Steps
 
-| 步骤 | 任务 | 输出 |
+| Step | Task | Output |
 |---|---|---|
-| 1.0 | 从客户材料提取 4A 需求 | 客户需求清单（BA/DA/AA/TA）|
-| 2.0 | 从你的软件功能清单提取 4A 能力 | 软件能力清单 |
-| 3.0 | 做映射表：客户需求 → 软件功能 | 映射表（标注 Fit / Partial / Gap）|
-| 4.0 | 出图：在标准 4A 架构图上标注你的软件模块 | 产品架构图 |
+| 1.0 | Extract 4A requirements from client materials | Client requirements list (BA/DA/AA/TA) |
+| 2.0 | Extract 4A capabilities from your software function list | Software capability list |
+| 3.0 | Create mapping table: client requirement → software function | Mapping table (marked Fit / Partial / Gap) |
+| 4.0 | Draw diagram: annotate your software modules on the standard 4A architecture diagram | Product architecture diagram |
 
-### 1.0 从客户材料提取 4A 需求
+### 1.0 Extract 4A Requirements from Client Materials
 
-**做法**：
-- BA 需求：从客户的业务流程文档提取（流程步骤 / 业务对象 / 角色）
-- DA 需求：从客户的数据标准文档提取（数据实体 / 数据源）
-- AA 需求：从客户的功能需求清单提取（功能点 / 集成需求）
-- TA 需求：从客户的技术约束文档提取（部署环境 / 安全要求）
-- 输出：4A 需求清单
+**How**:
+- BA requirements: extract from client business process documents (process steps / business objects / roles)
+- DA requirements: extract from client data standard documents (data entities / data sources)
+- AA requirements: extract from client functional requirements list (function points / integration requirements)
+- TA requirements: extract from client technical constraint documents (deployment environment / security requirements)
+- Output: 4A requirements list
 
-### 2.0 从你的软件功能清单提取 4A 能力
+### 2.0 Extract 4A Capabilities from Your Software Function List
 
-**做法**：
-- 你的软件有哪些模块（对应 AA 的 APP）
-- 每个模块有哪些功能（对应 AA 的功能项）
-- 你的软件支持哪些数据实体（对应 DA 的概念实体）
-- 你的软件的技术栈（对应 TA 的技术组件）
-- 输出：软件能力清单
+**How**:
+- What modules does your software have (corresponding to AA APPs)
+- What functions does each module have (corresponding to AA functional items)
+- What data entities does your software support (corresponding to DA conceptual entities)
+- Your software technology stack (corresponding to TA technology components)
+- Output: software capability list
 
-### 3.0 做映射表
+### 3.0 Create the Mapping Table
 
-**做法**：
-- 横坐标：客户需求（4A 需求清单）
-- 纵坐标：软件功能（软件能力清单）
-- 单元格：Fit（标准功能满足）/ Partial（部分满足，需定制）/ Gap（不满足）
-- Gap 项必须说明：定制开发 / 第三方集成 / 暂不支持
-- 输出：映射表
+**How**:
+- X-axis: client requirements (4A requirements list)
+- Y-axis: software functions (software capability list)
+- Cells: Fit (standard function satisfies) / Partial (partially satisfies, needs customization) / Gap (does not satisfy)
+- Gap items must state: custom development / third-party integration / not currently supported
+- Output: mapping table
 
-**示例**：
+**Example**:
 
-| 客户需求 | 软件功能 | 对应关系 | 说明 |
+| Client requirement | Software function | Relationship | Notes |
 |---|---|---|---|
-| 三入口预算编制（0702/0902/0904）| OA 平台 预算编制模块 | ✅ Fit | 标准功能支持 |
-| 1006 强控占用 | OA 平台 预算执行模块 | ✅ Fit | 标准功能支持 |
-| 凭证推送 ERP | OA 平台 集成接口模块 | ✅ Fit | 标准功能支持 |
-| 欧洲区独立评估 | ？ | ❌ Gap | 需定制开发或说明不支持 |
+| Three-entry budget preparation (0702/0902/0904) | OA Platform budget preparation module | ✅ Fit | Supported by standard function |
+| 1006 mandatory occupancy | OA Platform budget execution module | ✅ Fit | Supported by standard function |
+| Push voucher to ERP | OA Platform integration interface module | ✅ Fit | Supported by standard function |
+| Independent Europe-region assessment | ? | ❌ Gap | Needs custom development or state not supported |
 
-### 4.0 出图：产品架构图
+### 4.0 Draw the Diagram: Product Architecture Diagram
 
-**做法**：
-- 在标准 4A 架构图上标注"这是我们的软件模块"
-- 用不同颜色区分：Fit（绿色）/ Partial（黄色）/ Gap（红色）
-- 输出：产品架构图
+**How**:
+- On the standard 4A architecture diagram, annotate "this is our software module"
+- Use different colors: Fit (green) / Partial (yellow) / Gap (red)
+- Output: product architecture diagram
 
-### 输出位置
+### Output Location
 
-- 产品映射三件套放在 4A 架构图之后（先展示方法论架构，再展示产品对应）
-- 命名：`{客户}_{产品名}_产品映射_v{N}.html`
+- Place the product mapping trio after the 4A architecture diagrams (show methodology architecture first, then product mapping)
+- Naming: `{客户}_{产品名}_产品映射_v{N}.html`
 
-### 校验清单
+### Validation Checklist
 
-- [ ] 每个客户需求是否都标注了 Fit / Partial / Gap
-- [ ] Gap 项是否都说明了处理方式（定制/集成/不支持）
-- [ ] 产品架构图是否清晰标注了软件模块位置
-- [ ] 映射表是否覆盖全部 4A 需求
+- [ ] Is every client requirement marked Fit / Partial / Gap?
+- [ ] Do Gap items all state handling (customization/integration/not supported)?
+- [ ] Does the product architecture diagram clearly mark software module locations?
+- [ ] Does the mapping table cover all 4A requirements?
 
 ---
 
-## requirements：需求识别步骤
+## requirements: Requirements Identification Steps
 
-### 核心问题
+### Core Problem
 
-AI 怎么从客户材料（PPT/文档/访谈记录）里提取架构信息？当前 skill 假设 AI 已经知道要画什么，但实际 workflow 是：
+How does AI extract architecture information from client materials (PPT/documents/interview records)? The current skill assumes AI already knows what to draw, but the actual workflow is:
 
 ```
 客户材料（PPT/文档/访谈）
@@ -1020,292 +1020,291 @@ AI 怎么从客户材料（PPT/文档/访谈记录）里提取架构信息？当
 4 张架构图
 ```
 
-### 需求识别步骤
+### Requirements Identification Steps
 
-| 步骤 | 任务 | 输出 |
+| Step | Task | Output |
 |---|---|---|
-| 1.0 | 材料分类 | 材料分类表（哪些是 BA/DA/AA/TA 材料）|
-| 2.0 | 信息提取 | 4A 信息清单（每个域有哪些材料支撑）|
-| 3.0 | 缺口分析 | 缺口清单（哪些 4A 域没有材料支撑）|
-| 4.0 | 关联映射 | 4A 关联表（跨域映射关系）|
-| 5.0 | 优先级排序 | 设计顺序（先做哪个域）|
+| 1.0 | Material classification | Material classification table (which are BA/DA/AA/TA materials) |
+| 2.0 | Information extraction | 4A information list (which materials support each domain) |
+| 3.0 | Gap analysis | Gap list (which 4A domains lack material support) |
+| 4.0 | Association mapping | 4A association table (cross-domain mapping relationships) |
+| 5.0 | Priority ranking | Design order (which domain to do first) |
 
-### 1.0 材料分类
+### 1.0 Material Classification
 
-**做法**：
-- 先分材料形态：**混合材料**（逐字稿/访谈纪要）vs **单一材料**（需求清单/产品手册/制度文档）
-- 单一材料按支撑域归类：
-  - BA 材料：业务流程文档 / 组织架构 / 战略文档
-  - DA 材料：数据标准文档 / 数据字典 / 数据模型 / 业务单据样表
-  - AA 材料：系统清单 / 功能需求清单 / 集成需求
-  - TA 材料：技术栈文档 / 部署环境文档 / 安全要求
-- **混合材料不按整篇归类**：逐字稿里一句话可能同时含 BA（"三条审批线"）+ AA（"OA 平台要做预算控制"）+ TA（"ERP 只做 FI/CO"）。这类材料先整篇读入，在 2.0 信息提取时按主题拆分到各域
-- 输出：材料分类表
+**How**:
+- First classify material form: **mixed material** (transcripts/interview notes) vs **single material** (requirements list / product manual / policy document)
+- Classify single materials by supported domain:
+  - BA materials: business process documents / organization structure / strategy documents
+  - DA materials: data standard documents / data dictionary / data model / business document sample forms
+  - AA materials: system list / functional requirements list / integration requirements
+  - TA materials: technology stack documents / deployment environment documents / security requirements
+- **Do not classify mixed materials as a whole**: one sentence in a transcript may contain BA ("three approval lines") + AA ("OA Platform needs budget control") + TA ("ERP only does FI/CO"). Such materials are read in full first, then split into domains by topic during 2.0 information extraction
+- Output: material classification table
 
-**关键原则**：客户对话天然混杂，不能要求对话按方法论走。AI 的职责是从混乱对话里拆分出结构化信息，不是要求客户按 4A 分类说话。
+**Key principle**: client conversation is naturally mixed; you cannot require the conversation to follow the methodology. AI's job is to split structured information from messy conversation, not to require the client to speak in 4A categories.
 
-**示例**：
+**Example**:
 
-| 材料 | 形态 | 支撑域 | 处理方式 |
+| Material | Form | Supported domains | Handling |
 |---|---|---|---|
-| 财务需求沟通逐字稿.txt | 混合 | BA+AA+TA | 整篇读入，2.0 按主题拆分 |
-| 预算编制与执行管理.docx | 混合 | BA+AA | 整篇读入，2.0 按主题拆分 |
-| 投资预算清单.xlsx | 单一 | DA | 直接归类 |
-| ERP 接口文档.docx | 单一 | AA+DA | 直接归类 |
-| 财务制度.docx | 单一 | BA | 直接归类 |
+| Financial requirements communication transcript.txt | Mixed | BA+AA+TA | Read in full; split by topic in 2.0 |
+| Budget preparation and execution management.docx | Mixed | BA+AA | Read in full; split by topic in 2.0 |
+| Investment budget list.xlsx | Single | DA | Classify directly |
+| ERP interface document.docx | Single | AA+DA | Classify directly |
+| Financial policy.docx | Single | BA | Classify directly |
 
-### 2.0 信息提取
+### 2.0 Information Extraction
 
-**做法**：
-- 从每类材料提取关键信息
-- BA 提：业务对象 / 流程步骤 / 角色
-- DA 提：概念实体 / 数据源 / 数据标准
-- AA 提：功能点 / 集成需求 / 系统清单
-- TA 提：技术组件 / 部署节点 / 安全要求
-- 输出：4A 信息清单
+**How**:
+- Extract key information from each material type
+- BA extracts: business objects / process steps / roles
+- DA extracts: conceptual entities / data sources / data standards
+- AA extracts: function points / integration requirements / system list
+- TA extracts: technology components / deployment nodes / security requirements
+- Output: 4A information list
 
-### 3.0 缺口分析
+### 3.0 Gap Analysis
 
-**做法**：
-- 区分两类缺口：
-  - **文档缺口**：某个 4A 域缺材料支撑，需要补充访谈或文档
-  - **范围缺口**：客户主动排除的范围（如"欧洲区暂不评估"），不需要补材料，但要标注避免 AI 误去补
-- 文档缺口标注需要补充的内容和获取方式
-- 范围缺口标注排除原因，后续步骤不再覆盖
-- 输出：缺口清单（分两类）
+**How**:
+- Distinguish two gap types:
+  - **Document gap**: a 4A domain lacks material support; needs additional interview or documents
+  - **Scope gap**: scope the client actively excluded (e.g. "Europe region not assessed for now"); no material needed, but mark it to avoid AI mistakenly trying to fill it
+- Document gaps mark what needs to be added and how to obtain it
+- Scope gaps mark the exclusion reason; later steps do not cover them
+- Output: gap list (two types)
 
-**示例**：
+**Example**:
 
-**文档缺口（需补材料）**
+**Document gaps (need materials)**
 
-| 4A 域 | 现有材料支撑 | 缺口 | 需要补充 |
+| 4A domain | Existing material support | Gap | Need to add |
 |---|---|---|---|
-| BA | 逐字稿 + 财务制度 | 缺 QCA 表头样表 | 等陈大鹏会后给 |
-| DA | 投资预算清单 + 项目预算清单 | 缺预算科目完整清单 | 等马丹给大类+明细 |
-| AA | 逐字稿 + 预算编制演示 | 无 | — |
-| TA | 逐字稿 | 缺部署环境信息 | 需要访谈 IT |
+| BA | Transcript + financial policy | Missing QCA header sample form | Wait for Chen Dapeng to provide after meeting |
+| DA | Investment budget list + project budget list | Missing complete budget subject list | Wait for Ma Dan to provide categories + details |
+| AA | Transcript + budget preparation demo | None | — |
+| TA | Transcript | Missing deployment environment info | Need IT interview |
 
-**范围缺口（主动排除，不补）**
+**Scope gaps (actively excluded, do not fill)**
 
-| 排除范围 | 原因 | 影响 |
+| Excluded scope | Reason | Impact |
 |---|---|---|
-| 欧洲区 | 多语言/多币种需单独评估 | 本期 4A 架构不覆盖欧洲区业务 |
+| Europe region | Multi-language/multi-currency needs separate assessment | Current 4A architecture does not cover Europe-region business |
 
-### 4.0 关联映射
+### 4.0 Association Mapping
 
-**做法**：
-- BA 业务对象 → DA 概念实体（同一事物，不同视角）
-- BA 流程步骤 → AA 功能项（流程驱动功能）
-- DA 逻辑实体 → AA 功能项（数据驱动功能）
-- AA APP → TA 部署节点（应用驱动技术）
-- 输出：4A 关联表
+**How**:
+- BA business object → DA conceptual entity (same thing, different viewpoint)
+- BA process step → AA functional item (process-driven function)
+- DA logical entity → AA functional item (data-driven function)
+- AA APP → TA deployment node (application-driven technology)
+- Output: 4A association table
 
-**详细关联规则** → [cross-domain](#cross-domain)
+**Detailed association rules** → [cross-domain](#cross-domain)
 
-### 5.0 优先级排序
+### 5.0 Priority Ranking
 
-**做法**：
-- 通常顺序：BA → DA → AA → TA → 治理
-- 原因：BA 是输入，DA/AA 依赖 BA，TA 依赖 AA
-- 输出：设计顺序
+**How**:
+- Usual order: BA → DA → AA → TA → governance
+- Reason: BA is input; DA/AA depend on BA; TA depends on AA
+- Output: design order
 
-### 校验清单
+### Validation Checklist
 
-- [ ] 是否对全部客户材料做了分类（含混合材料识别）
-- [ ] 混合材料（逐字稿/访谈）是否整篇读入并按主题拆分到各域
-- [ ] 是否从每类材料提取了关键信息
-- [ ] AA 功能点是否做了粒度预判（候选 APP / 候选功能项）
-- [ ] 缺口是否区分文档缺口（需补材料）和范围缺口（主动排除）
-- [ ] 范围缺口是否标注排除原因，后续步骤不再覆盖
-- [ ] 是否建立了 4A 关联表
-- [ ] 是否确定了设计顺序
+- [ ] Are all client materials classified (including mixed-material identification)?
+- [ ] Are mixed materials (transcripts/interviews) read in full and split into domains by topic?
+- [ ] Is key information extracted from each material type?
+- [ ] Are AA function points pre-judged for granularity (candidate APP / candidate functional item)?
+- [ ] Are gaps distinguished between document gaps (need materials) and scope gaps (actively excluded)?
+- [ ] Are scope gaps marked with exclusion reason and not covered in later steps?
+- [ ] Is the 4A association table created?
+- [ ] Is the design order determined?
 
 ---
 
-## scenario-walkthrough：场景穿透验证（D-6 · 阶段二必做 · 最重要）
+## scenario-walkthrough: Scenario Walkthrough Validation (D-6 · Required in Phase 2 · Most Important)
 
-### 核心问题
+### Core Problem
 
-跨域对账只证明「四张图内部自洽」，不证明「架构能跑通业务」。场景穿透用 3-5 个关键业务场景沿 4A 各层端到端走一遍，验证**外部有效性**——架构不是纸面自洽，而是真的能承接客户的实际业务动作。
+Cross-domain reconciliation only proves "the four diagrams are internally consistent", not "the architecture can run the business". Scenario walkthrough walks 3-5 key business scenarios end-to-end through each 4A layer to validate **external validity**—the architecture is not just paper-consistent but can actually carry the client's real business actions.
 
-### 做法
+### How
 
-1. 选 3-5 个关键业务场景（覆盖核心主流程 + 至少 1 个异常/边界场景，如「费用报销」「预算追加」「跨系统对账失败」）。
-2. 每个场景沿 4A 逐层穿透，输出穿透表（场景行动链参照：用户原话 → 意图识别 → 信息预填 → 规则校验 → 人工确认 → 系统回写 → 结果证据）：
+1. Select 3-5 key business scenarios (cover core main processes + at least 1 exception/boundary scenario, e.g. "expense reimbursement", "budget addition", "cross-system reconciliation failure").
+2. Walk each scenario through the 4A layers one by one and output a walkthrough table (scenario action chain reference: user's original words → intent recognition → information prefill → rule validation → human confirmation → system write-back → result evidence):
 
-| 层 | 穿透问题 | 记录 |
+| Layer | Walkthrough question | Record |
 |---|---|---|
-| BA | 场景对应哪条流程步骤链？谁做？ | 步骤链 + 角色 |
-| AA | 每步由哪个 APP/功能项承接？ | APP/功能项名 |
-| DA | 每步读写哪些数据实体？流向？ | 实体 + 读/写 |
-| TA | 跑在哪些部署节点？走什么接口/协议？ | 节点 + 协议 |
+| BA | Which process step chain does the scenario correspond to? Who does it? | Step chain + roles |
+| AA | Which APP/functional item handles each step? | APP/functional item name |
+| DA | Which data entities are read/written in each step? Flow? | Entity + read/write |
+| TA | Which deployment nodes run it? What interface/protocol? | Node + protocol |
 
-3. 穿透中发现的「断点」（某层无承接）或「错位」（层间名字对不上）即为缺口，回补对应文档后再进阶段三。
+3. "Breaks" found during walkthrough (a layer has no handler) or "misalignments" (names do not match between layers) are gaps; backfill the corresponding documents before entering phase 3.
 
-### 校验
+### Validation
 
-- [ ] 3-5 个场景全部穿透完成，穿透表逐格可填
-- [ ] 每条场景链在 4A 各层都有承接，无断点
-- [ ] 穿透发现的缺口已回补文档（非「留待后续」）
+- [ ] All 3-5 scenarios walked through completely; every cell in the walkthrough table can be filled
+- [ ] Every scenario chain has a handler at every 4A layer; no breaks
+- [ ] Gaps found in walkthrough have been backfilled into documents (not "defer to later")
 
 ---
 
-## cross-domain：4A 关联规则
+## cross-domain: 4A Cross-Domain Rules
 
-### 核心问题
+### Core Problem
 
-4 张架构图不是独立的，它们之间有显式的关联关系。AI 做 4 张图时，必须检查跨域一致性，不能凭借上下文去猜。
+The 4 architecture diagrams are not independent; they have explicit association relationships. When AI makes the 4 diagrams, it must check cross-domain consistency, not guess from context.
 
-### 关联规则
+### Association Rules
 
-> **跨域对账用名字，不用 L 号**（详见 [分层原则规则 3](#分层原则与-l-编号规则mandatory-解决l-几混乱)）。下表的 L 号仅标注在该域内的位置，不用于跨域比较。
+> **Cross-domain reconciliation uses names, not L numbers** (see [L numbering and step numbering rules](#l-numbering-and-step-numbering-rules)). The L numbers in the table below only indicate positions within that domain and are not used for cross-domain comparison.
 
-| 关联 | 规则（用名字对账）| 检查点 | 示例 |
+| Relationship | Rule (reconcile by name) | Check point | Example |
 |---|---|---|---|
-| BA → DA | BA 的业务对象 = DA 的概念实体 | "发票"在 BA 是业务对象，在 DA 必须是同名概念实体 | BA 的"预算单"→ DA 的"预算单"概念实体 |
-| BA → AA | BA 的流程步骤 = AA 的 APP 识别输入 | "收票登记"在 BA 是流程步骤，在 AA 必须有对应 APP | BA 的"收票登记"流程→ AA 的"收票登记"APP |
-| DA → AA | DA 的逻辑实体 = AA 功能项操作的对象 | DA 的"发票表"→ AA 的"发票录入/校验/归档"功能操作它 | DA 的"预算单表"→ AA 的"预算编制/调整"功能操作它 |
-| AA → TA | AA 的每个 APP → TA 的部署节点 | "收票登记"APP → TA 的"应用服务器"节点 | AA 的"预算编制"APP → TA 的"OA 平台 应用服务器" |
-| 四者 → 治理 | 四者的 Owner = 治理的组织设计 | DA 的数据 Owner = 治理的"数据管家"角色 | BA 的流程 Owner = 治理的"流程管理员"角色 |
+| BA → DA | BA business object = DA conceptual entity | "Invoice" as a BA business object must be a same-name conceptual entity in DA | BA "budget form" → DA "budget form" conceptual entity |
+| BA → AA | BA process step = AA APP identification input | "Invoice registration" as a BA process step must have a corresponding APP in AA | BA "invoice registration" process → AA "invoice registration" APP |
+| DA → AA | DA logical entity = object operated by AA functional items | DA "invoice table" → AA "invoice entry/validation/archive" functions operate on it | DA "budget form table" → AA "budget preparation/adjustment" functions operate on it |
+| AA → TA | Every AA APP → TA deployment node | "Invoice registration" APP → TA "application server" node | AA "budget preparation" APP → TA "OA Platform app server" |
+| All four → governance | Owner of all four = organizational design in governance | DA data owner = governance "data steward" role | BA process owner = governance "process administrator" role |
 
-### 跨域一致性检查清单
+### Cross-Domain Consistency Checklist
 
-- [ ] BA 的每个业务对象在 DA 都有同名概念实体
-- [ ] BA 的每个流程步骤在 AA 都有对应 APP
-- [ ] DA 的每个逻辑实体在 AA 都有功能项操作它
-- [ ] AA 的每个 APP 在 TA 都有对应部署节点
-- [ ] 四者的 Owner 在治理章节都有对应角色
-- [ ] 同一个业务对象在 4 张图里叫同一个名字（术语一致）
+- [ ] Every BA business object has a same-name conceptual entity in DA
+- [ ] Every BA process step has a corresponding APP in AA
+- [ ] Every DA logical entity has a functional item in AA operating on it
+- [ ] Every AA APP has a corresponding deployment node in TA
+- [ ] Owners of all four have corresponding roles in the governance section
+- [ ] The same business object has the same name across the 4 diagrams (consistent terminology)
 
-### 示例：某集团预算费控系统
+### Example: A Group's Budget Expense-Control System
 
-| BA 业务对象 | DA 概念实体 | AA 功能 | TA 部署节点 | 治理 Owner |
+| BA business object | DA conceptual entity | AA function | TA deployment node | Governance owner |
 |---|---|---|---|---|
-| 预算单 | 预算单 | 预算编制 APP | OA 平台 应用服务器 | 财务经理 |
-| 发票 | 发票 | 收票登记 APP | OA 平台 应用服务器 | 财务专员 |
-| 采购申请单 | 采购申请单 | 预算占用 APP | OA 平台 应用服务器 | 采购员 |
-| 合同 | 合同 | 合同登记 APP | OA 平台 应用服务器 | 合同管理员 |
-| 付款申请单 | 付款申请单 | 付款消耗 APP | OA 平台 应用服务器 | 财务专员 |
+| Budget form | Budget form | Budget preparation APP | OA Platform app server | Finance manager |
+| Invoice | Invoice | Invoice registration APP | OA Platform app server | Finance specialist |
+| Procurement request form | Procurement request form | Budget occupancy APP | OA Platform app server | Procurement officer |
+| Contract | Contract | Contract registration APP | OA Platform app server | Contract administrator |
+| Payment request form | Payment request form | Payment consumption APP | OA Platform app server | Finance specialist |
 
-### 术语一致性规则
+### Terminology Consistency Rules
 
-- 同一个业务对象在 4 张图里必须叫同一个名字
-- 如果 BA 叫"预算单"，DA 不能叫"预算表单"，AA 不能叫"预算编制单"
-- 术语不一致时，以 BA 的命名为准（BA 是源头）
+- The same business object must have the same name across the 4 diagrams
+- If BA calls it "budget form", DA cannot call it "budget form document", AA cannot call it "budget preparation form"
+- When terminology is inconsistent, use BA's naming as authoritative (BA is the source)
 
-### 校验失败的处理
+### Handling Check Failures
 
-- 如果 BA 的业务对象在 DA 没有对应概念实体 → 补 DA 的概念实体
-- 如果 BA 的流程步骤在 AA 没有对应 APP → 补 AA 的 APP
-- 如果 DA 的逻辑实体在 AA 没有对应功能 → 补 AA 的功能项
-- 如果 AA 的 APP 在 TA 没有对应部署节点 → 补 TA 的部署节点
-- 如果四者的 Owner 在治理章节没有对应角色 → 补治理的组织设计
-
----
-
-## composition-extras：中心生态拓扑与多租户治理图讲法（D-6 · skill 层，不动渲染器）
-
-两个咨询高频图型的讲法（不改渲染器，用既有 diagram subtype 拼装或 PPT 手写）：
-
-### 中心生态拓扑（平台型客户）
-
-**适用**：客户是平台/枢纽型（ERP 平台、中台、API 网关），需要讲清「核心枢纽 + 外围角色 + 接口方向 + 治理环」。
-
-**结构**：
-- 核心枢纽：中央大卡（平台名 + 核心模块 chip）
-- 外围角色：≤6 个角色卡环绕（供应商/客户/渠道/监管/内部系统），连线止于枢纽边缘
-- 接口方向：每条连线标方向（谁调谁）+ 协议/端口 + 失败边界（集成三要素）
-- 治理环：外圈标治理规则（准入/数据主权/计费/安全合规）
-
-**复用**：diagram `architecture/platform_hub`（中心-环绕-右集成）承载主结构；治理环用图例槽位 `legend` + 附件槽位 `notes`。
-
-### 多租户治理图（集团型客户）
-
-**适用**：集团型客户需要讲清「组织层级 + 租户边界 + 数据隔离」。
-
-**结构**：
-- 组织层级：左列集团/子公司/事业部三级树
-- 租户边界：每个租户一个独立边界框（数据/配置/权限隔离），框内列该租户的应用与数据
-- 数据隔离：租户间边界上标隔离策略（物理隔离 / 逻辑隔离 / 共享表 + 租户字段）
-
-**复用**：diagram `architecture/layered`（分层）+ `relationship/org_tree`（组织层级）；租户边界用 `layered` 的层框表达，隔离策略写层间连接标注（跨层连接显性化）。
+- If a BA business object has no corresponding DA conceptual entity → add the DA conceptual entity
+- If a BA process step has no corresponding APP in AA → add the AA APP
+- If a DA logical entity has no corresponding function in AA → add the AA functional item
+- If an AA APP has no corresponding deployment node in TA → add the TA deployment node
+- If an owner of the four has no corresponding role in governance → add the governance organizational design
 
 ---
 
-## appendix：常见反模式
+## composition-extras: Central Ecosystem Topology and Multi-Tenant Governance Diagram Narratives (D-6 · Skill Layer · No Renderer Changes)
 
-### 架构图反模式
+Narratives for two high-frequency consulting diagram types (no renderer changes; assemble from existing diagram subtypes or hand-write in PPT):
 
-- ❌ 直接列"我们会建设一套 XX 系统"（缺原则 + 缺输入 + 缺制品三件套）
-- ❌ 用"解决方案" / "技术方案" 替代"架构"两个字（架构有方法论含义，不是策略文档）
-- ❌ 把"应用架构"和"应用模块清单"混为一谈（前者是分层的，后者是清单）
-- ❌ 跳过"原则"页直接给步骤（每类架构至少 3-6 条原则要先讲清楚）
-- ❌ 在架构图里嵌入公司 logo / 系统截图（除非客户提供的示意）
-- ❌ 把"现状 → 蓝图"画成两张并列图，不答中间的差距分析
-- ❌ 治理章节三治（架构/项目/运维）少答一治
+### Central Ecosystem Topology (Platform-Type Clients)
 
-### 功能识别反模式
+**Applicable**: client is platform/hub type (ERP platform, middle platform, API gateway) and needs to explain "core hub + peripheral roles + interface direction + governance ring".
 
-- ❌ 把功能项抬到 APP 级（如"OCR 识别"不是 APP，"收票登记"才是 APP）
-- ❌ 把功能子项抬到功能项级（如"Excel 导入"是子项，不是功能项）
-- ❌ 把业务对象当成功能（如"发票"是对象，"发票录入"才是功能）
-- ❌ 把实现方式当成功能（如"图形化填写"是子项，不是功能项）
+**Structure**:
+- Core hub: central large card (platform name + core module chip)
+- Peripheral roles: ≤6 role cards surrounding (supplier/customer/channel/regulator/internal system), connections stop at the hub edge
+- Interface direction: each connection marks direction (who calls whom) + protocol/port + failure boundary (integration three elements)
+- Governance ring: outer ring marks governance rules (onboarding/data sovereignty/billing/security compliance)
 
-### 跨域一致性反模式
+**Reuse**: diagram `architecture/platform_hub` (center-surround-right integration) carries the main structure; governance ring uses legend slot `legend` + attachment slot `notes`.
 
-- ❌ 4A 四张图各自独立，不检查跨域一致性
-- ❌ 同一个业务对象在 4 张图里叫不同名字
-- ❌ BA 的业务对象在 DA 没有对应概念实体
-- ❌ AA 的 APP 在 TA 没有对应部署节点
+### Multi-Tenant Governance Diagram (Group-Type Clients)
 
-### 产品映射反模式
+**Applicable**: group-type clients need to explain "organization hierarchy + tenant boundaries + data isolation".
 
-- ❌ 产品映射里把 Gap 项藏起来不标注（Gap 必须显式标注 + 说明处理方式）
-- ❌ 把 4A 方法论语言和产品工程语言硬套（两者不能一一对应）
-- ❌ 产品映射放在 4A 架构图之前（应该之后，先方法论后产品）
+**Structure**:
+- Organization hierarchy: left column group/subsidiary/business-unit three-level tree
+- Tenant boundary: each tenant is an independent boundary box (data/configuration/permission isolation); list that tenant's applications and data inside the box
+- Data isolation: mark isolation policy on boundaries between tenants (physical isolation / logical isolation / shared table + tenant field)
+
+**Reuse**: diagram `architecture/layered` (layers) + `relationship/org_tree` (organization hierarchy); tenant boundaries use `layered`'s layer boxes, isolation policies written as inter-layer connection annotations (make cross-layer connections explicit).
 
 ---
 
+## appendix: Common Anti-Patterns
 
-## rendering：视觉渲染规范
+### Architecture Diagram Anti-Patterns
 
-> **已拆分到独立文件**：视觉渲染规范（CSS 类、组件库、配色方案等）已拆分到 [styles.md](./styles.md)。
+- ❌ Directly listing "we will build an XX system" (missing the principles + inputs + deliverables triplet)
+- ❌ Replacing "architecture" with "solution" / "technical proposal" (architecture has methodology meaning, not a strategy document)
+- ❌ Confusing "application architecture" with "application module list" (the former is layered, the latter is a list)
+- ❌ Skipping the "principles" page and jumping straight to steps (each architecture type needs at least 3-6 principles explained first)
+- ❌ Embedding company logos / system screenshots in architecture diagrams (unless provided by the client as illustrations)
+- ❌ Drawing "current state → blueprint" as two side-by-side diagrams without addressing the gap analysis in between
+- ❌ Missing one of the three governance dimensions (architecture/project/operations) in the governance section
+
+### Functional Identification Anti-Patterns
+
+- ❌ Promoting a functional item to APP level (e.g. "OCR recognition" is not an APP; "invoice registration" is an APP)
+- ❌ Promoting a functional sub-item to functional item level (e.g. "Excel import" is a sub-item, not a functional item)
+- ❌ Treating a business object as a function (e.g. "invoice" is an object; "invoice entry" is a function)
+- ❌ Treating an implementation method as a function (e.g. "graphical fill-in" is a sub-item, not a functional item)
+
+### Cross-Domain Consistency Anti-Patterns
+
+- ❌ The four 4A diagrams are independent and cross-domain consistency is not checked
+- ❌ The same business object is called different names across the 4 diagrams
+- ❌ BA business object has no corresponding DA conceptual entity
+- ❌ AA APP has no corresponding TA deployment node
+
+### Product Mapping Anti-Patterns
+
+- ❌ Hiding Gap items in product mapping without marking them (Gap must be explicitly marked + state handling)
+- ❌ Force-fitting 4A methodology language and product engineering language (the two cannot be one-to-one)
+- ❌ Putting product mapping before the 4A architecture diagrams (should be after; methodology first, then product)
+
+---
+
+## rendering: Visual Rendering Spec
+
+> **Split into a separate file**: the visual rendering spec (CSS classes, component library, color schemes, etc.) has been split into [styles.md](./styles.md).
 >
-> **使用时机**：写完 4A 文档后，合并检查通过，最后根据文档画图时读取 styles.md。
+> **When to use**: after writing the 4A documents and passing the merge check, read styles.md when drawing the diagrams at the end.
 
-## checklist：校验清单（生成后总检 · 任何一项不过必须重做）
+## checklist: Validation Checklist (Post-Generation Total Check · Any Failure Must Be Redone)
 
-**结构**
-- [ ] 第 1 块先讲"原则"，不直接跳步骤
-- [ ] 步骤编号用 1.0/2.0/3.0 + 1.1/1.2 二级嵌套
-- [ ] 每步有"输入/任务/输出"三件套
-- [ ] 三性验证每节末尾出现
+**Structure**
+- [ ] Block 1 explains "principles" first, not directly jumping to steps
+- [ ] Step numbering uses 1.0/2.0/3.0 + 1.1/1.2 second-level nesting
+- [ ] Every step has "Input/Task/Output" triplet
+- [ ] Three-property validation appears at the end of each section
 
-**域特定**
-- [ ] DA 必出 5 层资产目录(L1-L5)
-- [ ] AA 必出 6 层图(AD/AG/APP/ABB/功能/子项)
-- [ ] TA 必出三横两纵
-- [ ] 治理矩阵每行有 Owner + 支撑模块，且与 cross-domain 对账表一致
-- [ ] 演进必答 5 步不跳
+**Domain-specific**
+- [ ] DA must produce the 5-layer asset catalog (L1-L5)
+- [ ] AA must produce the 6-layer diagram (AD/AG/APP/ABB/function/sub-item)
+- [ ] TA must produce three horizontals, two verticals
+- [ ] Every governance matrix row has Owner + supporting module and is consistent with the cross-domain reconciliation table
+- [ ] Evolution must answer 5 steps without skipping
 
-**功能识别**
-- [ ] 每个 APP 有独立业务用例
-- [ ] 每个 ABB 属于且仅属于一个 APP
-- [ ] 功能项可独立测试
-- [ ] 功能子项是实现方式不是独立功能
+**Functional identification**
+- [ ] Every APP has an independent business use case
+- [ ] Every ABB belongs to exactly one APP
+- [ ] Functional items are independently testable
+- [ ] Functional sub-items are implementation methods, not independent functions
 
-**跨域**
-- [ ] BA 业务对象在 DA 有对应概念实体
-- [ ] BA 流程步骤在 AA 有对应 APP
-- [ ] DA 逻辑实体在 AA 有对应功能项
-- [ ] AA 每个 APP 在 TA 有对应部署节点
-- [ ] 术语一致(同一对象 4 张图同名)
+**Cross-domain**
+- [ ] BA business objects have corresponding DA conceptual entities
+- [ ] BA process steps have corresponding AA APPs
+- [ ] DA logical entities have corresponding AA functional items
+- [ ] Every AA APP has a corresponding TA deployment node
+- [ ] Terminology consistent (same object has same name across the 4 diagrams)
 
-**产品映射(如有)**
-- [ ] 每个需求标注 Fit/Partial/Gap
-- [ ] Gap 项说明处理方式
+**Product mapping (if any)**
+- [ ] Every requirement marked Fit/Partial/Gap
+- [ ] Gap items state handling
 
-**通用**
-- [ ] 不绑死客户行业名
-- [ ] 无禁用词(赋能/抓手/闭环/生态/打通/全方位/一站式/卓越)
-- [ ] 跑 style-check + theme-verify
+**General**
+- [ ] Do not bind to a client industry name
+- [ ] No banned words (赋能/抓手/闭环/生态/打通/全方位/一站式/卓越)
+- [ ] Run style-check + theme-verify

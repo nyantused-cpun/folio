@@ -1,150 +1,150 @@
 ---
 name: presentation-content-design
 version: "1.1"
-description: "汇报材料表达设计方法论：容器→组件→构图→仿真五步工序，输出'每页讲法'的内容设计。作为 outline-to-spec / spec-gen 的推荐前置（按需，非强制）。当用户说做方案/做汇报/生成 HTML/做 PPT（信息化咨询/汇报材料）时调用。Use before outline-to-spec and spec-gen. v1.1: 定位调整——五步工序从强制锁降为推荐方法论，验收端已由 review 第 5 维 + verify 密度检查机械化兜底（2026 检索校准：模型可自行推理的通用方法论不设过程锁）。"
+description: "做方案/汇报/HTML/PPT 时调用五步内容设计。Use before outline-to-spec and spec-gen for presentation and report content design."
 ---
 
 # Presentation Content Design
 
-> 本文件是目录页，不是百科全书。方法论详情按需读 [reference.md](./reference.md) 对应锚点。
+> This file is an index, not an encyclopedia. Read the relevant [reference.md](./reference.md) anchor on demand.
 
 ## When to Invoke
 
-**调用**：做方案 / 做汇报 / 生成 HTML / 做 PPT / 出信息化咨询/汇报材料，且内容需要从客户材料重新组织（非微调已有产出）。
-**不调用**：架构图专项（走 `architecture-diagram-builder`）；编辑已有产出物；纯检索/读文件；工程类 HTML。
+**Invoke**: when making proposals / reports / HTML / PPT or producing IT consulting/report materials, and content needs to be reorganized from client materials (not minor edits to existing output).
+**Do not invoke**: architecture-diagram-only tasks (use `architecture-diagram-builder`); editing existing outputs; pure retrieval/reading files; engineering HTML.
 
-**定位**：本 skill 是 `outline-to-spec` / `spec-gen` 的**推荐前置**（按需，非强制锁）。它提供"每页怎么讲"的选型方法，spec 只是内容设计的落地格式。模型可自行组织内容时不必走完整工序；**查表价值 > 流程价值**——容器/组件/版式映射是项目特定知识，模型推理不出来。
+**Positioning**: This skill is a **recommended prerequisite** (on demand, not a hard lock) for `outline-to-spec` / `spec-gen`. It provides selection methods for "how each page is told"; spec is just the output format for content design. If the model can organize content itself, it need not run the full process; **lookup value > process value**—container/component/layout mappings are project-specific knowledge the model cannot infer.
 
-## 解决什么问题
+## What Problem It Solves
 
-我们的链路是「材料 → spec-gen 一步映射 → 渲染 → verify」，中间缺一个显式的**内容设计**环节——先想每页怎么讲、内容是什么关系，再落 spec 字段。目前这一步全凭 AI 临场发挥。
+Our chain is "materials → one-step spec-gen mapping → render → verify"; it lacks an explicit **content design** step—decide how each page is told and how content relates before filling spec fields. Currently this step relies on AI improvisation.
 
-排版问题的根源大多不是渲染器画错，而是**讲法选错**：该用对比矩阵的用了卡片墙，该用证据台账的用了大段文字。渲染层（`ui-design-system`）只能约束"壳"的规范，约束不了"这页该用什么讲法"——那是本 skill 的职责。
+Most layout problems stem not from renderer errors but from **wrong telling mode**: a comparison matrix should be used but a card wall is used; an evidence ledger should be used but long paragraphs are used. The rendering layer (`ui-design-system`) only constrains the "shell"; it cannot constrain "what telling mode this page should use"—that is this skill's job.
 
-## 执行顺序（推荐工序 · 五步）
+## Execution Order (Recommended Five-Step Process)
 
-> 验收端已机械化（review 第 5 维 + verify 反同壳/密度，2026-08-13），过程端不设锁。模型可自行组织内容时按需走完整工序；复杂/陌生场景建议走完。每步有输出物，做哪步读 reference.md 对应章节，不一次性读整个文件。
+> Acceptance is mechanized (review dimension 5 + verify anti-same-shell/density, 2026-08-13); process has no lock. Run the full process as needed when the model can organize content itself; complex/unfamiliar scenarios recommended. Each step has an output; read the matching reference.md section, not the whole file at once.
 
 ```
-Step 1: 容器定读法 → 给谁看、什么阅读行为 → 选定容器
-        读 reference.md#containers（容器 A-D + 局部布局 E-K）
-        输出：container 决策 + 理由（一句话）
+Step 1: Choose container by reading behavior -> who sees it, what reading behavior -> select container
+        Read reference.md#containers (containers A-D + local layouts E-K)
+        Output: container decision + reason (one sentence)
 
-Step 2: 组件定细节 → 逐页问"这段内容是什么关系" → 选定组件
-        读 reference.md#components（组件库 + 缺口组件降级方案）
-        输出：每页组件清单（页 → 组件 → 承担的信息关系）
+Step 2: Choose components by details -> ask per page "what relationship is this content" -> select components
+        Read reference.md#components (component library + fallback for missing components)
+        Output: per-page component list (page -> component -> information relationship it carries)
 
-Step 3: 仿真建直觉 → 能画的不用文字，能点的不贴截图
-        读 reference.md#simulation（Static / Interactive / Guided Demo + 反馈选型表）
-        输出：每页仿真级别（Static / Interactive / Guided Demo / 无）
+Step 3: Build intuition with simulation -> draw what can be drawn, make clickable what can be clicked instead of screenshots
+        Read reference.md#simulation (Static / Interactive / Guided Demo + feedback selection table)
+        Output: per-page simulation level (Static / Interactive / Guided Demo / none)
 
-Step 4: 模板定版式 → 构图母板决定信息在页面上的组织逻辑
-        读 reference.md#composition（12 种母板 + 组合体写法）
-        复杂页面读 reference.md#template-families（十大配方卡）
-        输出：每页构图母板 + 与 P01-P16 版式的映射
-        **落 spec**：页面声明 `composition` 字段（D-122，枚举见下方速查表，
-        多值=组合体）；verify 会在渲染前机械检查"声明母板 ↔ 页面构件"匹配
+Step 4: Choose template for layout -> composition board decides how information is organized on the page
+        Read reference.md#composition (12 boards + composite patterns)
+        Complex pages read reference.md#template-families (ten recipe cards)
+        Output: per-page composition board + mapping to P01-P16 layouts
+        **Write spec**: page declares `composition` field (D-122; enum in quick table below,
+        multiple values = composite); verify mechanically checks "declared board <-> page components" before render
 
-Step 5: 质量门验收 → 对照验收清单逐条过
-        读 reference.md#quality-gate（反退化清单 + 及格线 + 八项检查）
-        输出：验收结果（review 第 5 维 / verify 密度检查会在渲染后机械化复验）
+Step 5: Quality-gate acceptance -> go through checklist item by item
+        Read reference.md#quality-gate (anti-degradation list + passing line + eight checks)
+        Output: acceptance result (review dimension 5 / verify density check re-checks mechanically after render)
 ```
 
-**关键约束**：
-- Step 1-5 是顺序工序（推荐按序）；做哪一步读 reference.md 对应章节。
-- 内容设计是否走完整工序由模型按任务复杂度判断（新材料重组的复杂方案推荐走；微调/模板化生成可不走）。
-- spec 生成后发现讲法问题，回到 Step 2-4 改内容设计，不直接在 spec 上补丁。
+**Key constraints**:
+- Steps 1-5 are sequential (recommended in order); read the corresponding reference.md section for each step.
+- Whether to run the full process is judged by the model based on task complexity (recommended for complex new-material reorganization; optional for fine-tuning/templated generation).
+- If telling-mode issues are found after spec generation, go back to Steps 2-4 to revise content design; do not patch spec directly.
 
-## 构图母板速查（Step 4 落 spec 用，D-122）
+## Composition Board Quick Reference (for Step 4 spec, D-122)
 
-`composition` 字段枚举（完整语义读 reference.md#composition）：
+`composition` field enum (full semantics in reference.md#composition):
 
-| 枚举值 | 母板 | 页面应有构件（verify 机械提示依据） |
+| Enum | Board | Page components expected (verify mechanical hint basis) |
 |---|---|---|
-| `full_claim` | 全幅主张 | hero / action_title 大标题 |
+| `full_claim` | 全幅主张 | hero / action_title large title |
 | `editorial_columns` | 编辑式分栏 | info_cards / pullquote / view_cards |
-| `architecture_board` | 架构板 | diagram architecture 类（4a/layered/integration/deployment/platform_hub…） |
+| `architecture_board` | 架构板 | diagram architecture types (4a/layered/integration/deployment/platform_hub…) |
 | `evidence_ledger` | 证据台账 | evidence_ledger / info_cards |
-| `flow_spine` | 流程脊柱 | diagram flow 类（swimlane/cross_system/parallel…） |
-| `scenario_sequence` | 场景序列 | 多段 section_tag + action_title |
+| `flow_spine` | 流程脊柱 | diagram flow types (swimlane/cross_system/parallel…) |
+| `scenario_sequence` | 场景序列 | multiple section_tag + action_title |
 | `data_narrative` | 数据叙事 | stat_cards / kpi_cards / table |
-| `product_simulation` | 仿真产品 | simulation 组件 |
-| `timeline_gantt` | 时间线甘特 | diagram timeline 类（module_gantt/milestone_gantt） |
+| `product_simulation` | 仿真产品 | simulation component |
+| `timeline_gantt` | 时间线甘特 | diagram timeline types (module_gantt/milestone_gantt) |
 | `comparison_matrix` | 对比矩阵 | table / fit_gap / cbm / raci |
-| `decision_board` | 决策板 | callout_block / 决策类图 |
+| `decision_board` | 决策板 | callout_block / decision-type diagrams |
 | `capability_graph` | 能力图谱 | capability_map / platform_hub |
 
-## 三个选型原则
+## Three Selection Principles
 
-1. **容器看阅读行为**——读者是逐屏滚动、按章节跳读、还是被演示带着走
-2. **组件看内容关系**——这段内容是举证、分工、风险、计划还是决策，而不是"哪个壳好看"
-3. **模板看信息关系**——页面信息的主次/对比/时序关系决定构图母板，不是随机排
+1. **Container by reading behavior**—does the reader scroll screen by screen, jump by chapter, or follow a presentation?
+2. **Component by content relationship**—is this content evidence, division of labor, risk, plan, or decision, not "which shell looks good"?
+3. **Template by information relationship**—page information priority/comparison/sequence determines the composition board, not random arrangement.
 
-**反堆砌纪律**：一页里每个区域必须承担明确角色（主判断 / 主关系 / 辅助证据 / 例证 / 来源 / 行动），不为显得丰富而堆组件。
+**Anti-stuffing discipline**: every region on a page must play a clear role (main judgment / main relationship / supporting evidence / example / source / action); do not stack components to look rich.
 
-## 风格方向（定材料气质时）
+## Style Direction (When Setting Material Tone)
 
-八类风格 = 八套叙事语言（构图重心 + 字阶 + 空间节奏 + 图示语言 + 控件语言五样一起动），读 [reference.md#styles](./reference.md#styles-八类风格方向八套叙事语言不是八件衣服)。与我们 4 style + 4 theme（配色字体包）是补充关系，落地映射待决策。
+Eight style categories = eight narrative languages (composition focus + type scale + spatial rhythm + visual language + control language move together), read [reference.md#styles](./reference.md#styles). They complement our 4 style + 4 theme (color/font packages); concrete mapping pending decision.
 
-## 质量门速查（Step 5 验收）
+## Quality Gate Quick Reference (Step 5 acceptance)
 
-> 已下沉：以下规则已机械化为 review 第 5 维 + verify 反同壳/密度检查（观察模式，2026-08-13）。完整规则读 reference.md#quality-gate。
+> Moved down: these rules are mechanized as review dimension 5 + verify anti-same-shell/density checks (observation mode, 2026-08-13). Full rules in reference.md#quality-gate.
 
-- [ ] 每页有明确结论：判断 + 解释 + 例证，不能只有标题
-- [ ] 数据带口径和来源：单位、周期、业务语境、变化原因缺一不可
-- [ ] 无空洞结论："提升效率""加强协同"这类没有对象和数字的套话
-- [ ] 连续页面换壳：禁止同一套卡片/分栏从头用到尾
-- [ ] 密度受控：无溢出/裁切、无无意义大空白（容量预算预防 + 渲染后兜底）
-- [ ] 每个 EXHIBIT 有材料或内容设计支撑（防幻觉铁律不变）
+- [ ] Each page has a clear conclusion: judgment + explanation + example, not just a title
+- [ ] Data has scope and source: unit, period, business context, and reason for change are all required
+- [ ] No hollow conclusions: clichés like "提升效率""加强协同" without object and numbers
+- [ ] Consecutive pages change shells: do not use the same card/column set from start to finish
+- [ ] Density controlled: no overflow/clipping, no meaningless large whitespace (capacity budget prevention + post-render fallback)
+- [ ] Every EXHIBIT has material or content-design support (anti-hallucination rule unchanged)
 
-## 与现有 Skill 的边界
+## Boundaries with Existing Skills
 
-| Skill | 管什么 | 与本 skill 的关系 |
+| Skill | Owns | Relationship to this skill |
 |---|---|---|
-| 本 skill | **怎么讲**（容器/组件/构图/仿真 → 内容设计） | spec 生成前的默认前置 |
-| `architecture-diagram-builder` | 架构图单一物种的表达方法论 | 平行 skill；页面含架构图时其页面设计服从本 skill 的内容设计 |
-| `spec-writing-guide` | spec 字段怎么写 | 本 skill 的下游：内容设计落定后按它写字段 |
-| `ui-design-system` | 渲染器吃什么（版式/theme/容量预算） | 本 skill 的下游：壳的规范，不管讲法 |
-| `delivery-pipeline` | 交付顺序（HTML 先行→确认→PPT） | 编排层：本 skill 是其 Step 3（spec 生成）之前的可选前置 |
-| `de-ai-style` | 文案去 AI 味 | 正交：文案层面，任何生成都适用 |
+| This skill | **How to tell** (container/component/composition/simulation → content design) | Default prerequisite before spec generation |
+| `architecture-diagram-builder` | Expression methodology for architecture diagrams as a single species | Parallel skill; when a page contains architecture diagrams, its page design follows this skill's content design |
+| `spec-writing-guide` | How to write spec fields | Downstream: after content design is settled, write fields per it |
+| `ui-design-system` | What the renderer consumes (layout/theme/capacity budget) | Downstream: shell spec, does not manage telling mode |
+| `delivery-pipeline` | Delivery order (HTML first → confirm → PPT) | Orchestration layer: optional prerequisite before its Step 3 (spec generation) |
+| `de-ai-style` | Removes AI flavor from copy | Orthogonal: applies to any generated copy |
 
-## 工具与流程集成
+## Tool and Process Integration
 
-| 阶段 | 动作 |
+| Stage | Action |
 |---|---|
-| 内容设计 | 五步工序 → 输出内容设计（对话内呈现，不落 spec） |
-| 设计确认 | 复杂方案建议用户过目内容设计（spec 确认门强制，内容设计确认按需） |
-| spec 生成 | `python _cli.py spec-gen <材料> --client <客户> --output <spec.yml>`（按内容设计填充） |
-| 渲染校验 | `html-build` → `verify` / `review`（质量门规则的机械检查端） |
-| 会话结束 | `python _cli.py save <客户>` |
+| Content design | Five-step process → output content design (presented in conversation; not written to spec) |
+| Design confirmation | For complex proposals, suggest user review content design (spec confirmation gate is mandatory; content design confirmation optional) |
+| Spec generation | `python _cli.py spec-gen <材料> --client <客户> --output <spec.yml>` (fill based on content design) |
+| Render validation | `html-build` → `verify` / `review` (mechanical checks for quality-gate rules) |
+| Session end | `python _cli.py save <客户>` |
 
-## 已定项（2026-08-13 拍板，B-1 七条全按推荐）
+## Decisions (2026-08-13 confirmed, all seven B-1 items per recommendation)
 
-| # | 项 | 定论 |
+| # | Item | Decision |
 |---|---|---|
-| 1 | container 字段 | ✅ scroll/chapters/stage/report，默认 scroll |
-| 2 | 第一批 5 组件 | ✅ 证据台账/风险登记/RACI/决策板/甘特（B-3~B-7） |
-| 3 | 质量门下沉 | ✅ review 第 5 维 + verify 反同壳/密度（观察模式） |
-| 4 | 仿真组件 | ⏸️ 挂起，预留 simulation 字段（B-8） |
-| 5 | scenario:training | ✅ 加 |
-| 6 | 接入门禁 | ✅ 已进生成前必读 skill 清单 |
-| 7 | 沉淀纪律 | ✅ 见 #extension-discipline |
+| 1 | container field | ✅ scroll/chapters/stage/report, default scroll |
+| 2 | First 5 components | ✅ 证据台账/风险登记/RACI/决策板/甘特（B-3~B-7） |
+| 3 | Quality gate moved down | ✅ review dimension 5 + verify anti-same-shell/density (observation mode) |
+| 4 | Simulation components | ⏸️ Pending, reserved simulation field (B-8) |
+| 5 | scenario:training | ✅ Added |
+| 6 | Access gate | ✅ Already added to pre-generation required skill list |
+| 7 | Sedimentation discipline | ✅ See #extension-discipline |
 
-## container 四值选型（Step 1 容器定读法）
+## container Four-Value Selection (Step 1 container reading mode)
 
-| container | 阅读行为 | 适用 | 推荐版式 | 禁忌 |
+| container | Reading behavior | Use for | Recommended layouts | Avoid |
 |---|---|---|---|---|
-| scroll | 单长页逐屏滚动 | 单页方案、高管速览 | P01/P03/P04/P08/P11 | P02 章节页、P12 目录页 |
-| chapters | 按目录跳读 | 长方案、需求分析 | P02/P12 + P03~P10 | 无（最灵活） |
-| stage | 一页一屏翻页演示 | 宣讲、汇报现场 | P01~P11 + P16 | 长滚动叙事 |
-| report | 文档式线性深读 | 研究报告、白皮书 | P03/P07/P09/P10 + 文字元素 | P05/P06 大图为主 |
+| scroll | single long page, scroll screen by screen | single-page proposals, executive overviews | P01/P03/P04/P08/P11 | P02 chapter pages, P12 TOC pages |
+| chapters | jump by TOC | long proposals, requirements analysis | P02/P12 + P03~P10 | none (most flexible) |
+| stage | one page per screen, flip through | presentations, on-site reporting | P01~P11 + P16 | long scrolling narrative |
+| report | document-style linear deep reading | research reports, white papers | P03/P07/P09/P10 + text elements | P05/P06 image-led |
 
-> 完整版式映射见 reference.md#containers。
+> Full layout mapping in reference.md#containers.
 
-## training scenario 触发条件
+## training scenario trigger
 
-`scenario: training` 用于培训/教学型材料（ZSW 学习工作坊 C 风格）。触发：内容目标是「教会概念/流程/操作」而非「汇报结论」。页面骨架 = 学习动作先行（目标→例题→练习→反馈→迁移），密度中偏低。风格卡见 reference.md#training。
+`scenario: training` is for training/teaching materials (ZSW learning workshop style C). Trigger: content goal is "teach concepts/processes/operations" rather than "report conclusions". Page skeleton = learning actions first (goal → example → exercise → feedback → transfer), medium-low density. Style card in reference.md#training.
 
-## 沉淀纪律
+## Sedimentation Discipline
 
-新行业/新客户只沉淀：对象、术语、角色、证据、字段、常见问题。不沉淀：固定配色、页面数量、卡片布局。详见 reference.md#extension-discipline。
+For new industries/clients, only sediment: objects, terminology, roles, evidence, fields, common questions. Do not sediment: fixed colors, page counts, card layouts. See reference.md#extension-discipline.

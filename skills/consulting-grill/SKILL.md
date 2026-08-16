@@ -1,81 +1,81 @@
 ---
 name: consulting-grill
 version: "1.0"
-description: 带证据召回的咨询追问 skill。围绕计划或设计持续追问用户，遇到涉及客户需求的论断时主动调 CLI 召回原始材料片段作为证据，纠正或补充用户理解。适用于讨论客户方案、压力测试计划方向、确认需求理解时。
+description: 带证据召回的咨询追问。Use when stress-testing client plans or confirming requirement understanding.
 ---
 
-# consulting-grill：带证据召回的咨询追问
+# consulting-grill: Evidence-Recalling Consulting Grill
 
-## 核心理念
+## Core Idea
 
-普通追问 skill 只能基于用户说的话推理。consulting-grill 在追问过程中主动召回客户原始材料（会议纪要、技术要求、招投标文件等），用 snippet 引用纠正或补充用户理解。
+Ordinary grilling skills can only reason from what the user says. consulting-grill actively recalls the client's raw materials (meeting notes, technical requirements, bid/tender documents, etc.) during the grill and uses snippet citations to correct or supplement the user's understanding.
 
-**一句话**：不是你说了算，也不是我说了算，是原始材料说了算。
+**One-liner**: Neither you nor I decide; the raw material decides.
 
-## 启动前置
+## Startup Prerequisites
 
-1. 会话开始时先执行 `python _cli.py session-start "<用户输入>" --client <客户名>` 加载上下文
-2. 执行 `python _cli.py theme-guard <客户>` 拿到 permanent 铁律（HEAD 注入）
-3. 将铁律内容放在回答开头，整个追问过程中随时对照
+1. At session start, run `python _cli.py session-start "<用户输入>" --client <客户名>` to load context
+2. Run `python _cli.py theme-guard <客户>` to get the permanent rules (HEAD injection)
+3. Put the permanent rules at the start of answers and check them throughout the grill
 
-## 追问节奏（保留 grilling 原有节奏）
+## Grill Rhythm (Keep Original Grilling Rhythm)
 
-围绕这个计划的每个方面持续访谈用户，直到我们达成共同理解。沿着 design tree 的每个分支往下走，逐一解决决策之间的依赖。每个问题都要附上你的推荐答案。
+Keep interviewing the user about every aspect of the plan until we reach shared understanding. Walk down each branch of the design tree, resolving dependencies between decisions one by one. Attach your recommended answer to every question.
 
-**一次只问一个问题**，并等待用户对该问题的反馈后再继续。一次问多个问题会让人失去方向。
+**Ask one question at a time** and wait for the user's feedback before continuing. Asking multiple questions at once makes people lose direction.
 
-在用户确认我们已经达成共同理解之前，不要执行这个计划。
+Do not execute the plan until the user confirms we have reached shared understanding.
 
-## 与普通 grilling 的核心差异：召回优先于提问
+## Core Difference from Normal Grilling: Recall Before Asking
 
-### 触发召回的时机
+### When to Trigger Recall
 
-当用户陈述涉及以下内容时，**先召回再追问**：
+When the user's statement touches any of the following, **recall first, then continue grilling**:
 
-1. **客户需求/指标**（如"客户要支持 5000 并发"）-> 召回技术要求/会议纪要验证
-2. **方案方向/重点**（如"方案重点在协同办公"）-> 召回需求文档验证
-3. **约束条件**（如"不用管数据隔离"）-> 召回原始材料检查是否遗漏
-4. **技术选型**（如"用微服务架构"）-> 召回技术要求检查是否有明确指向
+1. **Client needs/metrics** (e.g. "client needs 5000 concurrent users") -> recall technical requirements/meeting notes to verify
+2. **Solution direction/focus** (e.g. "solution focuses on collaboration") -> recall requirements document to verify
+3. **Constraints** (e.g. "ignore data isolation") -> recall raw materials to check for omissions
+4. **Technology choices** (e.g. "use microservices architecture") -> recall technical requirements to check for explicit direction
 
-### 如何召回
+### How to Recall
 
 ```bash
 python _cli.py recall "<关键词>" --client <客户名>
 ```
 
-- 从召回结果的 snippet 字段获取原始文本内容
-- 如果 snippet 不够，用 `python _cli.py read <path#anchor>` 读完整片段
-- 召回 3-5 条即可，不需要全量
+- Get the raw text from the `snippet` field of recall results
+- If the snippet is insufficient, use `python _cli.py read <path#anchor>` to read the full passage
+- 3-5 results are enough; no need for the full set
 
-### 召回后的三种行为
+### Three Behaviors After Recall
 
-| 召回结果 | 行为 | 示例 |
+| Recall result | Behavior | Example |
 |---------|------|------|
-| 与用户陈述一致 | 确认后继续追问下一层 | "原始材料 #p12 确认了 3000 并发，我们继续看扩展方案" |
-| 与用户陈述冲突 | **引用 snippet 主动纠正** | "等一下，蓝海集团_技术要求_v2.docx#p12 写的是 3000 并发，不是 5000，你是不是记错了？" |
-| 召回无结果 | 提示用户确认来源 | "我在原始材料里没找到'5000 并发'的依据，这个数字从哪来的？" |
+| Matches the user's statement | Confirm, then continue to the next level | "Raw material #p12 confirms 3000 concurrent users; let's continue with the scaling plan" |
+| Conflicts with the user's statement | **Cite the snippet and correct actively** | "Wait, 蓝海集团_技术要求_v2.docx#p12 says 3000 concurrent users, not 5000 — did you misremember?" |
+| No results | Ask the user to confirm the source | "I found no support for '5000 concurrent users' in the raw materials. Where did that number come from?" |
 
-### 主题守卫联动
+### Theme-Guard Linkage
 
-追问过程中，每个分支结束时检查：
-- 当前讨论的方向是否覆盖了 permanent 铁律？
-- 是否有铁律被遗漏？
+During the grill, at the end of each branch check:
+- Does the current discussion direction cover the permanent rules?
+- Was any permanent rule missed?
 
-如果发现遗漏，主动提醒："我们讨论了协同办公，但客户铁律里'数据隔离是硬性要求'还没覆盖到，要不要现在看看？"
+If something is missing, proactively remind: "We covered collaboration, but the client rule that data isolation is a hard requirement has not been covered yet. Shall we look at it now?"
 
-## 追问结构（design tree）
+## Grill Structure (Design Tree)
 
-按以下顺序逐层追问，每层都先召回验证：
+Grill layer by layer in this order, recalling first at each layer:
 
-1. **需求理解层**：客户要解决什么问题？核心痛点是什么？（召回会议纪要验证）
-2. **方案方向层**：我们打算怎么解决？大方向是什么？（召回技术要求验证）
-3. **能力范围层**：具体做哪些模块？边界在哪？（召回需求文档验证）
-4. **约束检查层**：permanent 铁律都覆盖了吗？有没有遗漏？（theme-guard 检查）
-5. **交付确认层**：产出物是什么？交付顺序？（确认共识）
+1. **Requirement understanding layer**: What problem is the client solving? What is the core pain? (recall meeting notes to verify)
+2. **Solution direction layer**: How do we plan to solve it? What is the big direction? (recall technical requirements to verify)
+3. **Capability scope layer**: Which modules exactly? Where are the boundaries? (recall requirements document to verify)
+4. **Constraint check layer**: Are all permanent rules covered? Any omissions? (theme-guard check)
+5. **Delivery confirmation layer**: What are the deliverables? Delivery order? (confirm shared understanding)
 
-## 输出格式
+## Output Format
 
-每次追问时，如果调了召回，输出格式：
+Whenever you recall during a question, use this format:
 
 ```
 [证据] 来源：蓝海集团_技术要求_v2.docx#p12
@@ -86,17 +86,17 @@ xxx？
 （推荐答案：yyy）
 ```
 
-如果没调召回（纯逻辑问题），直接问。
+If no recall was triggered (pure logic question), ask directly.
 
-## 与 CLI 的关系
+## Relationship with CLI
 
-- **本 skill 用于讨论阶段**：AI 和用户讨论方案方向、需求理解时用
-- **生成阶段仍走 CLI**：讨论达成共识后，走 `python _cli.py new <客户>` -> spec -> html-build
-- **召回结果不自动注入生成**：讨论中的召回是临时的，生成时的证据注入是独立的（走 spec 阶段注入，见 decisions.md）
+- **This skill is for the discussion phase**: use it when the AI and user discuss solution direction and requirement understanding
+- **Generation still goes through CLI**: after reaching consensus, follow `python _cli.py new <客户>` -> spec -> html-build
+- **Recall results are not auto-injected into generation**: recalls during discussion are temporary; generation-time evidence injection is separate (injected at the spec stage; see decisions.md)
 
-## 注意事项
+## Notes
 
-- 召回结果可能不全（BM25 分词、切片粒度都有影响），不能 100% 依赖。召回无结果不等于客户没说过，要提示用户确认
-- snippet 长度有限（200 字），关键证据用 `read` 命令读完整片段
-- 不要为了召回而召回，纯逻辑/架构选型问题不需要召回原始材料
-- 每次召回后必须有文字回复，不能静默
+- Recall results may be incomplete (BM25 tokenization and chunk granularity affect this); do not rely on them 100%. No recall result does not mean the client never said it; ask the user to confirm
+- Snippet length is limited (200 chars); use the `read` command to read the full passage for key evidence
+- Don't recall for its own sake; pure logic/architecture choice questions do not need raw material recall
+- Every recall must be followed by a text reply; never stay silent

@@ -1,65 +1,65 @@
 ---
 name: architecture-diagram-builder
 version: "5.0"
-description: "Enterprise-architecture diagram construction methodology. Invoke when user says 架构图/蓝图架构/整体信息化规划/数据架构/应用架构/技术架构/治理架构. Use before outline-to-spec."
+description: "架构图/蓝图架构/信息化规划/数据/应用/技术/治理架构时调用。Enterprise-architecture diagram construction methodology; invoke for architecture diagrams and use before outline-to-spec."
 ---
 
 # Architecture Diagram Builder
 
-> 本文件是目录页，不是百科全书。方法论详情按需读 [reference.md](./reference.md) 对应锚点。
+> This file is a directory page, not an encyclopedia. Read methodology details on demand at the corresponding anchors in [reference.md](./reference.md).
 
 ## When to Invoke
 
-**调用**：架构图 / 蓝图架构 / 整体信息化规划 / 数据架构 / 应用架构 / 技术架构 / 治理架构 / 演进路线 / EA 架构管控。
-**不调用**：单纯流程图、技术栈图、单页 UI 截图、已有现成架构图只需微调。
+**Invoke**: architecture diagrams / blueprint architecture / overall IT planning / data architecture / application architecture / technical architecture / governance architecture / evolution roadmap / EA architecture governance.
+**Do not invoke**: simple flowcharts, tech-stack diagrams, single-page UI screenshots, or minor tweaks to an existing architecture diagram.
 
-**流程-服务映射图**：BA 5.1 task→系统服务推导完成后必须输出此图（MANDATORY），验证映射是否落地。画法见 [reference.md#BA](./reference.md#ba业务架构完整设计步骤) 末尾 5.2 节。
+**Process-service mapping diagram**: after BA 5.1 task→system service derivation, you MUST output this diagram (MANDATORY) to verify the mapping is realized. Drawing: see section 5.2 at the end of [reference.md#BA](./reference.md#ba业务架构完整设计步骤).
 
-## 解决什么问题
+## What Problem It Solves
 
-AI 画架构图时常犯的 5 个错，本 skill 用锁定清单 + 逐步跨域检查机制逐个防住：
+AI often makes 5 mistakes when drawing architecture diagrams; this skill prevents each one with locked checklists + step-by-step cross-domain checks:
 
-| # | 常见错误 | 为什么是错 | 本 skill 怎么防 |
+| # | Common mistake | Why it is wrong | How this skill prevents it |
 |---|---|---|---|
-| 1 | 跳过原则直接给步骤 | 没讲清设计准则，图能画出来但无逻辑根基，换需求就不知道怎么调 | 每类架构必须先出 3-6 条原则，才允许给步骤 |
-| 2 | 4A 四图各画各的，不查跨域一致性 | 同一业务对象在四张图里叫不同名字，看图的人对不上 | 每步输出锁定清单，下一步必须拿清单逐项比对 |
-| 3 | 功能项和 APP 粒度搞反 | 把"OCR 识别"这种小功能当 APP，"收票登记"这种完整业务能力反而当功能项 | 功能识别三轨对照表 + 粒度判断规则（APP=有独立用例；功能项=分配给一个人就结束的任务） |
-| 4 | 产品映射藏 Gap 项 | 只标 Fit 让方案看起来好，Gap 不标或标了不说怎么处理 | 每个需求必须标 Fit/Partial/Gap，Gap 项必须说明处理方式 |
-| 5 | 治理脱离对账结果新造内容 | 治理章写空泛管控体系，不回答"每条流程谁负责、跑在哪个模块"，和对账表对不上 | 治理矩阵每行必须有 Owner + 支撑模块，且全部来自 cross-domain 对账表（集团级汇报才启用三治×三维） |
+| 1 | Skipping principles and going straight to steps | Design criteria are not explained; the diagram can be drawn but has no logical foundation, so you won't know how to adjust when requirements change | Each architecture type must produce 3-6 principles before steps are allowed |
+| 2 | Drawing the four 4A diagrams independently without checking cross-domain consistency | The same business object has different names across the four diagrams, so readers cannot match them | Each step outputs a locked checklist; the next step must compare against it item by item |
+| 3 | Reversing the granularity of function items and APPs | Treating a small function like "OCR recognition" as an APP while treating a full business capability like "invoice receipt registration" as a function item | Three-track comparison table for function identification + granularity rules (APP = has independent use cases; function item = a task that ends when assigned to one person) |
+| 4 | Hiding Gap items in product mapping | Marking only Fit to make the proposal look good; Gap is omitted or marked without stating how to handle it | Every requirement must be marked Fit/Partial/Gap; Gap items must state the handling approach |
+| 5 | Governance inventing content detached from reconciliation results | The governance chapter writes vague control systems, does not answer "who owns each process and which module it runs in", and does not match the reconciliation table | Every governance matrix row must have Owner + supporting module, all from the cross-domain reconciliation table (enable three-governance × three-dimensions only for group-level reporting) |
 
-方法论基础见 [reference.md#methodology](./reference.md#methodology方法论基础)。
+Methodology foundation: [reference.md#methodology](./reference.md#methodology方法论基础).
 
-## 场景分流（首次接触先问方向）
+## Scenario Routing (Ask Direction on First Contact)
 
-| 场景 | 输出形态 | 颗粒度 |
+| Scenario | Output form | Granularity |
 |---|---|---|
-| 给老板看的架构蓝图 | HTML 单页 + 4A 总览图 + 演进路线 | L1-L2，重结论轻细节 |
-| 内部用的需求清单 | HTML 分域详述 + APP/功能项清单 + 跨域关联表 | L3-L5，重细节可落地 |
-| 成品软件销售 | 4A 架构图 + 产品映射三件套（Fit-Gap） | 方法论 + 产品对应 |
-| 培训/教学型架构讲解 | 先仿真建直觉（场景穿透）→ 再抽象分层（4A 分层图） | L1-L2，学习动作先行 |
-| 平台型客户（中心生态） | 中心生态拓扑图：核心枢纽 + 外围角色 + 接口方向 + 治理环 | L1-L2，重生态关系与接口方向 |
-| 集团型客户（多租户） | 多租户治理图：组织层级 + 租户边界 + 数据隔离 | L2-L3，重租户隔离与治理边界 |
+| Architecture blueprint for executives | HTML single page + 4A overview diagram + evolution roadmap | L1-L2, conclusion-focused, light on detail |
+| Internal requirements list | HTML per-domain detail + APP/function-item list + cross-domain association table | L3-L5, detail-focused and actionable |
+| Packaged software sales | 4A architecture diagrams + product mapping trio (Fit-Gap) | Methodology + product correspondence |
+| Training/teaching architecture walkthrough | Build intuition by simulation first (scenario penetration) → then abstract layers (4A layered diagram) | L1-L2, learning action first |
+| Platform clients (hub ecosystem) | Hub-ecosystem topology: core hub + peripheral roles + interface directions + governance loop | L1-L2, ecosystem relations and interface directions |
+| Group clients (multi-tenant) | Multi-tenant governance diagram: org hierarchy + tenant boundaries + data isolation | L2-L3, tenant isolation and governance boundaries |
 
-## 工具与流程集成（MANDATORY）
+## Tool and Workflow Integration (MANDATORY)
 
-本 skill 是本项目的子组件，必须走 CLI 工作流：
+This skill is a subcomponent of this project and must use the CLI workflow:
 
-| 阶段 | 命令 | 说明 |
+| Stage | Command | Description |
 |---|---|---|
-| 会话开始 | `python _cli.py session-start "<输入>" --client <客户>` | 判层级 + 加载历史 + 主题刷新 |
-| 客户铁律 | `python _cli.py theme-guard <客户>` | HEAD 注入客户永久铁律 |
-| 读材料 | `python _cli.py read <文件>` / 环境可用的文档读取工具 | 全文读取，禁止凭前 N 字符下结论 |
-| 生成 HTML | `python _cli.py html-build <spec> --client <客户>` | spec 须设 confirmed:true，否则阻断 |
-| 校验 | `python _cli.py verify <文件>` + `theme-verify <文件> <客户>` | 生成后自动跑，失败必须重做 |
-| 会话结束 | `python _cli.py save <客户>` | 写 task_history + 更新 index |
+| Session start | `python _cli.py session-start "<输入>" --client <客户>` | Determine level + load history + refresh theme |
+| Client ground rules | `python _cli.py theme-guard <客户>` | Inject client's permanent ground rules at HEAD |
+| Read materials | `python _cli.py read <文件>` / environment document-reading tool | Read full text; never conclude from the first N characters |
+| Generate HTML | `python _cli.py html-build <spec> --client <客户>` | spec must set confirmed:true, otherwise blocked |
+| Verify | `python _cli.py verify <文件>` + `theme-verify <文件> <客户>` | Runs automatically after generation; must redo on failure |
+| Session end | `python _cli.py save <客户>` | Write task_history + update index |
 
-渲染规范（CSS/配色/画法）见 [reference.md#rendering](./reference.md#rendering视觉渲染规范)，按需读取。
+Rendering spec (CSS/colors/drawing): [reference.md#rendering](./reference.md#rendering视觉渲染规范), read on demand.
 
-## 执行顺序（MANDATORY · 三阶段流程）
+## Execution Order (MANDATORY · Three-Phase Process)
 
-> **三阶段**：① 写文档 → ② 合并检查 → ③ 画图
+> **Three phases**: ① Write documents → ② Merge checks → ③ Draw diagrams
 >
-> **核心原则**：先完成所有文档内容，确保跨域一致性，最后才生成 HTML 架构图。
+> **Core principle**: finish all document content first, ensure cross-domain consistency, then generate the HTML architecture diagram.
 
 ```
 ─── 阶段一：写文档 ───
@@ -104,41 +104,41 @@ Step 11: 生成 HTML 架构图
   · 禁止在画图阶段修改文档内容（如需修改，回到阶段一）
 ```
 
-**关键约束**：
-- 阶段一完成前，不生成任何 HTML 架构图
-- 阶段二未通过，不进入阶段三
-- 阶段三发现文档问题，必须回到阶段一修改，不能直接在 HTML 中改
+**Key constraints**:
+- Do not generate any HTML architecture diagram before phase one is complete
+- Do not enter phase three unless phase two passes
+- If phase three finds document issues, return to phase one to fix; do not change directly in the HTML
 
-**关键规则**：
-1. 做哪一步就读 reference.md 对应章节，不一次性读整个文件。
-2. 禁止并行生成 BA/DA/AA/TA。
-3. **锁定机制（🔒）**：每步完成后输出锁定清单，等用户确认才能进下一步。格式与跨域检查规则见 [reference.md#execution-flow](./reference.md#execution-flow执行流与锁定机制)。作用域：仅当前会话有效，跨会话续作需重新确认。
-4. 逐步跨域检查，不是最后才检查。
+**Key rules**:
+1. Read only the relevant reference.md section for the current step; do not read the whole file at once.
+2. Do not generate BA/DA/AA/TA in parallel.
+3. **Lock mechanism (🔒)**: after each step, output a locked checklist and wait for user confirmation before the next step. Format and cross-domain check rules: [reference.md#execution-flow](./reference.md#execution-flow执行流与锁定机制). Scope: valid only in the current session; resuming across sessions requires re-confirmation.
+4. Run cross-domain checks step by step, not only at the end.
 
-## 组合体写法（图是组合体，不是单件）
+## Composite Composition (Diagrams Are Assemblies, Not Single Pieces)
 
-架构图不从孤立一张图出发，而是「架构板 + 配套组件」的组合体。三种高频组合：
+Architecture diagrams start from a composite of an architecture board + supporting components, not from an isolated image. Three common composites:
 
-| 组合 | 架构板 | 配套组件 | 解决什么 |
+| Composite | Architecture board | Supporting components | What it solves |
 |---|---|---|---|
-| 架构板 + 证据台账 | 分层架构图 | `evidence_ledger`（B-3） | 每个设计决策挂依据编号，答辩"依据是什么"可追溯 |
-| 架构板 + 责任矩阵 | 分层/治理架构图 | `raci_matrix`（B-5） | 治理架构强制配对，每条流程谁负责、跑在哪个模块 |
-| 演进路线 + 里程碑甘特 | 演进路线图 | `milestone_gantt`（B-7） | 替换 ≤4 里程碑弱 timeline，任务轨×依赖按周铺 |
+| Architecture board + evidence ledger | Layered architecture diagram | `evidence_ledger` (B-3) | Every design decision carries an evidence number; "what is the basis?" can be traced during defense |
+| Architecture board + responsibility matrix | Layered/governance architecture diagram | `raci_matrix` (B-5) | Mandatory pairing for governance architecture: who owns each process and which module it runs in |
+| Evolution roadmap + milestone gantt | Evolution roadmap | `milestone_gantt` (B-7) | Replaces weak timeline with ≤4 milestones; task tracks × dependencies laid out by week |
 
-**架构证据链（D-6 · 设计决策挂证据编号）**：每个设计决策挂证据编号（`EV-<序号>`），来源 = 客户需求条目 / 材料出处。答辩「依据是什么」时凭编号现场翻 `evidence_ledger`（B-3）台账，不靠回忆。证据编号在架构文档里与 B-3 台账的 `num` 一一对应——图上标注编号，台账列证据全文，形成「图 → 编号 → 证据」的可追溯链。
+**Architecture evidence chain (D-6 · design decisions carry evidence numbers)**: every design decision carries an evidence number (`EV-<序号>`), sourced from client requirement items / material references. During "what is the basis?" defense, look up `evidence_ledger` (B-3) by number on the spot, not from memory. Evidence numbers in architecture documents correspond one-to-one with `num` in the B-3 ledger: the diagram marks the number, the ledger lists the full evidence text, forming a traceable chain of diagram → number → evidence.
 
-**每图附件四槽位**（图不孤立，必有配套文字）：
+**Four companion slots for every diagram** (diagrams are never isolated; they must have supporting text):
 
-| 槽位 | 内容 |
+| Slot | Content |
 |---|---|
-| 结论 | 一句话：这张图要让人带走什么判断 |
-| 图例 | 颜色/线型/符号的语义（三态、角色色、箭头方向） |
-| 来源 | 依据（材料出处 / 证据编号 / 对账表章节） |
-| 行动 | 下一步 / 待确认项 / 责任人 |
+| Conclusion | One sentence: what judgment the reader should take away |
+| Legend | Semantics of colors/line styles/symbols (three states, role colors, arrow directions) |
+| Source | Basis (material reference / evidence number / reconciliation table section) |
+| Action | Next step / items to confirm / owner |
 
-**嵌入叙事 skill 的服从关系**：架构图作为页面组件嵌入方案时，服从 `presentation-content-design` 的 container（容器定读法）与密度决策——先定容器再选图，不孤立画图。示例：container=stage（汇报现场）时架构图一页一屏、结论先行；container=chapters（长方案）时架构图配证据台账、可展开查依据。
+**Subordination when embedded in narrative skills**: when an architecture diagram is embedded in a proposal as a page component, follow `presentation-content-design`'s container (container determines reading) and density decisions — decide the container first, then choose the diagram; do not draw in isolation. Example: container=stage (presentation) → one diagram per screen, conclusion first; container=chapters (long proposal) → pair the diagram with an evidence ledger for expandable basis lookup.
 
-**页面 composition 声明（D-122，2026-08-14）**：架构图页在 spec 里声明 `composition: [architecture_board]`（或组合体如 `[architecture_board, evidence_ledger]`），verify 机械检查该页确有 architecture 类 diagram；渲染前 schema 校验枚举。示例：
+**Page composition declaration (D-122, 2026-08-14)**: architecture diagram pages declare `composition: [architecture_board]` in the spec (or composites such as `[architecture_board, evidence_ledger]`); verify mechanically checks the page actually has an architecture-class diagram; schema validates the enum before rendering. Example:
 
 ```yaml
 # 单图主张页（stage 容器，一页一屏）
@@ -166,23 +166,23 @@ pages:
           - {num: "E-01", claim: "...", status: "已核对"}
 ```
 
-**4A 及格线**（review 第 5 维机械复验）：真实实体 + 边界 + 接口 + 流向——四要素缺一即不达结构完整度。
+**4A pass line** (mechanically re-checked by review dimension 5): real entities + boundaries + interfaces + flows — missing any of the four fails structural completeness.
 
-## 输出落地
+## Output Delivery
 
-- 方案：`output/{客户}/{客户}_架构蓝图_v{N}.html`
-- 产品映射：`output/{客户}/{客户}_{产品名}_产品映射_v{N}.html`
-- 先 HTML → 用户确认 → 再 PPT
+- Proposal: `output/{客户}/{客户}_架构蓝图_v{N}.html`
+- Product mapping: `output/{客户}/{客户}_{产品名}_产品映射_v{N}.html`
+- HTML first → user confirmation → then PPT
 
-## 术语表
+## Glossary
 
-| 缩写 | 含义 |
+| Abbreviation | Meaning |
 |---|---|
-| AD/AG/APP | 应用域/组/一级模块 |
-| ABB | APQC L4 活动的系统化（需要流程 owner 协调多人的协作单元） |
-| CBM | IBM 组件化业务模型 |
-| APQC PCF | 流程分类框架 |
+| AD/AG/APP | Application domain/group/level-1 module |
+| ABB | Systematized APQC L4 activities (collaboration units requiring a process owner to coordinate multiple people) |
+| CBM | IBM componentized business model |
+| APQC PCF | Process classification framework |
 | TOGAF ADM | The Open Group Architecture Framework - Architecture Development Method |
-| ArchiMate | 企业架构建模语言（三层：业务/应用/技术） |
-| SOR/SOI | 稳态 IT/敏态 IT |
-| RACI | 主责/决策/咨询/知情 |
+| ArchiMate | Enterprise architecture modeling language (three layers: business/application/technology) |
+| SOR/SOI | Steady-state IT / agile IT |
+| RACI | Responsible/Accountable/Consulted/Informed |

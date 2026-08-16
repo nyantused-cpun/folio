@@ -1,4 +1,4 @@
-﻿# 敏感与本地文件
+# 敏感与本地文件
 .env
 .env.*
 !.env.example
@@ -25,6 +25,7 @@ _assets/
 # 运行时日志与 skill 同步镜像（CLI/插件脚本自建，不入库）
 .folio/
 .agents/
+.scratch/
 
 # 系统残留
 _tmp_*/

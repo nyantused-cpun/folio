@@ -44,6 +44,15 @@ cd folio
 - 命名：模块五段名见 README（Intake / Chronicle / Craft / Press / Proof）；
 - 不用"售前助手"称呼本产品（那是历史内部名），对外统一「兰亭（Folio）」。
 
+## 语言策略（Language policy）
+
+**面向 agent 的指令内容默认用英文**——skills 正文、preset 的 SOP、AGENTS 类指令等只有 agent 读、人不读；英文跨中英文模型都稳定、token 更省，也不受中文分词与编码差异影响。
+
+- **例外（保留中文）**：禁用词表、语感样本、客户名/行业名示例等必须逐字匹配的中文素材；
+- **SKILL.md 的 description**：允许中英各一句短触发词（中文用户口语触发 + 英文模型匹配）；
+- **人读文档**（README / docs / RELEASE_NOTES / CHANGELOG）：保持中英双语入口，不套用本策略；
+- **核心提示词保持精简**：只写约束、边界与例外，不写推理过程，不堆砌背景叙述。
+
 ## 许可
 
 MIT。提交即同意以 MIT 许可发布你的贡献。

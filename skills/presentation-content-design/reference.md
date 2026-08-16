@@ -1,241 +1,241 @@
 # Presentation Content Design — Reference
 
-> 按需读取对应锚点，不一次性读整个文件。
-> 内容来源：`inbox/AI修炼宝典`（ZSW SKILL 套件方法）翻译为我们的项目语境，落地项以 SKILL.md「已定项」决策为准。
+> Read the matching anchor on demand; do not read the whole file at once.
+> Content source: `inbox/AI修炼宝典` (ZSW SKILL suite methodology) translated into our project context; implemented decisions follow SKILL.md "Decisions".
 
-## 锚点目录
+## Anchor Index
 
-| 锚点 | 内容 | 何时读 |
+| Anchor | Content | When to read |
 |---|---|---|
-| #containers | 容器 A-D + 局部布局 E-K | Step 1 容器定读法 |
-| #components | 组件库 19 种 + 内容关系对照 | Step 2 组件定细节 |
-| #simulation | 仿真三模式 + 反馈选型表 | Step 3 仿真建直觉 |
-| #composition | 构图母板 12 种 + 组合体写法 | Step 4 模板定版式 |
-| #template-families | 十大模板家族（配方卡） | 复杂页面找构图基因 |
-| #quality-gate | 反退化清单 + 及格线 + 八项检查 | Step 5 质量门验收 |
-| #styles | 八类风格方向 A-H（含 #training 培训风格卡） | 定材料气质时 |
-| #extension-discipline | 模板沉淀的扩展纪律 | 维护 skills / _knowledge 时 |
+| #containers | Containers A-D + local layouts E-K | Step 1 container reading mode |
+| #components | 19-component library + content-relationship mapping | Step 2 component details |
+| #simulation | Three simulation modes + feedback selection table | Step 3 simulation intuition |
+| #composition | 12 composition boards + composite patterns | Step 4 template layout |
+| #template-families | Ten template families (recipe cards) | Complex pages: find composition DNA |
+| #quality-gate | Anti-degradation list + passing line + eight checks | Step 5 quality-gate acceptance |
+| #styles | Eight style directions A-H (incl. #training style card) | When setting material tone |
+| #extension-discipline | Extension discipline for template sedimentation | When maintaining skills / _knowledge |
 
 ---
 
-## #containers 容器库：整份材料怎么读
+## #containers Container Library: How the Whole Deck Is Read
 
-容器决定读者怎么进入、翻阅、切换整份材料，**不决定某一页长什么样**。选容器看阅读行为，不是个人习惯。
+Containers decide how readers enter, flip through, and switch across the whole deck; **they do not decide what a page looks like**. Choose containers by reading behavior, not personal habit.
 
-### 顶层容器 A-D（管"门和走廊"）
+### Top-level containers A-D (manage "doors and corridors")
 
-| 容器 | 形态 | 阅读行为 | 适用 |
+| Container | Form | Reading behavior | Use for |
 |---|---|---|---|
-| A 纵向场景 | 单长页逐屏滚动 | 顺序下滑 | 单页方案、高管速览 |
-| B 章节式 Part | 顶部章节切换，章节内自然阅读 | 按目录跳读 | 长方案、需求分析 |
-| C PPT 演示舞台 | 一页一屏，箭头翻页 | 被演示带着走 | 宣讲、汇报现场 |
-| D 连续报告 | 文档式线性排布 | 线性深读 | 研究报告、白皮书 |
+| A 纵向场景 | single long page, scroll screen by screen | sequential scrolling | single-page proposals, executive overviews |
+| B 章节式 Part | top chapter switching, natural reading within chapters | jump by TOC | long proposals, requirements analysis |
+| C PPT 演示舞台 | one page per screen, arrow to flip | led by the presentation | presentations, on-site reporting |
+| D 连续报告 | document-style linear layout | linear deep reading | research reports, white papers |
 
-### 局部布局 E-K（管"房间里的家具怎么摆"）
+### Local layouts E-K (how "furniture in a room" is arranged)
 
-与 A-D 正交，可自由组合进任何容器：
+Orthogonal to A-D; can be freely combined into any container:
 
-| 布局 | 组织方式 |
+| Layout | Organization |
 |---|---|
-| E Part + 步骤 | 主结论常驻 + 步骤 1/2/3 可回看 |
-| F 交互工作台 | 仿真操作区 + 操作反馈 |
-| G 滚动叙事 | 随滚动推进的叙事段落 |
-| H 时间轴流 | 里程碑沿时间轴铺排 |
-| I 知识图谱 | 中心节点 + 放射关系 |
-| J 空间画布 | 自由摆位的空间关系 |
-| K 证据室 | 结论-来源成组的证据陈列 |
+| E Part + 步骤 | main conclusion persists + steps 1/2/3 can be revisited |
+| F 交互工作台 | simulation operation area + operation feedback |
+| G 滚动叙事 | narrative paragraphs advancing with scroll |
+| H 时间轴流 | milestones laid out along a timeline |
+| I 知识图谱 | central node + radial relationships |
+| J 空间画布 | freely positioned spatial relationships |
+| K 证据室 | conclusion-source grouped evidence display |
 
-> 落地：spec 顶层 `container` 字段（已定，scroll/chapters/stage/report 默认 scroll）。局部布局 E-K 作为页面构件的组合模式，不单列字段。
+> Implementation: spec top-level `container` field (decided; scroll/chapters/stage/report, default scroll). Local layouts E-K are combination patterns for page components; no separate field.
 
-### container → P01-P16 版式映射（2026-08-13）
+### container → P01-P16 layout mapping (2026-08-13)
 
-| container | 推荐版式 | 禁忌版式 | 说明 |
+| container | Recommended layouts | Avoid | Notes |
 |---|---|---|---|
-| scroll | P01/P03/P04/P08/P11 | P02 章节页、P12 目录页 | 单长页滚动，无章节切换 |
-| chapters | P02/P12 + P03~P10 | 无（最灵活） | 目录 + 章节页引导跳读 |
-| stage | P01~P11 + P16 | 长滚动叙事 | 一页一屏翻页演示 |
-| report | P03/P07/P09/P10 + 文字元素 | P05/P06 大图为主 | 文档式线性深读 |
+| scroll | P01/P03/P04/P08/P11 | P02 chapter pages, P12 TOC pages | single long page scrolling, no chapter switching |
+| chapters | P02/P12 + P03~P10 | none (most flexible) | TOC + chapter pages guide jumping |
+| stage | P01~P11 + P16 | long scrolling narrative | one page per screen flip presentation |
+| report | P03/P07/P09/P10 + text elements | P05/P06 image-led | document-style linear deep reading |
 
 ---
 
-## #components 组件库：按内容关系选
+## #components Component Library: Choose by Content Relationship
 
-组件不是"卡片皮肤"，是汇报的乐高积木。选组件看"这段内容是什么关系"，不是"哪个壳好看"。
+Components are not "card skins"; they are Legos for presentations. Choose components by "what relationship this content has", not "which shell looks good".
 
-### 我们已有对应能力的（优先复用，不新造）
+### Components we already support (reuse first, don't reinvent)
 
-| ZSW 组件 | 讲什么关系 | 我们现状 |
+| ZSW component | Relationship it tells | Our current state |
 |---|---|---|
-| 叙事卡 | 判断 + 解释 + 例证 | info_cards 等基础元素 |
-| 对比板 | 两方对照 | duo_compare / diagram: matrix |
-| 能力成绩单 | 多指标打分总览 | stat_cards / kpi_cards |
-| 文本图示板 | 文字 + 图示混排 | 页面构件组合 |
-| 架构图 | 系统分层与连接 | diagram: architecture（28 种 diagram） |
+| 叙事卡 | judgment + explanation + example | info_cards and other base elements |
+| 对比板 | two-party comparison | duo_compare / diagram: matrix |
+| 能力成绩单 | multi-indicator scoring overview | stat_cards / kpi_cards |
+| 文本图示板 | mixed text + diagram | page component combinations |
+| 架构图 | system layering and connections | diagram: architecture (28 diagram types) |
 
-### 第一批 5 组件（已定，2026-08-13 拍板；B-3~B-7 实现）
+### First 5 components (decided 2026-08-13; B-3~B-7 implemented)
 
-| 组件 | 内容关系 | 选型判定（内容信号） | 结构要点 | 当前降级 |
+| Component | Content relationship | Selection signal (content cues) | Structural points | Current fallback |
 |---|---|---|---|---|
-| 证据台账 | 需求覆盖、成果举证 | 每条结论要「有据可查」 | 结论-证据-状态-编号，可展开 | table |
-| 风险控制登记 | 风险台账 | 风险要「可跟踪」 | 高/中/低 + 状态 + 应对 | table / info_cards |
-| 角色责任矩阵 | 责任分工 | 多角色多任务「谁负责什么」 | 甲方/我方 RACI（每行恰一个 A） | table |
-| 里程碑甘特 | 实施计划 | 「什么时候做什么」任务×时间×依赖 | 任务轨 × 里程碑 × 依赖，按周铺 | diagram: timeline（≤4 节点） |
-| 决策面板 | 拍板页 | 多方案「选哪个」 | 方案比较 + 建议下一步 | duo_compare |
+| 证据台账 | requirements coverage, outcome proof | each conclusion must be "verifiable" | conclusion-evidence-status-number, expandable | table |
+| 风险控制登记 | risk ledger | risks must be "trackable" | high/medium/low + status + response | table / info_cards |
+| 角色责任矩阵 | division of responsibility | multiple roles/tasks "who owns what" | client/our RACI (exactly one A per row) | table |
+| 里程碑甘特 | implementation plan | "what to do when" task × time × dependency | task track × milestone × dependency, weekly layout | diagram: timeline (≤4 nodes) |
+| 决策面板 | decision page | multiple options "which to choose" | option comparison + recommended next step | duo_compare |
 
-### 缺口组件（第二批，视需求）
+### Missing components (second batch, on demand)
 
-| 组件 | 内容关系 | 当前降级 |
+| Component | Content relationship | Current fallback |
 |---|---|---|
-| 指标叙事带 | 经营数据讲故事（口径→原因→对策） | stat_cards 只有大数字 |
-| 审计事件行 | 系统操作留痕（动作→状态→反馈+证据编号） | 无 |
-| 场景旅程条 | 落地路径（痛点→试点→推广） | 无 |
-| 执行作战板 | 推进计划（动作-标准-证据） | 无 |
+| 指标叙事带 | tell business data story (scope → reason → action) | stat_cards has only big numbers |
+| 审计事件行 | system operation trace (action → status → feedback + evidence number) | none |
+| 场景旅程条 | rollout path (pain point → pilot → rollout) | none |
+| 执行作战板 | progress plan (action-standard-evidence) | none |
 
-### 仿真交互组件（默认挂起，simulation 字段预留，见 SKILL.md 已定项 4）
+### Simulation interactive components (default pending; `simulation` field reserved; see SKILL.md Decisions item 4)
 
-编号证据卡、流程向导（步骤条可回退）、真实工作台、爆炸拆解图（UI / 物品）、聚光交互指引——讲产品不贴截图，做能点的页面。仅 HTML 端，PPT 需降级策略。
+编号证据卡, 流程向导 (step bar with back), 真实工作台, 爆炸拆解图 (UI / objects), 聚光交互指引—present products without screenshots; build clickable pages. HTML only; PPT needs fallback strategy.
 
 ---
 
-## #simulation 仿真库：三种页面拟真
+## #simulation Simulation Library: Three Page Realisms
 
-汇报里讲产品，贴截图是最弱的方式。拟真要求**动作 → 状态 → 反馈**完整：点了什么、界面怎么变、结果如何反馈。
+When presenting products, screenshots are the weakest approach. Realism requires complete **action → state → feedback**: what was clicked, how the interface changed, how the result feeds back.
 
-| 模式 | 回答的问题 | 要求 | 讲解深度 |
+| Mode | Question answered | Requirements | Explanation depth |
 |---|---|---|---|
-| Static 高拟真静态页 | 系统长什么样 | 有壳、有导航、有真实数据；不用能点，但必须像真实产品 | 展示结构、字段、业务状态 |
-| Interactive 可点击交互 | 人怎么用、系统怎么反馈 | 每个按钮必须有真实状态变化和反馈 | 演示审批、筛选、处理记录 |
-| Guided Demo 引导演示 | 整个流程怎么走 | 每步可定位、可回退、可跳步 | 带观众沿真实路径走一遍 |
+| Static high-fidelity page | What does the system look like | has shell, navigation, real data; need not be clickable but must look like a real product | show structure, fields, business states |
+| Interactive clickable | How people use it, how the system responds | every button must have real state change and feedback | demonstrate approval, filtering, processing records |
+| Guided Demo | How the whole flow goes | every step locatable, reversible, skippable | walk the audience along a real path |
 
-### 反馈选型表（反馈不是随便弹一条）
+### Feedback selection table (feedback is not a random toast)
 
-| 反馈方式 | 什么时候用 | 不该用来 |
+| Feedback method | When to use | Should not be used for |
 |---|---|---|
-| 审计事件行 | 需要保留的操作结果：状态 + 事件 + 时间/对象 + 结果明细 + 证据编号/下一步 | 只显示一条"操作成功"就消失 |
-| 就近旁注 | 字段或记录的局部问题：在出错那行旁边直接标 | 把局部问题弹成全局大框 |
-| 状态日志 / 抽屉 / 可展开证据 | 需要继续查看原因、证据、处理过程 | 只给结论不给来龙去脉 |
-| Toast 轻提示 | 无需保留的短时反馈（"已保存"） | 代替审计回执、错误详情、业务处理结果 |
+| Audit event row | when an operation result must be retained: status + event + time/object + result details + evidence number/next step | just show a disappearing "操作成功" |
+| Inline annotation | local issues on a field or record: mark directly beside the failing row | pop a local issue as a global large dialog |
+| Status log / drawer / expandable evidence | when users need to keep viewing reasons, evidence, processing history | give only conclusion without context |
+| Toast | short-lived feedback that need not be retained ("已保存") | replace audit receipts, error details, business processing results |
 
-### PPT 端降级策略（B-8，2026-08-13 设计，组件挂起）
+### PPT fallback strategy (B-8, designed 2026-08-13; components pending)
 
-simulation 仅 HTML 端原生，PPT 端降级：
+simulation is native only on HTML; PPT fallback:
 
-| simulation | PPT 降级 |
+| simulation | PPT fallback |
 |---|---|
-| static | 高拟真静态页布局（壳 + 导航 + 真实数据），不可点 |
-| interactive | 分步静态序列：每步一屏，动作→状态→反馈用箭头串联 |
-| guided | 步骤条 + 每步截图：序号 + 回看路径用静态序列表达 |
+| static | high-fidelity static page layout (shell + nav + real data), not clickable |
+| interactive | step-by-step static sequence: one screen per step, action→state→feedback linked by arrows |
+| guided | step bar + screenshots per step: sequence number + review path expressed as static sequence |
 
-- 降级原则：动作→状态→反馈的完整性保留，交互性（可点/可回退）降级为静态箭头/步骤条
-- 触发条件：出现真实演示需求（客户要看系统操作流程）时立项，立项时重估工作量
-- 状态：挂起（simulation 字段已预留，不实现渲染逻辑）
+- Fallback principle: preserve completeness of action→state→feedback; interactivity (clickable/back) degrades to static arrows/step bars
+- Trigger: when a real demo need appears (client wants to see system operation flow), start a project and re-estimate effort
+- Status: pending (`simulation` field reserved; render logic not implemented)
 
 ---
 
-## #composition 构图母板：十二种"讲法"
+## #composition Composition Boards: Twelve "Telling Modes"
 
-构图母板是优秀汇报的"句法"：决定重要信息放哪、读者先看什么、关系怎么被看懂。与换皮肤的本质区别：换皮肤只改颜色圆角；母板改的是**信息在页面上的组织逻辑**。同一段"项目进展"，用"数据叙事"讲趋势、用"决策板"讲取舍、用"证据台账"讲依据——讲法不同，读者得到的结论不同。
+Composition boards are the "syntax" of good presentations: decide where key information goes, what readers see first, and how relationships are understood. Difference from skin-changing: skin-changing only changes colors/radii; boards change **the organizational logic of information on the page**. The same "project progress" can be told as a trend with 数据叙事, as trade-offs with 决策板, or as evidence with 证据台账—different telling modes lead readers to different conclusions.
 
-| 母板 | 擅长讲什么 |
+| Board | Best at telling |
 |---|---|
-| 全幅主张 | 单一核心主张，整页一个判断 |
-| 编辑式分栏 | 杂志式图文穿插，叙事带证据 |
-| 架构板 | 系统分层 + 底座 + 治理栏 |
-| 证据台账 | 结论-证据-状态逐条明细 |
-| 流程脊柱 | 阶段逐级交接，阶段门评审 |
-| 场景序列 | 多场景按序展开（痛点→试点→推广） |
-| 数据叙事 | 拐点标注 + 来源 + 结论，数据讲故事 |
-| 仿真产品 | 页面拟真为主体，讲产品 |
-| 时间线甘特 | 任务轨 × 里程碑 × 依赖，按周铺 |
-| 对比矩阵 | 多方案多维度打分比较 |
-| 决策板 | 方案比较 + 推荐 + 建议下一步 |
-| 能力图谱 | 核心 + 能力项的关系图谱 |
+| 全幅主张 | a single core claim, one judgment on the page |
+| 编辑式分栏 | magazine-style text/image interleaving, narrative with evidence |
+| 架构板 | system layering + foundation + governance bar |
+| 证据台账 | conclusion-evidence-status line by line |
+| 流程脊柱 | stage-by-stage handoff, stage-gate reviews |
+| 场景序列 | multiple scenarios in order (pain point → pilot → rollout) |
+| 数据叙事 | inflection annotations + source + conclusion; data tells the story |
+| 仿真产品 | page realism as the main body, presenting a product |
+| 时间线甘特 | task track × milestone × dependency, weekly layout |
+| 对比矩阵 | multi-option multi-dimension scoring comparison |
+| 决策板 | option comparison + recommendation + suggested next step |
+| 能力图谱 | relationship graph of core + capability items |
 
-### 组合体写法
+### Composite patterns
 
-一页可以组合多种表达（架构板 + 证据台账、仿真工作台 + 操作步骤、甘特 + 责任矩阵），但**每个区域都得承担明确角色**：主判断 / 主关系 / 辅助证据 / 例证 / 来源 / 行动——不为显得丰富而堆砌。
+A page can combine multiple expressions (架构板 + 证据台账, 仿真工作台 + 操作步骤, 甘特 + 责任矩阵), but **each region must play a clear role**: main judgment / main relationship / supporting evidence / example / source / action—do not pile up to look rich.
 
 ---
 
-## #template-families 十大模板家族（配方卡）
+## #template-families Ten Template Families (Recipe Cards)
 
-配方保存的不是"皮"（配色圆角），而是四样东西：**信息解剖 + 空间组织 + 阅读路径 + 交互行为**。风格可变，结构不散。不是封闭清单：可以创造新页面，只要说清新构图解决什么信息关系。
+A recipe preserves not the "skin" (colors/radii) but four things: **information anatomy + spatial organization + reading path + interaction behavior**. Style can change; structure does not scatter. Not a closed list: new pages can be created as long as you explain what information relationship the new composition solves.
 
-### 架构与生态类
+### Architecture and ecosystem families
 
-| 配方 | 讲什么 | 结构清单 |
+| Recipe | Tells | Structure list |
 |---|---|---|
 | 分层企业蓝图 | 大型平台、能力全景、技术与业务分层 | 横向层级 + 纵向治理栏 + 能力分区 + 外部系统 + 跨层连接 + 底座 |
 | 中心生态拓扑 | 中心平台与用户/渠道/模型/外围系统的关系 | 核心枢纽 + 外围角色 + 接口方向 + 治理环 |
 | 系统集成关系图 | 多系统对接、数据流、消息流、身份访问 | 真实系统 + 接口端口 + 流向标签 + 失败边界 |
 | 多租户治理图 | 集团/租户/组织/身份映射 | 组织层级 + 租户边界 + 数据隔离 + 治理中心 |
 
-### 场景与演示类
+### Scenario and demo families
 
-| 配方 | 讲什么 | 结构清单 |
+| Recipe | Tells | Structure list |
 |---|---|---|
 | 场景行动链 | 从用户表达走向系统执行 | 用户原话 → 意图识别 → 信息预填 → 规则校验 → 人工确认 → 系统回写 → 结果证据 |
 | 交互时序板 | 多参与方调用、审批、返回、日志沉淀 | 参与方 + 时间方向 + 状态变化 + 异常支路 |
 | 运营看板与业务工作台 | 运营分析、产品演示、配置操作 | 有口径的指标 + 真实图表 + 任务导航 + 操作反馈 |
 | 深度叙事面板 | 痛点、机制、能力、风险、案例 | 语义图示 + 明确判断 + 原因机制 + 具体例子 + 证据/行动 |
 
-### 证据与决策类
+### Evidence and decision families
 
-| 配方 | 讲什么 | 结构清单 |
+| Recipe | Tells | Structure list |
 |---|---|---|
 | 证据与覆盖账本 | 成果成绩、需求覆盖、完成状态、问题响应 | 汇总判断 + 明细层级 + 状态来源 + 证据编号 + 可展开 |
 | 决策与路线套件 | 方案比较、双轨迁移、阶段规划、里程碑 | 比较轴 + 当前与目标 + 阶段时间 + 责任依赖 + 风险与建议 |
 
 ---
 
-## #quality-gate 质量门：完成度下限
+## #quality-gate Quality Gate: Minimum Completeness
 
-质量门不看颜色圆角，看**结构是否完整**：一个组件有没有把信息关系讲全。拦的是"看起来像回事，其实没讲清"的页面。
+The quality gate does not look at colors/radii; it checks **whether structure is complete**: whether a component fully tells the information relationship. It blocks pages that "look plausible but don't explain clearly".
 
-### 不及格的常见退化（反面清单）
+### Common failing degradations (negative list)
 
-- 叙事卡：只有图标 + 标题 + 一句空泛口号，没有判断、解释、例证
-- 指标卡：一个大数字，没有单位、周期、业务语境和变化原因
-- 流程/时序：只有步骤名，没有参与方、动作、状态、输入输出或异常
-- 架构图：多层方框 + 箭头，没有真实实体、边界、接口和流向
-- 表格/账本：把段落排成网格，没有字段关系、状态、来源、责任
-- 数据图表：彩色柱条，没有口径、单位、刻度、数据标签和业务解释
-- 拟真工作台：套个浏览器外框，没有真实任务、字段、记录、状态、反馈
+- Narrative card: only icon + title + vague slogan; no judgment, explanation, or example
+- Metric card: one big number; no unit, period, business context, or reason for change
+- Flow/sequence: only step names; no participants, actions, states, inputs/outputs, or exceptions
+- Architecture diagram: multi-layer boxes + arrows; no real entities, boundaries, interfaces, or flows
+- Table/ledger: paragraphs arranged in a grid; no field relationships, status, source, or responsibility
+- Data chart: colored bars; no scope, units, scale, data labels, or business explanation
+- Simulated workbench: browser frame only; no real tasks, fields, records, states, or feedback
 
-### 及格线（结构完整度）
+### Passing line (structural completeness)
 
-| 组件类型 | 及格线 |
+| Component type | Passing line |
 |---|---|
-| 叙事组件 | 判断 + 解释 + 例证，三件套齐 |
-| 指标组件 | 单位 + 周期 + 语境 + 变化原因，可追溯 |
-| 流程时序 | 参与方 + 动作 + 状态 + 输入输出 + 异常支路 |
-| 架构图 | 真实实体 + 边界 + 接口 + 流向，能讲清系统怎么运转 |
-| 表格账本 | 字段关系 + 状态 + 来源 + 责任/响应点 |
-| 数据图表 | 口径 + 单位 + 刻度 + 标签 + 业务解释 |
-| 拟真工作台 | 真实任务 + 字段 + 记录 + 状态 + 反馈，缺一不可 |
+| Narrative component | judgment + explanation + example, all three present |
+| Metric component | unit + period + context + reason for change, traceable |
+| Flow/sequence | participants + action + state + inputs/outputs + exception branches |
+| Architecture diagram | real entities + boundaries + interfaces + flows; can explain how the system works |
+| Table/ledger | field relationships + status + source + responsibility/response point |
+| Data chart | scope + units + scale + labels + business explanation |
+| Simulated workbench | real tasks + fields + records + states + feedback, none missing |
 
-### 贯穿所有入口的八项检查
+### Eight checks across all entries
 
-| 检查项 | 标准 |
+| Check | Standard |
 |---|---|
-| 内容 | 每页有明确任务，结论有解释/证据/机制/示例/边界或行动支撑；复杂内容不压缩成几句描述 |
-| 结构 | 同一完整结论只在一个主位置讲透；前后术语、数字、时间、角色、状态保持一致 |
-| 多样性 | 连续页面不反复使用相同卡片、相同左右分栏或同一页面外壳 |
-| 可读性 | 对比度、字号、换行、文字溢出、裁切和无意义大空白都在检查范围内 |
-| 图示 | 节点、边界、箭头、图例、标签、对齐：不只画方框加箭头 |
-| 数据 | 数值、合计、单位、时间范围、刻度、图例、图形比例核对 |
-| 交互 | 真实点击所有控件，动作→状态→反馈一致；引导式演示可回到任一步 |
-| 反模板化 | 识别"一句话反馈横条""通用三层架构堆叠"等廉价结构：不靠换色规避 |
+| Content | each page has a clear task; conclusions supported by explanation/evidence/mechanism/example/boundary/action; complex content not compressed into a few sentences |
+| Structure | the same complete conclusion is fully explained in one main position; terminology, numbers, time, roles, and states stay consistent |
+| Diversity | consecutive pages do not repeatedly use the same cards, same left/right columns, or the same page shell |
+| Readability | contrast, font size, line breaks, text overflow, clipping, and meaningless large whitespace are all in scope |
+| Diagram | nodes, boundaries, arrows, legends, labels, alignment: not just boxes + arrows |
+| Data | verify numbers, totals, units, time ranges, scales, legends, and graphic proportions |
+| Interaction | actually click all controls; action→state→feedback consistent; guided demos can return to any step |
+| Anti-templating | recognize cheap structures like "one-line feedback bar" or "generic three-layer architecture stack"; do not evade by changing colors |
 
-> 规则库纪律：规则是活的——每次翻车沉淀一条；四个入口引用同一份规则；每项检查能说"依据第 X 条"；验收没过时能指出哪条没满足，不含糊说"再改改"。
+> Rule-library discipline: rules are alive—each failure sediments one rule; four entries reference the same rule set; each check can say "per rule X"; when acceptance fails, point out which rule is unmet instead of vaguely saying "tweak it".
 
 ---
 
-## #styles 八类风格方向（八套叙事语言，不是八件衣服）
+## #styles Eight Style Directions (Eight Narrative Languages, Not Eight Outfits)
 
-真正的风格变化 = **构图重心 + 字阶 + 空间节奏 + 图示语言 + 控件语言**五样一起动；只换一组颜色，不算换风格。
+True style change = **composition focus + type scale + spatial rhythm + visual language + control language** all move together; changing only a color set is not a style change.
 
-| 风格 | 适合 | 真正变的是什么 |
+| Style | Suits | What actually changes |
 |---|---|---|
 | A Formal Dossier 正式卷宗 | 领导汇报、成果、治理、证据密集的正式方案 | 公文三段式：居中红头、文号、表格化数据、落款 |
 | B Editorial Narrative 编辑叙事 | 主题分享、咨询故事、概念解释与图文穿插 | 杂志通栏：超大标题、首字下沉、刊例数字栏、引言 |
@@ -246,13 +246,13 @@ simulation 仅 HTML 端原生，PPT 端降级：
 | G Information Atlas 信息图谱 | 能力地图、行业版图、知识体系、组合关系 | 图谱语言：中心节点、放射关系、图例、多层嵌套 |
 | H Scenario Documentary 场景纪实 | 客户案例、实施复盘、角色变化、前后对照 | 纪实语言：时间线、角色卡片、前后对照、旁白引用 |
 
-> 对照我们：4 style + 4 theme 本质是配色字体包；C（培训语法）对应 `scenario: training`。
+> Compared to us: 4 style + 4 theme are essentially color/font packages; C (training grammar) corresponds to `scenario: training`.
 
-### #training 培训场景风格卡（2026-08-13，B-2）
+### #training Training Scenario Style Card (2026-08-13, B-2)
 
-`scenario: training` 用 C Human Learning Studio 学习工作坊风格。
+`scenario: training` uses C Human Learning Studio style.
 
-| 维度 | 要点 |
+| Dimension | Key points |
 |---|---|
 | 页面骨架 | 学习动作先行：目标胶囊 → 编号学习卡（概念）→ 例题 → 练习条 → 反馈 → 迁移 |
 | 密度 | 中偏低（每页 1 个学习动作，不给读者信息过载） |
@@ -263,10 +263,10 @@ simulation 仅 HTML 端原生，PPT 端降级：
 
 ---
 
-## #extension-discipline 模板沉淀的扩展纪律
+## #extension-discipline Extension Discipline for Template Sedimentation
 
-新行业/新客户只沉淀：**对象、术语、角色、证据、字段、常见问题**。
+New industries/clients only sediment: **objects, terminology, roles, evidence, fields, common questions**.
 
-不沉淀：**固定配色、页面数量、卡片布局**——防止套件越做越散（呼应 `writing-great-skills` 的 sediment/sprawl 问题）。
+Do not sediment: **fixed colors, page counts, card layouts**—to prevent the suite from sprawling (echoing `writing-great-skills` sediment/sprawl issue).
 
-适用于本项目的 skills 和 `_knowledge/` 维护：客户级 refs 沉淀材料事实，渲染层的版式/组件决策只走项目级扩展流程（P 系先例），不反向污染。
+Applies to skills and `_knowledge/` maintenance in this project: client-level refs sediment material facts; renderer-level layout/component decisions go through the project-level extension process (P-series precedents), not reverse contamination.

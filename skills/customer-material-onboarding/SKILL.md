@@ -1,7 +1,7 @@
 ---
 name: customer-material-onboarding
 version: "1.0"
-description: "新客户入库：建目录、摄入参考材料、提取决策、重建索引。当用户说新客户 / 入库 / 上传材料 / 接单时调用。Onboards a new client: creates directory structure, ingests materials into refs/, extracts decisions, rebuilds indexes."
+description: "新客户入库：建目录、摄入材料、提取决策、重建索引。Onboards a new client: creates directory structure, ingests materials into refs/, extracts decisions, rebuilds indexes."
 ---
 
 # Customer Material Onboarding
@@ -12,7 +12,7 @@ Standardizes how a new client enters the knowledge base. Without this skill, AI 
 
 - User mentions a client name not yet in `_knowledge/clients/`
 - User uploads a file (docx/pdf/xlsx/md) that looks like client material
-- User says: 新客户 / 入库 / 整理材料 / 建客户档案 / 接单
+- User says: new client / onboard / organize material / create client profile / take an order
 - `session-start` returns a client name with no matching directory
 
 Do NOT invoke for: existing client follow-up (use `delivery-pipeline`), generic snippet saving, or output file management.
@@ -65,7 +65,7 @@ For binary formats (docx/pdf/xlsx), optionally extract plain text to `refs/_txt/
 
 ### Step 4 — Full-text read and extract
 
-Read each material fully (禁止凭前 N 字符下结论 — see project rules):
+Read each material fully (never conclude from the first N characters — see project rules):
 
 ```bash
 python _cli.py read <文件路径>
@@ -169,6 +169,6 @@ User: "蓝海集团又给了一份痛点汇总，加进去"
 
 ## Notes
 
-- **去厂商名**: when recording system names in `aliases.yml`, write system names (e.g. "协同办公系统") not vendor names (e.g. "泛微 e-cology"). Vendor names go in a `vendor_names` field if needed for reference.
-- **全文读取**: never conclude from the first N characters. Use `read` to load the full document.
+- **No vendor names**: when recording system names in `aliases.yml`, write system names (e.g. "协同办公系统") not vendor names (e.g. "泛微 e-cology"). Vendor names go in a `vendor_names` field if needed for reference.
+- **Full-text read**: never conclude from the first N characters. Use `read` to load the full document.
 - **Decisions format**: see `decision-recording` skill — every entry needs `persistence` + `scope` fields.

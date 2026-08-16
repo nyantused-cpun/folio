@@ -1,147 +1,147 @@
 ---
 name: de-ai-style
 version: "1.1"
-description: "去 AI 化文风约束。生成或改写任何客户可见文案（方案/HTML/PPT/报价/汇报）时调用。禁用词库 + AI 句式检测 + 语感样本 + 证据边界 + style-check/review 强制链。"
+description: 生成或改写客户可见文案时调用。Use when generating or rewriting client-facing copy.
 ---
 
-# 去 AI 化（De-AI Style）
+# De-AI Style
 
-> 目标：产出读起来像顾问写的，不像模型生成的。
-> 词库单一数据源在 `_paths.py`（BANNED_WORDS / BANNED_PHRASES），本文件是流程与判断说明。
+> Goal: produce copy that reads like a consultant wrote it, not like a model generated it.
+> The single source of the word lists is `_paths.py` (`BANNED_WORDS` / `BANNED_PHRASES`); this file describes the process and judgment.
 
 ## When to Invoke
 
-**调用**：写/生成/改方案、HTML、PPT、报价、汇报等客户可见文案；review 风格问题返修时。
-**不调用**：工程代码、内部分析、与用户的过程性对话。
+**Invoke**: when writing/generating/revising client-facing copy such as proposals, HTML, PPT, quotes, or reports; when reworking style issues found in review.
+**Do not invoke**: engineering code, internal analysis, or process-oriented conversation with the user.
 
-## 强制链（已存在，不用重造）
+## Mandatory Chain (Already Exists; Don't Rebuild)
 
-| 时机 | 机制 | 强制力 |
+| Timing | Mechanism | Enforcement |
 |---|---|---|
-| 生成前 | `_cli_guards` → `_style_guard.pre_check()`：返回反模式清单 + 要求先读 `_knowledge/me/style_samples/` 语感样本 | 失败阻断生成 |
-| 生成后 | `_review.py` 独立审查第 3 维「去 AI 化」：本地扫禁用词 + LLM 判风格 | FAIL 打回重做 |
-| 随时手动 | `python _cli.py style-check <文件>` | 提示 |
+| Before generation | `_cli_guards` → `_style_guard.pre_check()`: returns antipattern list and requires reading `_knowledge/me/style_samples/` first | Blocks generation on failure |
+| After generation | `_review.py` independent review dimension 3 "De-AI Style": local banned-word scan + LLM style judgment | FAIL sends it back for rework |
+| Any time, manual | `python _cli.py style-check <文件>` | Advisory |
 
-## 禁用词与禁用句式
+## Banned Words and Banned Patterns
 
-- **禁用词（8）**：赋能 / 抓手 / 闭环 / 生态 / 打通 / 全方位 / 一站式 / 卓越
-- **禁用句式（4）**：综上所述 / 总而言之 / 不难看出 / 可以说
-- **动态词库**：`_knowledge/snippets/antipattern/*.md`——每行一个词，`_style_guard` 自动加载，**加词不改代码**。
+- **Banned words (8)**: 赋能 / 抓手 / 闭环 / 生态 / 打通 / 全方位 / 一站式 / 卓越
+- **Banned patterns (4)**: 综上所述 / 总而言之 / 不难看出 / 可以说
+- **Dynamic word list**: `_knowledge/snippets/antipattern/*.md` — one word per line, auto-loaded by `_style_guard`; **add words without changing code**.
 
-## `_style_guard` 句式检测（正则，style-check 可查）
+## `_style_guard` Pattern Detection (Regex, Checkable via style-check)
 
-| 套路 | 特征 | 改法 |
+| Pattern | Signature | Fix |
 |---|---|---|
-| 排比三连 | 不仅…更…还… | 短句，一句一个信息点 |
-| 黑话 | 命中禁用词库 | 用具体动词（"缩短周期"而非"提升效率"） |
-| 总结句 | 综上所述/由此可见/总的来说 | 直接删，PPT 不需要 |
-| 华丽形容词 | 领先的/世界级的/顶级的/无与伦比的 | 删形容词，给事实 |
-| 对称句式 | 既要…又要… | 选一个重点 |
-| 过度结构化 | 首先/其次/再次/第一第二 | 自然句过渡，不强行编号 |
-| 对称骨架 | 不是…而是/不在于…而在于/既是…也是…更是/与其说…不如说 | 直接说结论，不先立靶子、不强行三连 |
-| 假揭示 | 看似/表面…本质/背后/其实 | 直接陈述事实，不制造"表象 vs 本质"揭示感 |
-| 时代开场 | 随着…的快速发展/在当今…时代 | 删开场白，直接说事 |
-| 本质宣称 | 真正…的是/本质上/核心在于/底层逻辑 | 直接给主语和事实，不升维总结 |
+| Triple parallelism | 不仅…更…还… | Short sentences; one info point per sentence |
+| Jargon | 命中禁用词库 | Use concrete verbs ("缩短周期" instead of "提升效率") |
+| Summary sentence | 综上所述/由此可见/总的来说 | Delete it; PPT doesn't need it |
+| Flowery adjectives | 领先的/世界级的/顶级的/无与伦比的 | Delete adjectives; give facts |
+| Symmetrical sentence | 既要…又要… | Pick one focus |
+| Over-structuring | 首先/其次/再次/第一第二 | Transition naturally; don't force numbering |
+| Symmetrical skeleton | 不是…而是/不在于…而在于/既是…也是…更是/与其说…不如说 | State the conclusion directly; don't set up a strawman or force triple structure |
+| Fake reveal | 看似/表面…本质/背后/其实 | State facts directly; don't create an "appearance vs essence" reveal |
+| Era opener | 随着…的快速发展/在当今…时代 | Cut the opener; get to the point |
+| Essence claim | 真正…的是/本质上/核心在于/底层逻辑 | Give the subject and facts directly; don't elevate into a summary |
 
-## 语感（比禁用词更重要）
+## Language Feel (More Important Than Banned Words)
 
-词表只防最低级翻车，真正的 AI 味在结构和习惯。**动笔前必读 `_knowledge/me/style_samples/`**：
+The word lists only prevent the lowest-level failures; the real AI flavor lives in structure and habits. **Read `_knowledge/me/style_samples/` before writing**:
 
-- 短句、先结论、一句一个信息点
-- 用动词不用形容词，数字必配单位
-- 不堆词、不夸大意义、不模糊归因（"随着…的快速发展""在当今数字化时代"）
-- 去厂商名：替换规则表在 `_knowledge/me/profile.md`（金蝶→ERP、泛微→OA/BPM 平台……），只有竞品对比才出现厂商名
+- Short sentences, conclusion first, one info point per sentence
+- Use verbs instead of adjectives; always pair numbers with units
+- Don't stack words, don't inflate significance, don't blur attribution ("随着…的快速发展", "在当今数字化时代")
+- Remove vendor names: replacement rules are in `_knowledge/me/profile.md` (金蝶→ERP、泛微→OA/BPM 平台……); vendor names appear only in competitive comparisons
 
-### 语感诊断（六问，动笔前自查）
+### Language-Feel Diagnosis (Six Questions, Self-Check Before Writing)
 
-1. 太完整——每个角度都覆盖了，没有一个真实情境是活的
-2. 太顺滑——连接很圆、冲突消失、节奏匀速
-3. 太抽象——价值/能力/洞察等名词替代了可见事实
-4. 太客观——不说谁看见了什么、谁做了决定、方案判断是什么
-5. 太会总结——结尾向上升华，不落到动作/后果/未解问题
-6. 清理后发扁——AI 味没了，但没有可被记住的具体句子
+1. Too complete — every angle is covered, but no real situation feels alive
+2. Too smooth — transitions are seamless, conflict disappears, rhythm is uniform
+3. Too abstract — nouns like value/capability/insight replace visible facts
+4. Too objective — nobody says who saw what, who made the decision, or what the plan's judgment is
+5. Too good at summarizing — ends by elevating upward instead of landing on actions/consequences/unresolved questions
+6. Flat after cleanup — the AI flavor is gone, but no concrete sentence is memorable
 
-### 防止过度修复（改到什么程度就停）
+### Prevent Over-Fixing (Know When to Stop)
 
-- 不全局禁用标点：冒号/破折号/列表/编号有用就保留（HTML/PPT 方案尤其）
-- 不强行加网感词、梗、夸张口语
-- 不编造现场：客户没给的事实、数字、案例、日期、引语一律不写
-- 不重写每一句：清楚的句子保留
-- 受众需要的专业词不删：定义它，或接到真实案例
-- 不把方案改得松散闲聊：方案可以结构化，同时像人写的
-- 不把 AI 味换成鸡汤味："更有文采"必须同时更精确
+- Don't ban punctuation globally: keep colons/dashes/lists/numbering when useful (especially HTML/PPT proposals)
+- Don't force internet slang, memes, or exaggerated colloquialisms
+- Don't fabricate scenes: never write facts, numbers, cases, dates, or quotes the client didn't provide
+- Don't rewrite every sentence: keep clear sentences as-is
+- Don't delete professional terms the audience needs: define them, or tie them to a real case
+- Don't turn the proposal into loose chatter: proposals can be structured and still human
+- Don't replace AI flavor with chicken-soup flavor: "more literary" must also mean "more precise"
 
-### 先区分内容债与语言债
+### First Distinguish Content Debt from Language Debt
 
-- 内容债：缺事实、无真实案例、无判断、受众不清、判断无支撑 → 先补内容
-- 语言债：AI 套话、结构过分整齐、连接词过多、升华式结尾 → 再修语言
+- Content debt: missing facts, no real cases, no judgment, unclear audience, unsupported judgment → fill in content first
+- Language debt: AI clichés, overly neat structure, too many connectives, elevating endings → then fix language
 
-只修语言债会把空话越改越空；方案最常见的"AI 味"其实是内容债。
+Fixing only language debt makes empty words emptier; the most common "AI flavor" in proposals is actually content debt.
 
-### 先删再改（很多 AI 味是句子本来就没信息量）
+### Delete First, Then Rewrite (Many AI-Flavored Sentences Carry No Information)
 
-遇到空句优先删，不硬改。"这不仅提升了体验，也为后续发展奠定了基础"——没有具体事实就整句删。删完再问四个问题：
+When you meet an empty sentence, delete it first rather than forcing a rewrite. "这不仅提升了体验，也为后续发展奠定了基础" — without concrete facts, delete the whole sentence. Then ask four questions:
 
-1. 换名测试：这句删掉方案名放进任何竞品方案里都成立吗？成立 = 没信息，补机制/数字/取舍。
-2. 反证测试：会有人主张反面吗？"我们重视质量"没人反对 = 空话；"上线后工单下降 40%"才有人敢质疑。
-3. 然后呢：把事实推到读者能行动的后果。"系统支持数据对接" → "财务不用再手工导表"。
-4. 说边界：方案必须写清限制、前提、不覆盖什么。满篇"全面提升"像销售，写"本期不覆盖移动端"像顾问。
+1. Name-swap test: if you swap in any competitor's proposal name, does this sentence still hold? If yes = no information; add mechanism/number/tradeoff.
+2. Contradiction test: would anyone argue the opposite? "我们重视质量" nobody opposes = empty; "上线后工单下降 40%" invites challenge.
+3. Then what: push the fact to a consequence the reader can act on. "系统支持数据对接" → "财务不用再手工导表".
+4. State boundaries: proposals must state limits, assumptions, and what is not covered. A page full of "全面提升" sounds like sales; "本期不覆盖移动端" sounds like a consultant.
 
-### 名词化动词壳（软指导，不进词库）
+### Nominalized Verb Shells (Soft Guidance, Not in the Word List)
 
-"进行优化/实现增长/做出选择/提供保障/给予支持/采取措施/加以改进"这类"空动词 + 抽象名词"要回落到具体动作：谁、把什么、改成什么样、结果是什么。
-例："我们围绕用户反馈开展产品体验优化" → "本周先改两个问题：登录慢，导出表格易失败"。
-但"提供数据安全保障""实现数据共享"是正常写法，不要机械拆。
+"进行优化/实现增长/做出选择/提供保障/给予支持/采取措施/加以改进" — these "empty verb + abstract noun" shells should return to concrete actions: who, what changed to what, and what result.
+Example: "我们围绕用户反馈开展产品体验优化" → "本周先改两个问题：登录慢，导出表格易失败".
+But "提供数据安全保障" and "实现数据共享" are normal writing; don't mechanically break them.
 
-### 汇报页标题写判断，不写栏目名
+### Report Page Titles Should State a Judgment, Not a Section Name
 
-"客户续费慢"而不是"客户成功体系待升级"；"结构化输出让结果可审计"而不是"方案价值"。一页一个主判断，下面用要点支撑。
+"客户续费慢" instead of "客户成功体系待升级"; "结构化输出让结果可审计" instead of "方案价值". One main judgment per page, supported by bullet points.
 
-## 证据边界与断言强度（比词表更重要）
+## Evidence Boundaries and Claim Strength (More Important Than the Word Lists)
 
-方案最容易的 AI 味不是用词，是"把规划写成已验证"。动笔前对每个结论自问：它停在证据能证明的范围里吗？够不到就降级措辞。
+The easiest AI flavor in proposals is not word choice; it's writing plans as if they were already verified. Before writing, ask about every conclusion: does it stay within what the evidence can prove? If not, downgrade the wording.
 
-证据 → 最多能支持的结论（对照）：
-- 试点/内测数据 → "早期试用反馈积极"，不能写"全面验证/市场认可"
-- 相关性/同期发生 → 不能写成因果（"上线后工单下降" ≠ "系统直接导致下降"）
-- 产品能力规划 → "支持/可实现"，不能写"已落地/已达标"
-- 供应商宣称/白皮书 → "厂商宣称"，不能写"已被证实"
-- 理论/架构设计 → "设计上可支撑"，不能写"性能已验证"（无实测）
+Evidence → strongest supported conclusion:
+- Pilot/internal-test data → "早期试用反馈积极"; cannot write "全面验证/市场认可"
+- Correlation/co-occurrence → cannot write causation ("上线后工单下降" ≠ "系统直接导致下降")
+- Product capability plan → "支持/可实现"; cannot write "已落地/已达标"
+- Vendor claim/whitepaper → "厂商宣称"; cannot write "已被证实"
+- Theory/architecture design → "设计上可支撑"; cannot write "性能已验证" (no actual measurement)
 
-高危断言词（只在有实测/来源时用，否则删或降级）：
+High-risk claim words (use only with actual measurement/source; otherwise delete or downgrade):
 验证、证实、表明、证明、必将、唯一、最佳、绝对、彻底、完美、成功验证、充分证明、强烈需求、市场认可、真实需求
 
-更安全句式（降级但不失真）：
-- "这说明…" → 只在证据直接测量该结论时用
-- "至少可以说明…""从现有材料看…"
-- "厂商宣称…""该数据支持早期兴趣，但不能证明…"
+Safer phrasings (downgrade without losing accuracy):
+- "这说明…" → only when the evidence directly measures that conclusion
+- "至少可以说明…" / "从现有材料看…"
+- "厂商宣称…" / "该数据支持早期兴趣，但不能证明…"
 
-## 事实骨架纪律（润色改稿时）
+## Fact-Skeleton Discipline (When Polishing a Draft)
 
-用户给初稿让润色时，第一步先抽"事实骨架"：把客户痛点、数字、承诺、结论列成几条，改写**不增不减**这些事实，只换说法。改完对照骨架逐条核对：有没有篡改、丢失、新增。风格满分和事实纪律冲突时，事实纪律赢。
+When the user gives a draft for polishing, first extract the "fact skeleton": list the client pain points, numbers, commitments, and conclusions as a few lines. During rewriting, **do not add, remove, or change** these facts; only change wording. After finishing, check each line against the skeleton: was anything tampered with, lost, or added? When style perfection conflicts with factual discipline, factual discipline wins.
 
-## 生成中的自审（final anti-AI pass）
+## Self-Review During Generation (Final Anti-AI Pass)
 
-改完第一遍后，只回头看"自己改动过的句子"，逐条查：
-1. 有没有新增假深刻结构（不是…而是…/真正…的是）
-2. 有没有把普通事实拔高成意义（标志着/体现了/充分证明）
-3. 有没有加金句、排比、漂亮比喻
-4. 有没有新增未经来源支撑的数字/场景/例子
-5. 有没有删掉客户原文里有辨识度的说法
+After the first revision, look back only at the sentences you changed and check each:
+1. Did I add fake profound structures (不是…而是…/真正…的是)?
+2. Did I inflate ordinary facts into significance (标志着/体现了/充分证明)?
+3. Did I add aphorisms, parallelism, or pretty metaphors?
+4. Did I add numbers/scenarios/examples without a source?
+5. Did I delete distinctive phrasing from the client's original text?
 
-最后冷读一遍全文，自问一句："读者最可能从哪里看出这是 AI 写的？"再针对性改一遍。二次扫描只修自己引入的问题，不顺手重写没问题的原文。
+Finally cold-read the whole text and ask: "Where is the reader most likely to notice this was written by AI?" Then revise targeted. The second scan only fixes problems you introduced; don't rewrite unchanged text along the way.
 
-## 扩充词库的纪律
+## Discipline for Expanding the Word List
 
-- 想加词：直接往 `_knowledge/snippets/antipattern/` 加 `.md` 文件即可生效
-- 现有分类文件：`jargon.md`（互联网/营销黑话）/ `empty_modifiers.md`（空泛形容词）/ `vague_attribution.md`（模糊归因与时代开场）/ `filler_transitions.md`（废话连接词）/ `significance_inflation.md`（夸大象征与意义拔高）/ `abstract_subject.md`（抽象主语代理）/ `meta_narrative.md`（元叙述与自证式）/ `evidence_overclaim.md`（证据越界断言）
-- 用户明确豁免：无缝、落地（场景正常用词）；生态（EA 术语语境，如「中心生态拓扑图」，architecture-diagram-builder 场景）
+- To add a word: just add a `.md` file under `_knowledge/snippets/antipattern/`; it takes effect immediately
+- Existing category files: `jargon.md` (internet/marketing jargon) / `empty_modifiers.md` (vague adjectives) / `vague_attribution.md` (vague attribution and era openers) / `filler_transitions.md` (filler connectives) / `significance_inflation.md` (inflated symbolism and elevation) / `abstract_subject.md` (abstract-subject proxies) / `meta_narrative.md` (meta-narrative and self-justifying) / `evidence_overclaim.md` (evidence overclaiming)
+- User explicit exemptions: 无缝、落地 (normal words in context); 生态 (EA terminology context, e.g. 「中心生态拓扑图」, architecture-diagram-builder scenario)
 
-### 加词三级标准（对齐 human-copywrite edit bar + ai-write-flow P0/P1/P2）
+### Three-Tier Standard for Adding Words (Aligned with human-copywrite edit bar + ai-write-flow P0/P1/P2)
 
-- **必删**（进机械词库/正则，单次即命中）：聊天残留、元叙述、证据越界断言、抽象主语——正常表达几乎不用、无保护例外。
-- **聚类才改**（软指导，≥2 处或密度高才动）：空洞好词（高效/强大/完善）、意义拔高（标志着/体现）——单次可能是正常表达，聚类才显 AI 味。
-- **语境判断**（不进词库，AI 编辑时人工定夺）：破折号、加粗、列表、名词化动词（进行/提供/给予 + 抽象名词）、第一人称——有大量正常用法，机械拦截必误报。
+- **Must delete** (goes into mechanical word list/regex, hit on a single use): chat residue, meta-narrative, evidence overclaiming, abstract subject — almost never used in normal expression, no protected exceptions.
+- **Change only in clusters** (soft guidance, only if ≥2 occurrences or high density): empty good words (高效/强大/完善), significance inflation (标志着/体现) — a single use may be normal; clustering reveals AI flavor.
+- **Context judgment** (not in the word list; human decides during AI editing): dashes, bold, lists, nominalized verbs (进行/提供/给予 + abstract noun), first person — many normal uses; mechanical blocking would cause false positives.
 
-只有同时满足三条才进词库：高频（方案里反复出现）+ 低误报（正常顾问表达几乎不用）+ 无保护例外（不存在"引语/法定表述"等必须保留的语境）。其余只作软指导。
-**误报教训**：不加"深度/全面/有效"等日常高频词（P2 曾因此误报泛滥被移除）；"先…再…"不收——SOP 场景是正常写法。
+Only add to the word list when all three conditions are met: high frequency (repeated in proposals) + low false-positive (normal consultant expression almost never uses it) + no protected exceptions (no context such as "quotes/legal phrasing" that must be kept). Everything else stays soft guidance.
+**False-positive lesson**: don't add everyday high-frequency words like 深度/全面/有效 (P2 once had false-positive floods and removed them); don't collect "先…再…" — it is normal in SOP scenarios.

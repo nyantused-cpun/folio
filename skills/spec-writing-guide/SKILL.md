@@ -1,18 +1,18 @@
 ---
 name: spec-writing-guide
 version: "1.3"
-description: "定义 spec.yml 字段规则、容量预算和 confirmed 门禁。当用户说写 spec / 改 spec / 生成 spec / spec-gen / RenderBlockedError 时调用。Defines spec.yml field rules, layout catalog, capacity budget, and the confirmed:true gate. v1.3: diagram 子类型 33 种全量对齐（含 D-5 pyramid/quadrant、B-7 milestone_gantt）；v1.2: 容量预算表；v1.1: 对齐 spec 协议 v1。"
+description: "定义 spec.yml 字段规则、容量预算和 confirmed 门禁。Defines spec.yml field rules, capacity budget, and the confirmed:true gate."
 ---
 
 # Spec Writing Guide
 
 `spec.yml` is the contract between user intent and the renderer. Without `confirmed: true`, every `*-build` command raises `RenderBlockedError`. This skill exists because AI used to hallucinate spec fields, invent layouts, and skip the confirmation gate.
 
-**字段与元素的唯一事实源：`docs/spec_protocol_v1.md`（spec 协议 v1，2026-07-20）。** 本 skill 只讲流程；字段表、能力矩阵、降级行为以协议文档为准。
+**Single source of truth for fields and elements: `docs/spec_protocol_v1.md` (spec protocol v1, 2026-07-20).** This skill only covers process; field tables, capability matrix, and degradation behavior are governed by the protocol doc.
 
 ## When to Invoke
 
-- User says: 写 spec / 改 spec / 生成 spec / spec-gen
+- User says: write spec / edit spec / generate spec / spec-gen
 - `spec-gen` or `outline-to-spec` returned a draft and you need to finalize it
 - `RenderBlockedError: spec not confirmed` occurred
 - Before any `html-build` / `docx-build` / `quote-build` / `pptd-gen` call (preflight check)
@@ -21,20 +21,20 @@ Do NOT invoke for: reading an already-confirmed spec, or non-spec YAML files.
 
 ## The confirmed:true Gate (L3 hard constraint)
 
-[_cli_guards.py:16-21](file:///d:/knowledge%20base/_cli_guards.py) — `require_confirmed(spec)`：未确认即 `raise RenderBlockedError(...)`（判定单点 `is_confirmed`，`_cli_guards.py:6-13`；Renderer 在 `_renderer/__init__.py:97-98` 调用）。
+`src/_cli_guards.py:16-21` — `require_confirmed(spec)`: raises `RenderBlockedError(...)` if not confirmed (single decision point `is_confirmed`, `_cli_guards.py:6-13`; Renderer calls it at `_renderer/__init__.py:97-98`).
 
 Workflow:
 
 1. Generate draft spec (via `spec-gen` / `outline-to-spec` / manual write)
-2. **Show the draft to the user** and explicitly ask: "spec 草稿已生成，请确认内容是否正确？确认后我会加 `confirmed: true` 并开始生成。"
+2. **Show the draft to the user** and explicitly ask: "Draft spec generated. Please confirm the content is correct? After confirmation I will add `confirmed: true` and start generation."
 3. Only after the user confirms, add `confirmed: true` to the spec top level
-4. Then call `html-build`（同出 .pptd 工程）/ `pptd-build` / etc.（`ppt-build` 已退役 D-090）
+4. Then call `html-build` (also outputs .pptd project) / `pptd-build` / etc. (`ppt-build` is retired D-090)
 
-Never set `confirmed: true` proactively without user confirmation. This is the L3 boundary — spec 中没有的内容一律不写.
+Never set `confirmed: true` proactively without user confirmation. This is the L3 boundary — do not write anything not in the spec.
 
 ## Spec Type 1 — Proposal Spec (HTML/PPT/DOCX)
 
-Full field reference: `docs/spec_protocol_v1.md`（顶层字段表 + 每种元素的正典/兼容字段 + 三端能力矩阵）。写任何字段前先查它。
+Full field reference: `docs/spec_protocol_v1.md` (top-level field table + canonical/compatible fields per element + three-format capability matrix). Check it before writing any field.
 
 ### Top-level fields
 
@@ -64,21 +64,21 @@ pages:                         # array of page objects
     elements: [...]
 ```
 
-### 文档级新字段（批次 A，2026-08-13，观察/预留）
+### Document-level New Fields (Batch A, 2026-08-13, observation/reserved)
 
-以下字段当前只做 schema 合法值校验 + verify 观察报告，渲染层暂不消费（观察期内，§8 晋级流程）。
+These fields are currently only schema-validated and reported by `verify` observation; the render layer does not consume them yet (promotion per §8 during observation).
 
-**container（叙事容器）**：spec 顶层可选，合法值 `scroll | chapters | stage | report`，缺省 `scroll`。
-- 语义：内容叙事容器形态。scroll=滚动长文（现状默认）；chapters=分章节；stage=舞台演示；report=报告式。
-- 反例：`container: flipbook`（不在白名单，报错）
+**container (narrative container)**: optional at spec top level; valid values `scroll | chapters | stage | report`; default `scroll`.
+- Semantics: narrative container shape. scroll=scrolling long-form (current default); chapters=chaptered; stage=stage presentation; report=report-style.
+- Counterexample: `container: flipbook` (not whitelisted, error)
 
-**simulation（仿真模式）**：spec 顶层可选，合法值 `none | static | interactive | guided`，缺省 `none`。
-- 语义：仿真组件预留字段（仿真组件挂起，字段先占位）。写 spec 保持缺省 none 即可。
+**simulation (simulation mode)**: optional at spec top level; valid values `none | static | interactive | guided`; default `none`.
+- Semantics: reserved field for simulation components (component work is paused; field reserved). Keep default `none` when writing specs.
 
-**type_roles（字号角色制）**：spec 顶层可选块，角色名 → size（数值或 `{size: 数值}`）。
-- 角色名白名单 6 个：`title / subtitle / body / caption / footnote / hero_number`
-- 不写零报错（完全向后兼容）；写了就校验角色名合法 + size 为数值
-- 反例：`type_roles: {heading: 40}`（heading 不在白名单）、`type_roles: {title: "大"}`（size 非数值）
+**type_roles (font-size role system)**: optional top-level block; role name → size (number or `{size: number}`).
+- Six whitelisted role names: `title / subtitle / body / caption / footnote / hero_number`
+- Omission is error-free (fully backward compatible); if present, validate role name and numeric size.
+- Counterexamples: `type_roles: {heading: 40}` (`heading` not whitelisted), `type_roles: {title: "大"}` (size not numeric)
 
 ```yaml
 type_roles:
@@ -87,44 +87,44 @@ type_roles:
   caption: 12
 ```
 
-**font_role（元素级角色）**：任意元素的通用可选属性，角色名 ∈ 同一白名单。
-- 未声明不报错；声明了非法角色名报错
-- 反例：`{type: text, text: "x", font_role: banner}`（banner 不在白名单）
-- 渲染优先级（规划）：元素显式 size > font_role > 默认（渲染解析待接入，当前仅校验）
+**font_role (element-level role)**: generic optional attribute on any element; role name must be in the same whitelist.
+- Absent is error-free; an invalid role name errors.
+- Counterexample: `{type: text, text: "x", font_role: banner}` (`banner` not whitelisted)
+- Render priority (planned): explicit element `size` > `font_role` > default (renderer parsing not yet wired; currently validation only)
 
 ### Layout catalog (page metadata)
 
-`layout` 字段由生成器写入，**协议 v1 三端渲染器不消费它**——页面内容完全由 `elements[]` 决定（协议文档 §2）。以下仅为生成器沿用的页面意图分类，写 spec 时重点选对元素：
+The `layout` field is written by the generator; **protocol v1 three-format renderers do not consume it** — page content is fully determined by `elements[]` (protocol doc §2). The following is only the generator's page-intent classification; focus on choosing the right elements when writing specs.
 
 | Layout | Use for | Key elements |
 |---|---|---|
 | `title_body` | Overview / text-heavy page | `text` + `heading` |
 | `cards_3` | Pain points / 3-column comparison | `cards` (title/tag/body/highlight) |
-| `blueprint` / `function_architecture` | Architecture / capability hierarchy | `diagram`（org_tree / biz_capability_tree / architecture 系）或 `bullets`+`cards` 组合 |
+| `blueprint` / `function_architecture` | Architecture / capability hierarchy | `diagram` (org_tree / biz_capability_tree / architecture family) or `bullets`+`cards` combination |
 | `timeline` | Phase plan / roadmap | `phases` (name/desc/actions) |
 | `table` | Budget / matrix / data | `table` (headers/rows) |
 | `summary` | Closing / next steps | `text` + `bullets` |
 
-### Element types（协议 v1 合法全集，共 10 种）
+### Element types (full valid set in protocol v1, 10 total)
 
-只用了这 10 种——**未知/拼错的 type 现在会报 schema 错误、渲染进 report.skipped、verify 判 FAIL**（以前是静默跳过，元素直接消失）。字段细节见协议文档 §3-§5。
+Only these 10 are valid — **unknown/misspelled `type` now raises a schema error, is rendered into `report.skipped`, and `verify` marks FAIL** (previously silently skipped and elements disappeared). Field details: protocol doc §3–§5.
 
-- `text` — `{content, role?}`（兼容字段 `text`）
-- `heading` — `{text, level?}`（level 缺省 2，1-7；兼容 `title|content`）。**三端均可用**
+- `text` — `{content, role?}` (compatible field `text`)
+- `heading` — `{text, level?}` (`level` defaults to 2, 1–7; compatible `title|content`). **Available in all three formats**
 - `bullets` — `items: [string]`
-- `cards` — array of `{title, body, tag?, highlight?}`（tag/highlight 仅 HTML 端渲染）
-- `phases` — array of `{name, desc, actions: [string]}`。**正典字段是 name/desc/actions**；`label/goal`、`phase/title/items` 是存量兼容写法，新写 spec 不要用。注意 PPTD 端只发 name/desc 不发 actions
-- `table` — `{headers: [string], rows: [[string]]}`（每行列数须与 headers 齐）
-- `pullquote` — `{content, cite?}`。**三端均可用**（DOCX 端为缩进斜体引文）
-- `architecture_4a` — `{layers: [{name, components[]}]}`。**仅 DOCX 原生渲染，HTML/PPTD 降级为 `[4A 架构图] 本节内容请见 Word 版`**——只建议用于 DOCX 场景的 spec；HTML/PPT 架构图用 `diagram`
-- `diagram` — 结构化图形（见下节，D-087）。**DOCX 端降级为 `[架构图：{title}] 请见 HTML/PPT 版`**——写 spec 时知道只有 HTML/PPT 才有图
-- `product_intro_placeholder` — 产品介绍占位（D-089）。DOCX 端同样降级为文本提示
+- `cards` — array of `{title, body, tag?, highlight?}` (tag/highlight render only in HTML)
+- `phases` — array of `{name, desc, actions: [string]}`. **Canonical fields are name/desc/actions**; `label/goal`, `phase/title/items` are legacy compatible forms — do not use in new specs. Note PPTD emits only name/desc, not actions
+- `table` — `{headers: [string], rows: [[string]]}` (each row's column count must match headers)
+- `pullquote` — `{content, cite?}`. **Available in all three formats** (DOCX: indented italic quote)
+- `architecture_4a` — `{layers: [{name, components[]}]}`. **DOCX-only native render; HTML/PPTD degrade to `[4A 架构图] 本节内容请见 Word 版`** — only use for DOCX-targeted specs; use `diagram` for HTML/PPT architecture
+- `diagram` — structured graphics (next section, D-087). **DOCX degrades to `[架构图：{title}] 请见 HTML/PPT 版`** — know when writing that only HTML/PPT have diagrams
+- `product_intro_placeholder` — product intro placeholder (D-089). DOCX similarly degrades to a text notice
 
-### diagram 图形元素（HTML/PPT 双输出，同源）
+### diagram element (HTML/PPT dual output, same source)
 
-视觉规范：`docs/diagram_visual_design_v1_2026-07-19.md` v1.3（画法 + 字段全表 + §4.2 图形铁律 / §4.3 块箭头 / §4.4 adj 语义表 / §4.5 布尔切分层级图 / §4.6 连接线路由）；子类型必填字段以协议文档 §5 为准（与 `_renderer/schema.py` 的 DIAGRAM_SCHEMA 一致，写错必填字段会报 schema 错误）。
-**写作约定：一页一图**（_build_content_page 无分页，多张大图会溢出页面）。
-**端能力：HTML/PPTD 原生渲染，DOCX 端降级为文本提示**——同一份 spec 要出 DOCX 时，关键信息别只放在图里。
+Visual spec: `docs/diagram_visual_design_v1_2026-07-19.md` v1.3 (drawing rules + full field table + §4.2 shape rules / §4.3 block arrows / §4.4 adj semantics table / §4.5 boolean-split hierarchy / §4.6 connector routing); subtype required fields follow protocol doc §5 (matches `DIAGRAM_SCHEMA` in `_renderer/schema.py`; wrong required fields cause schema errors).
+**Writing rule: one diagram per page** (`_build_content_page` has no pagination; multiple large diagrams overflow the page).
+**Format capability: HTML/PPTD render natively, DOCX degrades to text notice** — when the same spec will also produce DOCX, do not put key information only in diagrams.
 
 ```yaml
 - type: diagram
@@ -134,7 +134,7 @@ type_roles:
   desc: "说明（可选）"
 ```
 
-子类型与专有字段（**33 种已全部实现**：flow 6 / architecture 7 / matrix 5 / timeline 4 / relationship 11，含 D-5 pyramid、quadrant 与 B-7 milestone_gantt；以下为高频示例，全量字段表见设计规范 §3 与协议文档 §5）：
+Subtypes and their dedicated fields (**all 33 implemented**: flow 6 / architecture 7 / matrix 5 / timeline 4 / relationship 11, including D-5 pyramid, quadrant and B-7 milestone_gantt; below are frequent examples; full field table in design spec §3 and protocol doc §5):
 
 ```yaml
 # flow/sequence 顺序流程图：steps[].type = start|task|system|decision|end|doc
@@ -219,41 +219,41 @@ type_roles:
    hint: "在此处插入客户产品介绍页", keywords: ["产品A", "模块B"]}
 ```
 
-P1 写法注意：
+P1 writing notes:
 
-- `flow/decision`：decision 步骤用 `alt_next: "<否分支目标 label>"` + `alt_label: "否"`；主线顺序即「是」分支
-- `flow/cross_system`：steps 需带 `system: "<系统名>"` 落列；`async: true` 画虚线（异步），`note:` 标接口名
-- `flow/parallel`：`sources` 纵排 -> `merge` 汇聚 -> 可选 `after` 后续链
-- `architecture/integration` 双形态：点对点给 `source{items}+target{items}+links[mode]`；总线给 `hub+systems`（二选一）
-- `architecture/deployment`：`zones[].nodes[]` 嵌套；`links: [{from, to, label}]` from/to 写 zone 名
-- `matrix/cbm`：capabilities 元素可为 `{name, heat: strong|mid|weak}` 开热力
-- `relationship/er_*`：relations `type: one_to_one|one_to_many|many_to_many`；逻辑 ER 用 `pk/fk/attrs`
-- `relationship/data_flow`：nodes `type: source|process|sink|store`；flows `direction: push|pull|bidirectional`
-- `relationship/biz_capability_tree`：`groups[].children[].items[]` 三层
+- `flow/decision`: decision steps use `alt_next: "<no-branch target label>"` + `alt_label: "否"`; the main sequence is the "yes" branch
+- `flow/cross_system`: steps need `system: "<system name>"` to assign columns; `async: true` draws dashed lines (async), `note:` marks interface names
+- `flow/parallel`: `sources` stack vertically -> `merge` converges -> optional `after` follow-on chain
+- `architecture/integration` two forms: point-to-point uses `source{items}+target{items}+links[mode]`; bus uses `hub+systems` (choose one)
+- `architecture/deployment`: `zones[].nodes[]` nested; `links: [{from, to, label}]` from/to use zone names
+- `matrix/cbm`: capability elements can use `{name, heat: strong|mid|weak}` for heat
+- `relationship/er_*`: relations `type: one_to_one|one_to_many|many_to_many`; logical ER uses `pk/fk/attrs`
+- `relationship/data_flow`: nodes `type: source|process|sink|store`; flows `direction: push|pull|bidirectional`
+- `relationship/biz_capability_tree`: `groups[].children[].items[]` three levels
 
-**pptd 手写页纪律**（不走 spec diagram、直接写 .page 时必读；真实项目 v14 教训 2026-08-11）：
+**pptd handwritten-page discipline** (read when writing `.page` directly instead of spec `diagram`; lesson from real project v14, 2026-08-11):
 
-- 优先走 `type: diagram` 让官方渲染器出图；确需手写时，箭头路由照 `_renderer/diagram/flow.py _pptd_arrow`：吸附节点连接点——同行右缘→左缘直线；错位 `bentConnector3` 肘形，出底入顶、不穿节点盒
-- 禁悬空箭头（固定高度的列间水平箭头对不齐节点，用户判"没法看"）；列内节点 hug 高度、文字可换行、上下分布布满列体，列变窄给箭头留通道
-- **图形铁律（选择门）**：原生 preset/chart > 布尔切分 > 手写 freeform path（禁用）。shape 名必须在 `_pptd_convert._SHAPE_NAME_MAP` / `_CONNECTOR_MAP` 白名单内，diagram 图形区域禁 image（verify 观察模式拦截）
-- **块箭头**：实心方向用块箭头 preset（`rightArrow`/`leftRightArrow`/`upDownArrow`/`pentagon`），细关系（接口/数据流连线）用 connector
+- Prefer `type: diagram` so the official renderer draws the graphic; when handwritten is required, route arrows per `_renderer/diagram/flow.py _pptd_arrow`: snap to node connection points — same row right edge→left edge straight line; misaligned `bentConnector3` elbow, bottom out/top in, no crossing node boxes
+- No dangling arrows (fixed-height horizontal arrows between columns misalign with nodes; users call it "unreadable"); in-column nodes hug height, text wraps, vertical distribution fills the column, and narrower columns leave channels for arrows
+- **Shape rules (selection gate)**: native preset/chart > boolean split > handwritten freeform path (banned). Shape names must be in the `_pptd_convert._SHAPE_NAME_MAP` / `_CONNECTOR_MAP` whitelist; `image` is banned in diagram graphic areas (`verify` intercepts in observation mode)
+- **Block arrows**: solid-direction uses block arrow presets (`rightArrow`/`leftRightArrow`/`upDownArrow`/`pentagon`); fine relationships (interface/data-flow lines) use connector
 
-## 容量预算（写 spec 时遵守，防 Plan-Delivery Gap）
+## Capacity Budget (follow when writing specs, prevent Plan-Delivery Gap)
 
-页面 1280×720。**写作时就不许超**，不要等 lint 打回（依据：真实项目 v7 实测 + 规约 docs/思维链预算与验证回路规约_v1.1_2026-07-21.md §5 L0）：
+Page is 1280×720. **Do not exceed at writing time**; do not wait for lint to reject (basis: real project v7 measurement + spec `docs/思维链预算与验证回路规约_v1.1_2026-07-21.md` §5 L0):
 
-| 元素 | 预算 | 实测出处 |
+| Element | Budget | Evidence source |
 |---|---|---|
-| `table` | ≤11 行、单格 ≤20 字；表后还有 pullquote 时 ≤9 行 | 13 行长文案致 pullquote 越界（v7 P11） |
-| `pullquote` | content ≤2 行（≈60 字）、cite ≤15 字；与表格同页时文字再减半 | 同上 |
-| `architecture/4a`、`layered` | **禁写 desc**（渲染器 desc/chips 硬编码必撞，known_issue）；信息并入 name 或页面 pullquote | desc 被 chips 压成乱码（v7 P2） |
-| `timeline/horizontal` | ≤4 个 milestones、desc ≤30 字 | 4 节点 40 字 desc 勉强通过（v7 P17） |
-| `flow/cross_system` | ≤6 个系统列、note ≤12 字 | 6 列连线拥挤 warning（v7 P15） |
-| `architecture/deployment` | 跨 zone 的 link **不写 label**（被 zone 背景遮），信息并入节点 desc | label 被遮显示不全（v7 P19） |
-| `cards` | ≤3 张/行、body ≤3 行 | — |
-| 页面标题 | ≤30 字 | — |
+| `table` | ≤11 rows, ≤20 chars per cell; ≤9 rows when a `pullquote` follows | 13-row long text pushed pullquote out of bounds (v7 P11) |
+| `pullquote` | content ≤2 lines (≈60 chars), cite ≤15 chars; halve text when on same page as a table | same as above |
+| `architecture/4a`、`layered` | **Do not write `desc`** (renderer hardcodes desc/chips and they always collide, known_issue); fold info into `name` or page `pullquote` | desc crushed by chips into garbled text (v7 P2) |
+| `timeline/horizontal` | ≤4 milestones, desc ≤30 chars | 4 nodes with 40-char desc barely passed (v7 P17) |
+| `flow/cross_system` | ≤6 system columns, note ≤12 chars | 6-column connections crowded warning (v7 P15) |
+| `architecture/deployment` | cross-zone links **do not write `label`** (hidden by zone background); fold info into node desc | label hidden/incomplete (v7 P19) |
+| `cards` | ≤3 per row, body ≤3 lines | — |
+| Page title | ≤30 chars | — |
 
-一页一图（既有约定不变）。**超预算的正确做法不是硬塞，是拆页或精简文案。**
+One diagram per page (existing rule unchanged). **When over budget, do not force content in — split pages or trim copy.**
 
 ## Spec Type 2 — Quote Spec
 
@@ -303,12 +303,12 @@ All generators produce **drafts without `confirmed: true`**. You must add it man
 
 ### Example 1 — spec-gen then confirm
 
-User: "用这份需求文档生成 spec"
+User: "Generate a spec from this requirements document"
 
 1. `python _cli.py spec-gen 需求.docx --client 蓝海集团 --output spec.yml`
 2. Read the draft, present key fields to user: pages count, layouts used, style
-3. Ask: "spec 草稿已生成（5 页，含痛点/架构/阶段/预算/总结）。确认无误吗？"
-4. User: "确认" → add `confirmed: true` to spec.yml top level
+3. Ask: "Draft spec generated (5 pages, including pain points/architecture/phases/budget/summary). Does it look correct?"
+4. User: "Confirmed" → add `confirmed: true` to spec.yml top level
 5. Proceed to `html-build`
 
 ### Example 2 — Fixing RenderBlockedError
@@ -322,7 +322,7 @@ User ran `html-build` and got: `RenderBlockedError: spec.yml 未标记 confirmed
 
 ### Example 3 — Quote spec
 
-User: "出一份报价 spec"
+User: "Create a quote spec"
 
 1. Confirm materials are in `_knowledge/clients/{客户}/refs/`
 2. `python _cli.py quote-spec-gen _knowledge/clients/蓝海集团/refs _knowledge/clients/蓝海集团/蓝海集团_quote_spec.yml --client 蓝海集团`
@@ -335,72 +335,72 @@ User: "出一份报价 spec"
 | Symptom | Cause | Fix |
 |---|---|---|
 | `RenderBlockedError` | spec lacks `confirmed: true` | Confirm with user, add field |
-| `RenderBlockedError`（client_name） | `client_name` 字段存在但为空 | 填真实客户名或删掉该字段 |
-| verify FAIL：`N 个元素被跳过` | 未知/拼错的元素 type（协议 v1 起不再静默跳过） | 改用协议文档 §3 的 10 种合法 type；常见于旧 spec 的 `tree`/`chart`/`actions` |
-| 打印 `[spec校验] ... 缺必填字段` | 元素缺必填字段（如 cards 缺 title、table 行列不齐） | 按协议文档 §4/§5 的必填规则补齐；不阻断生成但渲染会缺内容 |
-| DOCX 里出现 `[架构图：...] 请见 HTML/PPT 版` | diagram/占位卡在 DOCX 端无原生渲染（预期降级） | 预期行为；要 DOCX 出架构内容改用 `architecture_4a` 或文字元素 |
-| HTML/PPT 里出现 `[4A 架构图] 本节内容请见 Word 版` | `architecture_4a` 仅 DOCX 原生 | 改用 `diagram`（architecture/4a、layered 子类型） |
+| `RenderBlockedError`（client_name） | `client_name` field exists but is empty | Fill in the real client name or remove the field |
+| verify FAIL：`N 个元素被跳过` | Unknown/misspelled element type (no silent skip since protocol v1) | Use one of the 10 valid types from protocol doc §3; common in old specs using `tree`/`chart`/`actions` |
+| `[spec校验] ... 缺必填字段` printed | Element missing required fields (e.g. cards missing title, table rows/columns mismatched) | Fill per required-field rules in protocol doc §4/§5; generation continues but rendered content will be incomplete |
+| `[架构图：...] 请见 HTML/PPT 版` appears in DOCX | diagram/placeholder has no native DOCX render (expected degradation) | Expected; for architecture content in DOCX use `architecture_4a` or text elements |
+| `[4A 架构图] 本节内容请见 Word 版` appears in HTML/PPT | `architecture_4a` renders natively only in DOCX | Use `diagram` (architecture/4a, layered subtypes) |
 | `theme-verify` low coverage | Spec content missing permanent-theme keywords from `theme-guard` output | Add keywords to page content, rebuild |
-| `pptd-build` 报错 on page N | Element type mismatch for that page's layout | 用 `html-build` 双输出重建 .pptd 工程，核对该页元素 schema 后重跑 `pptd-build` |
+| `pptd-build` errors on page N | Element type mismatch for that page's layout | Rebuild the .pptd project with `html-build` dual output, check that page's element schema, then rerun `pptd-build` |
 | Quote `total_label` missing | Section lacks `total_label` field | Add `total_label: <合计标签>` to each section |
 | `--style` rejected | Not one of `education/enterprise/tech/gov` | Use a valid style or omit (uses spec `style` field) |
 
 ## Anti-patterns (do NOT)
 
 - Set `confirmed: true` before user confirmation
-- Use element types outside the protocol v1 list of 10 (`tree`/`chart`/`actions`/拼错的 type）——现在会报 schema 错误并导致 verify FAIL
-- 新写 spec 用 phases 的兼容写法（`label/goal`、`phase/title/items`）——正典是 `name/desc/actions`
-- 在要出 DOCX 的 spec 里依赖 `diagram` 出图（DOCX 端只有降级文本）；在要出 HTML/PPT 的 spec 里用 `architecture_4a`（会降级）
+- Use element types outside the protocol v1 list of 10 (`tree`/`chart`/`actions`/misspelled types) — now raises schema errors and causes verify FAIL
+- Use legacy phases forms in new specs (`label/goal`, `phase/title/items`) — canonical is `name/desc/actions`
+- Rely on `diagram` for graphics in DOCX-targeted specs (DOCX only has degraded text); use `architecture_4a` in HTML/PPT-targeted specs (it degrades)
 - Mix proposal spec fields with quote spec fields in one file
-- Omit `id` field on pages (renderer uses it for chunking, report定位 and replacement)
+- Omit `id` field on pages (renderer uses it for chunking, report targeting, and replacement)
 - Put vendor names in `cards`/`diagram` content (use system names per project rules)
-- Write more pages than the spec needs (HTML 先行, iterate based on user feedback)
+- Write more pages than the spec needs (HTML first, iterate based on user feedback)
 
-## v2.0 页面版式与构件（2026-07-25 冻结，dev_plan_visual_v2_2026-07-25）
+## v2.0 Page Layouts and Components (frozen 2026-07-25, dev_plan_visual_v2_2026-07-25)
 
-### 版式选择（锁定目录制：只能选、不能发明）
+### Layout selection (locked catalog: choose, do not invent)
 
-页面级 `layout` 字段，受控值 P01-P16（v3.0 扩展 P12/P14/P15/P16，无 P13）；目录不够用 = 扩目录走决策，不在 spec 里自由发挥。
+Page-level `layout` field, controlled values P01-P16 (v3.0 adds P12/P14/P15/P16, no P13); if the catalog is insufficient = expand it through a decision, do not improvise in the spec.
 
-| 编号 | 名称 | 必需构件（顺序） | 可选 | 容量上限 |
+| ID | Name | Required components (order) | Optional | Capacity limit |
 |------|------|----------------|---------|---------|
-| P01 | 封面 | hero | stat_cards | hero.stats ≤4 |
-| P02 | 章节页 | section_tag + action_title | info_cards | info_cards ≤1 组 |
-| P03 | 结论摘要 | section_tag + action_title + kpi_cards | info_cards | kpi ≤4 |
-| P04 | 痛点矩阵 | section_tag + action_title + pain_cards | legend_bar | pain ≤9 |
-| P05 | 流程图页 | section_tag + action_title + diagram(flow 系) + legend_bar | info_cards | 单图 |
-| P06 | 架构图页 | section_tag + action_title + diagram(architecture 系) | legend_bar | 单图 |
-| P07 | 对比表页 | section_tag + action_title + table | info_cards | table ≤12 行 |
-| P08 | 能力地图页 | section_tag + action_title + diagram(matrix 系) + legend_bar | stat_cards | 单图 |
-| P09 | 路线图页 | section_tag + action_title + diagram(timeline 系) | info_cards | 单图 |
-| P10 | 风险与待确认页 | section_tag + action_title + (table\|info_cards) | qa_block | — |
-| P11 | 收尾页 | action_title + info_cards | hero(紧凑) | — |
-| P12 | 目录页（v3.0） | section_tag + action_title + toc_cards | — | 卡 ≤8 |
-| P14 | 双栏对比页（v3.0） | section_tag + action_title + duo_compare | legend_bar | — |
-| P15 | 优缺点清单页（v3.0） | section_tag + action_title + pros_cons | legend_bar | — |
-| P16 | CTA 收尾页（v3.0） | action_title + cta_block | — | — |
+| P01 | Cover | hero | stat_cards | hero.stats ≤4 |
+| P02 | Chapter page | section_tag + action_title | info_cards | info_cards ≤1 group |
+| P03 | Conclusion summary | section_tag + action_title + kpi_cards | info_cards | kpi ≤4 |
+| P04 | Pain-point matrix | section_tag + action_title + pain_cards | legend_bar | pain ≤9 |
+| P05 | Flowchart page | section_tag + action_title + diagram(flow family) + legend_bar | info_cards | Single diagram |
+| P06 | Architecture diagram page | section_tag + action_title + diagram(architecture family) | legend_bar | Single diagram |
+| P07 | Comparison table page | section_tag + action_title + table | info_cards | table ≤12 rows |
+| P08 | Capability map page | section_tag + action_title + diagram(matrix family) + legend_bar | stat_cards | Single diagram |
+| P09 | Roadmap page | section_tag + action_title + diagram(timeline family) | info_cards | Single diagram |
+| P10 | Risks and open items page | section_tag + action_title + (table\|info_cards) | qa_block | — |
+| P11 | Closing page | action_title + info_cards | hero(compact) | — |
+| P12 | Table-of-contents page (v3.0) | section_tag + action_title + toc_cards | — | Cards ≤8 |
+| P14 | Two-column comparison page (v3.0) | section_tag + action_title + duo_compare | legend_bar | — |
+| P15 | Pros/cons checklist page (v3.0) | section_tag + action_title + pros_cons | legend_bar | — |
+| P16 | CTA closing page (v3.0) | action_title + cta_block | — | — |
 
-**内容类型→版式匹配**：封面→P01 / 量化结论·价值→P03 / 痛点→P04 / 流程→P05 / 架构→P06 / 对比·通道→P07 / 能力·点亮·功能清单→P08 / 计划·路线→P09 / 风险·待确认→P10 / 结尾→P11（产品介绍建议 P16 CTA）。
+**Content type → layout mapping**: cover→P01 / quantified conclusions & value→P03 / pain points→P04 / process→P05 / architecture→P06 / comparison & channels→P07 / capabilities, lit-up, feature list→P08 / plan & roadmap→P09 / risks & open items→P10 / closing→P11 (product intro recommends P16 CTA).
 
-旧 layout 值（title_body/cards_3/blueprint/summary/table/tree/phases/timeline）继续有效按自由流渲染（F9）；不声明 layout 同为自由流。
+Legacy `layout` values (`title_body`/`cards_3`/`blueprint`/`summary`/`table`/`tree`/`phases`/`timeline`) remain valid and render as free flow (F9); omitting `layout` is also free flow.
 
-**主题**：spec 顶层 `theme: consulting_kpmg | legacy_bluegreen | corporate_navy | product_charcoal`（缺省 legacy）；spec 内禁 hex 字面量（v2 spec 机械防线，配色进主题包）。
+**Theme**: spec top-level `theme: consulting_kpmg | legacy_bluegreen | corporate_navy | product_charcoal` (default `legacy`); hex literals are banned in specs (v2 spec mechanical guard; colors go into theme packs).
 
-**场景**（v3.0，批次 A 加 training）：spec 顶层可选 `scenario: report | product_intro | training`（缺省 report）。
-- `report`：汇报型（CFO/IT 总监），配 `theme: corporate_navy`，默认 P01-P11 版式
-- `product_intro`：产品介绍型，配 `theme: product_charcoal`，收尾页建议 P16 CTA
-- `training`：培训/教学型（批次 A 新增，2026-08-13）
-- scenario 只作为内容→版式默认映射的参考，不强制主题；两者独立声明
-- （注：outline-to-spec 的 P 系映射待 build_elements v2 构件化后接入，当前场景字段先用于校验与文档语义）
+**Scenario** (v3.0, batch A adds training): optional spec top-level `scenario: report | product_intro | training` (default `report`).
+- `report`: presentation style (CFO/IT director), paired with `theme: corporate_navy`, default P01-P11 layouts
+- `product_intro`: product intro style, paired with `theme: product_charcoal`, closing page recommends P16 CTA
+- `training`: training/teaching style (added in batch A, 2026-08-13)
+- scenario only guides the content→layout default mapping, does not force theme; the two are declared independently
+- (Note: outline-to-spec P-family mapping waits for build_elements v2 componentization; the scenario field is currently used for validation and document semantics)
 
-**品牌/logo**（v3.0）：spec 顶层可选 `brand`：
+**Brand/logo** (v3.0): optional spec top-level `brand`:
 ```yaml
 brand:
   logo: refs/logo.png          # 本地资产（refs/ 或 _assets/），禁外链；缺省占位虚线框
   logo_position: topnav_left   # topnav_left | topnav_right | hero_corner
 ```
 
-### 新元素写法（10 种页面构件）
+### New element syntax (10 page components)
 
 ```yaml
 - type: hero
@@ -447,7 +447,7 @@ brand:
   brand_sub: "私有化 OA 平台"        # 章节锚点由 pages 自动生成
 ```
 
-### evidence_ledger 证据台账（B-3，批次 B 组件）
+### evidence_ledger evidence ledger (B-3, batch B component)
 
 ```yaml
 - type: evidence_ledger             # 每条结论挂证据编号 + 状态，三端原生渲染
@@ -459,10 +459,10 @@ brand:
        evidence: "调研访谈 2026-07", status: "待补"}
 ```
 
-- 校验：`items` 必填非空；每项 `conclusion`/`evidence` 必填；`num`/`status` 可选
-- 容量：≤12 条（超 → warning）；单格 ≤20 字（PPT 端单行截断，长文本会溢出）
+- Validation: `items` required and non-empty; each item `conclusion`/`evidence` required; `num`/`status` optional
+- Capacity: ≤12 items (over → warning); ≤20 chars per cell (PPT truncates to one line; long text overflows)
 
-### risk_register 风险登记（B-4，批次 B 组件）
+### risk_register risk register (B-4, batch B component)
 
 ```yaml
 - type: risk_register              # 风险项 + 等级 + 状态 + 应对，三端原生渲染
@@ -474,10 +474,10 @@ brand:
        response: "提前两周联调 + 周例会跟踪"}
 ```
 
-- 校验：`items` 必填非空；每项 `risk`/`response` 必填；`level` 枚举 高/中/低（可选）；`status` 可选
-- 容量：≤12 条（超 → warning）；单格 ≤20 字
+- Validation: `items` required and non-empty; each item `risk`/`response` required; `level` enum 高/中/低 (optional); `status` optional
+- Capacity: ≤12 items (over → warning); ≤20 chars per cell
 
-### raci_matrix 角色责任矩阵（B-5，批次 B 组件）
+### raci_matrix RACI matrix (B-5, batch B component)
 
 ```yaml
 - type: raci_matrix                # 行=任务，列=角色，单元格 R/A/C/I
@@ -488,11 +488,11 @@ brand:
     - {task: "方案设计", cells: {甲方项目经理: "C", 我方PM: "R", 我方顾问: "A"}}
 ```
 
-- 校验：`roles` 必填非空；`tasks` 必填非空；每项 `task` 必填；`cells` 值 ∈ R/A/C/I；cells 的 key 须在 roles 声明内
-- 容量：≤12 行任务（超 → warning）；角色列 ≤6
-- 语义：R=执行 Responsible / A=问责 Accountable（每行恰一个）/ C=咨询 Consulted / I=知会 Informed
+- Validation: `roles` required and non-empty; `tasks` required and non-empty; each item `task` required; `cells` values ∈ R/A/C/I; `cells` keys must be declared in `roles`
+- Capacity: ≤12 task rows (over → warning); ≤6 role columns
+- Semantics: R=Responsible / A=Accountable (exactly one per row) / C=Consulted / I=Informed
 
-### decision_board 决策面板（B-6，批次 B 组件）
+### decision_board decision panel (B-6, batch B component)
 
 ```yaml
 - type: decision_board              # 方案比较 + 推荐 + 下一步，三端原生渲染
@@ -504,10 +504,10 @@ brand:
   next_step: "启动 POC 验证"        # 可选
 ```
 
-- 校验：`options` ≥2 个；每项 `name` 必填；`recommendation` 必填；`pros`/`cons` 可选
-- 容量：≤4 个方案（超 → warning）
+- Validation: `options` ≥2; each item `name` required; `recommendation` required; `pros`/`cons` optional
+- Capacity: ≤4 options (over → warning)
 
-### flow_rows 写法（行式流程图）
+### flow_rows syntax (row-based flowchart)
 
 ```yaml
 - type: diagram
@@ -537,37 +537,37 @@ brand:
         - {label: "纸质用印", desc: "实体章场景保留", role: ext, dim: true}   # dim=降透明度
 ```
 
-校验：rows 必填；单行 cards ≤6、总行数 ≤8（超 → warning）；card.role 必须在 roles 声明内（否则 error）；dashed_opt 行内带 badge → warning（可选项不编号）。
+Validation: `rows` required; ≤6 cards per row, ≤8 total rows (over → warning); `card.role` must be declared in `roles` (otherwise error); badge in a `dashed_opt` row → warning (optional rows are not numbered).
 
-### 线型/框型语义表（F6 冻结，写 spec 必读）
+### Line/box semantics table (F6 frozen, must-read for spec writing)
 
-| 视觉元素 | 唯一语义 | 纪律 |
+| Visual element | Unique semantics | Discipline |
 |---------|---------|------|
-| 实线箭头 →/↓ | 同步调用 / 主流程方向 | 主链路唯一线型 |
-| 虚线箭头 ⇢ | 异步 / 回传 / 可选路径 | 必须带文字标注（11px） |
-| 实线框卡片 | 主链路节点 | — |
-| 行级虚线橙框 | 可选项 / 替代通道 | 不编号、须配「可选项」标签 |
-| 行级底色分组 | 同一业务阶段/系统域 | 同图 ≤3 种 |
-| 角色顶条色 | 节点责任角色 | 角色色 >2 必须出 legend |
-| 芯片绿实底 | 已点亮 / 标准直接支持 | 三态成组出现 |
-| 芯片朱橙实底 | 部分点亮 / 配置或二开 | 同上 |
-| 芯片深灰虚线框 | 缺口 / 定制 / 未覆盖 | 必须画出 |
-| 左色条+序号圆点 | 流程步骤顺序 | 可选项不编号 |
-| 青色折角单据节点+无箭头虚线 | 单据挂载（BPMN data object） | 沿用 v1.2 |
+| Solid arrow →/↓ | Synchronous call / main flow direction | Only line style for the main path |
+| Dashed arrow ⇢ | Async / return / optional path | Must have text label (11px) |
+| Solid box card | Main-path node | — |
+| Row-level dashed orange box | Optional / alternative channel | Not numbered, must have "optional" label |
+| Row-level background group | Same business stage/system domain | ≤3 per diagram |
+| Role top-bar color | Node responsibility role | Legend required when >2 role colors |
+| Green solid chip | Lit / standard direct support | Appear as a three-state group |
+| Orange solid chip | Partially lit / config or secondary development | Same as above |
+| Dark-gray dashed chip | Gap / custom / not covered | Must be drawn |
+| Left color bar + numbered dot | Flow step order | Optional items not numbered |
+| Cyan folded document node + arrowless dashed line | Document attachment (BPMN data object) | Keep v1.2 |
 
-### 关系决定图形（选 subtype 先定关系，再选图）
+### Relationship decides graphic (choose relationship first, then subtype)
 
-- 调用/数据流 → 带方向箭头的节点链（flow/sequence、flow_rows）
-- 多角色交互 → 泳道（swimlane）或 flow_rows roles 色板
-- 状态迁移 → 状态机式 flow（decision）
-- 部署故障域 → deployment 拓扑
-- 选项对比 → 同尺度矩阵（fit_gap/cbm）
+- Call/data flow → node chain with directional arrows (`flow/sequence`, `flow_rows`)
+- Multi-role interaction → swimlane or `flow_rows` roles color palette
+- State transition → state-machine style flow (`decision`)
+- Deployment fault domains → `deployment` topology
+- Option comparison → same-scale matrix (`fit_gap`/`cbm`)
 
-### 制图纪律（Kimi tech-engineering §6.2）
+### Drawing discipline (Kimi tech-engineering §6.2)
 
-- 箭头必须有方向 + 含义；数据流/控制流/异常路径用颜色 + 线型 + 标签冗余区分
-- 连接线止于节点边缘，绝不穿越文字（verify 几何检查）
-- 关键路径加粗/强调色，其余退中性色
-- 复杂架构先总览再逐层放大
-- 同页卡片不嵌套；禁红/紫/黄/绿高饱和四色同页（AI 经典配色，verify 检查）
-- 图表必须配文字解读，不孤立存在；禁 icon 元素（F7 黑名单：pyz 实测图标退化圆形）；需图标用预设形状或文字符号
+- Arrows must have direction + meaning; distinguish data/control/exception paths redundantly with color + line style + labels
+- Connectors stop at node edges, never cross text (`verify` geometry check)
+- Emphasize the critical path with bold/color; keep the rest neutral
+- For complex architecture, show overview first, then zoom into layers
+- Do not nest cards on the same page; ban the four high-saturation colors red/purple/yellow/green on one page (classic AI palette, `verify` check)
+- Charts must be accompanied by text interpretation, never standalone; `icon` elements are banned (F7 blacklist: pyz test showed icons degrade to circles); use preset shapes or text symbols if icons are needed

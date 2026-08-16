@@ -1,7 +1,7 @@
 ---
 name: decision-recording
 version: "1.0"
-description: "Records key decisions to decisions.md with persistence + scope fields. Invoke when user says '记一下', when AI detects a key decision, or before session save."
+description: "用户说记一下或 AI 识别关键决策时调用。Records key decisions to decisions.md with persistence + scope fields."
 ---
 
 # Decision Recording
@@ -10,7 +10,7 @@ Decisions are the project's memory. Without them, AI re-litigates the same quest
 
 ## When to Invoke
 
-- User says: 记一下 / 记决策 / 记录这个 / decisions
+- User says: note this down / record decision / log this / decisions
 - AI detects a key decision during work:
   - Architecture / scope decisions (e.g. "7 系统一次性切换")
   - Business rule confirmations (e.g. "ERP 不动")
@@ -22,16 +22,16 @@ Do NOT invoke for: transient task state (use `context.md`), pure material extrac
 
 ## The persistence + scope Model
 
-From [_theme_guard.py:9-13](file:///d:/knowledge%20base/_theme_guard.py):
+From `src/_theme_guard.py:9-13`:
 
 | persistence | scope | Meaning | Loaded by theme-guard? |
 |---|---|---|---|
-| `permanent` | `client` | 铁律：跨会话跨任务始终生效 | ✅ Always |
-| `permanent` | `task` | 任务约束：本次任务全程不变 | ✅ Only when task_id matches |
-| `task` | `client` | (rare) 临时客户级约束 | ❌ Only with only_permanent=False |
-| `task` | `task` | 临时任务约束，任务结束归档 | ❌ Only with only_permanent=False + task_id match |
+| `permanent` | `client` | Iron rule: always applies across sessions and tasks | ✅ Always |
+| `permanent` | `task` | Task constraint: fixed for the whole current task | ✅ Only when task_id matches |
+| `task` | `client` | (rare) temporary client-level constraint | ❌ Only with only_permanent=False |
+| `task` | `task` | Temporary task constraint; archived when the task ends | ❌ Only with only_permanent=False + task_id match |
 
-**Backward compatibility**: entries without `persistence`/`scope` fields default to `permanent + client` (so old铁律 don't silently disappear). But always write the fields explicitly for new entries.
+**Backward compatibility**: entries without `persistence`/`scope` fields default to `permanent + client` (so old iron rules don't silently disappear). But always write the fields explicitly for new entries.
 
 ## Decision Entry Format (canonical)
 
@@ -53,8 +53,8 @@ For `scope: task`, add `- **task_id: <id>**` (use `YYYYMMDD_HHMMSS` or a meaning
 
 ### Field rules
 
-- **决策** — one sentence, the actual decision. Not "讨论了 X", but "X = Y".
-- **理由** — why this way. Required (project rule: 保留决策依据).
+- **决策** — one sentence, the actual decision. Not "discussed X", but "X = Y".
+- **理由** — why this way. Required (project rule: preserve decision rationale).
 - **否决方案** — why NOT the alternative. Optional but strongly recommended for architecture decisions.
 - **来源** — traceability: user quote / material file path / "AI 推断".
 - **影响范围** — what downstream work changes because of this.
@@ -70,7 +70,7 @@ For `scope: task`, add `- **task_id: <id>**` (use `YYYYMMDD_HHMMSS` or a meaning
 python _cli.py theme-guard <客户名> --set "<topic>" --scope client
 ```
 
-This calls `_theme_guard.save_decision()` which writes the canonical format. Use when user explicitly says "记一下" with a clear topic.
+This calls `_theme_guard.save_decision()` which writes the canonical format. Use when user explicitly says "note this down" with a clear topic.
 
 ### Option B — Manual append (for AI-detected decisions during work)
 
@@ -92,7 +92,7 @@ Before `save <客户>`, scan the session for unrecorded decisions. If found, app
 
 User: "记一下，ERP 这套不动，这次只做上面 7 个系统的替换迁移"
 
-1. Confirm: this is a铁律 (cross-session, cross-task)
+1. Confirm: this is an iron rule (cross-session, cross-task)
 2. Append to `_knowledge/clients/蓝海集团/decisions.md`:
 
 ```markdown
@@ -161,7 +161,7 @@ During spec review, AI notices the spec lists "asset management" as a core syste
 ## Anti-patterns (do NOT)
 
 - Record transient state as `permanent` (e.g. "今天的会议纪要" — that's `context.md`)
-- Record without `理由` (project rule: 保留决策依据)
+- Record without `理由` (project rule: preserve decision rationale)
 - Use `scope: task` without `task_id` (parser will synthesize one from timestamp, but meaningful ids are better)
 - Rewrite existing entries (append-only; if wrong, add a new entry that supersedes it)
 - Record decisions the user didn't actually make (AI inference must be marked as `来源: AI 推断` and confirmed with user first)
