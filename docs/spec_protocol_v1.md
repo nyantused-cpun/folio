@@ -13,7 +13,7 @@
 
 | 字段 | 必填 | 缺省 | 说明 |
 |------|------|------|------|
-| `confirmed` | 是（生成前） | `false` | 确认门禁。未设 `true` 时所有 `*-build` 抛 `RenderBlockedError`（`_cli_guards.py:16-21`，判定单点 `_cli_guards.py:6-13`）。只能由人工确认后添加，AI 不得自设 |
+| `confirmed` | 是（生成前） | `false` | 确认门禁。未设 `true` 时所有 `*-build` 抛 `RenderBlockedError`（`src/_cli_guards.py:16-21`，判定单点 `src/_cli_guards.py:6-13`）。只能由人工确认后添加，AI 不得自设 |
 | `client_name` | 否 | — | **存在但为空字符串时阻断生成**（`_renderer/__init__.py:101-102`）；不写该字段则不检查 |
 | `project` | 否 | — | 信息字段，渲染器不消费（outline-to-spec 写入，`_outline_to_spec.py:352`） |
 | `style` | 否 | `enterprise` | 风格名：`education / enterprise / tech / gov`（`_renderer/__init__.py:112`）。注意：v1 中 HTML 端不消费 styles.json（重构计划 §一），`--style` 仅影响 PPTD/报价 |
@@ -225,8 +225,8 @@ HTML/PPTD 渲染为占位卡（`_renderer.diagram` 管线）；DOCX 端降级为
 
 ### 6.1 confirmed 门禁
 
-- 判定单点：`_cli_guards.is_confirmed`（`_cli_guards.py:6-13`），全项目 4 处检查点都走这里，不得各自 `spec.get("confirmed")`。
-- 未确认：抛 `RenderBlockedError`，生成硬阻断（`_cli_guards.py:16-21`）。
+- 判定单点：`src/_cli_guards.is_confirmed`（`src/_cli_guards.py:6-13`），全项目 4 处检查点都走这里，不得各自 `spec.get("confirmed")`。
+- 未确认：抛 `RenderBlockedError`，生成硬阻断（`src/_cli_guards.py:16-21`）。
 - 生成器（spec-gen / outline-to-spec / quote-spec-gen）产出的草稿一律不带 `confirmed: true`，须人工确认后手动添加。
 
 ### 6.2 client_name 空值阻断

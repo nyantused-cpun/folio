@@ -84,7 +84,7 @@ Three selling points:
 
 - **v1.0 released** (2026-08-15): skills + guard + install script
 - **P1 landed** (2026-08-15): 15 tools + event plugin
-- **v1.0.2 released** (2026-08-16): CI pipeline, contributor-friendly infrastructure, bilingual demo outputs
+- **v1.0.2 released** (2026-08-16): CI pipeline, contributor-friendly infrastructure, bilingual demo outputs, English-localized skills
 - **v1.2 planned**: Lanting mode v2 + graph projection
 - **v1.3 planned**: sidebar panel + Packs manager
 
@@ -95,3 +95,12 @@ Three selling points:
 1. **Install**: run `setup/install.ps1` (kernel) → `setup/install-folio-plugins.ps1 -Install` (plugin layer) → restart dsh web
 2. **Use**: a new session auto-injects the entry protocol reminder; just ask "which folio tools do I have"
 3. **Swap**: install the Folio Pack for your industry; change the SOP section of the preset for your way of working
+
+## 9. Community help wanted
+
+**Currently missing — links, PRs and experience welcome**:
+- Word layout and typesetting
+- Excel formatted tables and formula handling
+- Linux / macOS port
+
+**Next iteration**: richer PPT narrative templates and examples · richer UI layouts · Word processing improvements · long-text optimization · community plugin integration to send a selected section directly to AI for editing.
