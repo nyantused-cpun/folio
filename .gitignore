@@ -22,6 +22,10 @@ _archive/
 .versions/
 _assets/
 
+# 运行时日志与 skill 同步镜像（CLI/插件脚本自建，不入库）
+.trae/
+.agents/
+
 # 系统残留
 _tmp_*/
 *.bak

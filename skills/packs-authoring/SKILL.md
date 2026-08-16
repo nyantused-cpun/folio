@@ -39,7 +39,7 @@ my-pack/
 4. **约束清单**：这个领域的铁律（禁词、必须覆盖的主题、门禁参数）——照 `docs/产品定位与三卖点` §5 边界第 2 条：**包必须携带门禁参数**。
 5. **样例**：用公开案例材料跑一遍 spec-gen，把产物放进 `samples/`。
 6. **验证清单**（自检，v0.1 人工执行）：
-   - [ ] outline.yml 能被 outline-to-spec 读取（`python src/_cli.py outline-list` 能看到你的场景）
+   - [ ] outline.yml 能被 outline-to-spec 读取（`python _cli.py outline-list` 能看到你的场景）
    - [ ] 用样例材料跑通 spec → html-build → 产出可看
    - [ ] 包内没有客户真实数据（脱敏检查）
    - [ ] 文案过 de-ai-style 检查（禁用词/证据边界）

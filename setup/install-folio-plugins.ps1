@@ -295,7 +295,19 @@ try {
                 Write-Step "pre-sales preset 已追加 folio 两插件行（备份: $presetBak）"
             }
         }
-        # 4. 清理旧拓扑残留 Junction
+        # 4. skills 挂载：发布版 skills/ -> .agents/skills/（DSH 项目级 skill 发现目录）
+        $pythonExe = Join-Path $projRoot ".venv\Scripts\python.exe"
+        if (Test-Path $pythonExe) {
+            & $pythonExe (Join-Path $projRoot "_cli.py") skills-sync
+            if ($LASTEXITCODE -ne 0) {
+                Write-Step "[WARN] skills-sync 退出码 $LASTEXITCODE（可稍后手动补跑）"
+            } else {
+                Write-Step "skills 已同步到 .agents/skills（DSH 自动识别）"
+            }
+        } else {
+            Write-Step "[WARN] 未找到 $pythonExe，跳过 skills 自动挂载（可稍后手动运行 skills-sync）"
+        }
+        # 5. 清理旧拓扑残留 Junction
         Remove-LegacyJunctions
         Write-Host "安装完成。**重启 dsh web 后生效**（host 插件无 HMR）。"
         exit 0

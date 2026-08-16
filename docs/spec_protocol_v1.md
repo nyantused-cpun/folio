@@ -1,9 +1,9 @@
 # Spec 协议 v1（spec.yml 字段与行为单一事实源）
 
 > 版本 v1 · 2026-07-20 · 状态：生效
-> 上游：`docs/refactor_plan_spec_pipeline_2026-07-20.md` §六（Phase 1 协议层收敛），本文档是其 §6.4 交付物
+> 上游：内部协议重构计划 §六（Phase 1 协议层收敛），本文档是其 §6.4 交付物；该计划文档不随发布版分发
 > 代码事实源：`_renderer/elements.py`（字段兼容 + 能力矩阵 + 降级文本）、`_renderer/schema.py`（全量校验）；本文与代码冲突时以代码为准并回修本文
-> 读者：所有写 spec 的人与 AI。流程入口（confirmed 门禁、生成命令）见 `.trae/skills/spec-writing-guide/SKILL.md`，本协议只管"字段怎么写、写了会怎样"
+> 读者：所有写 spec 的人与 AI。流程入口（confirmed 门禁、生成命令）见 `skills/spec-writing-guide/SKILL.md`，本协议只管"字段怎么写、写了会怎样"
 
 ---
 
@@ -219,7 +219,7 @@ HTML/PPTD 渲染为占位卡（`_renderer.diagram` 管线）；DOCX 端降级为
 | relationship | `cross_4a_reconcile` | `terms` |
 | relationship | `automation_table` | `tasks` |
 
-各子类型的字段语义与画法见 `docs/diagram_visual_design_v1_2026-07-19.md` §3。写作约定：**一页一图**（PPTD content 页无分页，多张大图溢出页面）。
+各子类型的字段语义与画法见内部视觉规范文档（不随发布版分发）。写作约定：**一页一图**（PPTD content 页无分页，多张大图溢出页面）。
 
 ## 6. 行为规则
 
@@ -265,7 +265,7 @@ HTML/PPTD 渲染为占位卡（`_renderer.diagram` 管线）；DOCX 端降级为
 
 ### 6.7 输出路径白名单
 
-生成产出只能写入项目 `output/` 目录（commonpath 目录级比较，防前缀兄弟目录绕过），否则抛 `OutputPathNotAllowedError`（`_renderer/__init__.py:32-50`）。
+生成产出只能写入项目 `output/` 目录（commonpath 目录级比较，防前缀兄弟目录绕过），否则抛 `OutputPathNotAllowedError`（`src/_renderer/__init__.py`）。
 
 ### 6.8 渲染报告（RenderReport）
 
@@ -274,5 +274,5 @@ HTML/PPTD 渲染为占位卡（`_renderer.diagram` 管线）；DOCX 端降级为
 ## 7. 版本说明
 
 - **v1（2026-07-20）**：首版协议。随重构 Phase 1 落地：`_renderer/elements.py` 协议层新增（能力矩阵 10 元素 × 3 端、normalize 单点、degrade_text、RenderReport）、`schema.py` 扩展为全量校验（8 种基础元素必填规则 + 未知 type 报错）、三端渲染器接入协议层（HTML 补 heading、DOCX 补 pullquote + diagram/placeholder 降级、PPTD 补 heading + architecture_4a 降级）、verify 消费渲染报告。
-- **与重构计划的关系**：`docs/refactor_plan_spec_pipeline_2026-07-20.md` 是"为什么改、分几步改"的计划文档（§六 6.1-6.3 是 v1 的实现依据，§6.4 要求写本文档）；本文档是"字段怎么写"的规范性参考。计划文档会随 Phase 推进归档，本文档随协议演进持续更新。
+- **与重构计划的关系**：本文档源自内部协议重构计划（"为什么改、分几步改"的计划文档不随发布版分发）；本文档是"字段怎么写"的规范性参考，随协议演进持续更新。
 - **演进预期**：Phase 2（样式收敛、pptd 溢出防线、elementId 唯一化）不改变本协议的字段层；若新增元素类型或调整能力矩阵，先改 `_renderer/elements.py` 再回修本文并升版本号。

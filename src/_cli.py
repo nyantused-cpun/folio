@@ -362,7 +362,7 @@ def cmd_index_rebuild(args):
 
 
 def cmd_skills_sync(args):
-    """.trae/skills/（或发布版 skills/）-> .agents/skills/ 单向镜像（事实源在前者）。"""
+    """技能目录（发布版 skills/ 或 .trae/skills）-> .agents/skills/ 单向镜像。"""
     from _paths import SKILLS_DIR
     from _skills_sync import sync_skills
     src = SKILLS_DIR
@@ -371,7 +371,7 @@ def cmd_skills_sync(args):
         print(f"错误: 技能源目录不存在: {src}")
         sys.exit(1)
     report = sync_skills(src, dst, prune=args.prune)
-    print("技能同步完成（.trae/skills -> .agents/skills）：")
+    print(f"技能同步完成（{src} -> {dst}）：")
     print(f"  新增 {len(report['added'])} · 更新 {len(report['updated'])} · 未变 {len(report['unchanged'])} · 剪枝 {len(report['pruned'])}")
     for label in ("added", "updated", "pruned"):
         for name in report[label]:

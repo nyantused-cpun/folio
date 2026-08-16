@@ -33,7 +33,7 @@ dsh plugin --profile web add @nyantused/folio-dsh-events
 #              当前能力等级 L0：零 key 可跑（DSH 下读图/搜索/审查走宿主原生）
 ```
 
-装完后：重启 DSH → 开新会话 → 直接说「帮我做一份 XX 方案」。引擎的 skills 会被 DSH 自动识别。
+装完后：重启 DSH → 开新会话 → 直接说「帮我做一份 XX 方案」。引擎的 skills 已由插件安装脚本自动同步到 `.agents/skills/`，DSH 会直接识别；若未走脚本安装，可手动补跑 `python _cli.py skills-sync`。
 
 **零配置起步**：不配任何 key 也能跑（L0）；配 1 个 embedding key 解锁语义召回（L1）；配读图/搜索 key 解锁独立 CLI 场景（L2）。每个能力槽位的取舍见 [docs/能力配置引导](docs/能力配置引导_v1_2026-08-15.md)。
 
@@ -70,7 +70,9 @@ HTML / DOCX / 报价三种格式零外部依赖，装完即用。**PPT 转换**�
 
 ```
 folio/
-├── src/          # 内核（63 个 CLI 命令 + 渲染器 + 检索/记忆/质量链）
+├── _cli.py        # 根级 CLI 转发入口（`python _cli.py <命令>`，实现见 src/）
+├── .env.example   # 环境配置模板（install.ps1 会自动复制为根 .env；留空即 L0）
+├── src/          # 内核（63 个 CLI 子命令，含 3 个已废弃兼容入口 + 渲染器 + 检索/记忆/质量链）
 ├── skills/       # 11 个方法论 skill（含 packs-authoring 创作指南）
 ├── plugins/      # DSH 插件层：folio-tools（15 个原生工具 + L0 守卫子入口）+ folio-events（会话协议，preset 挂载）
 ├── preset/       # 兰亭 agent preset 模板（install-folio-plugins.ps1 安装时落盘/替换占位符）
@@ -157,7 +159,7 @@ pwsh .\setup\install-community-plugins.ps1 -Verify
 
 ### 3. 极简模式与平台
 
-- 兰亭 preset 设计上对齐 DSH 官方 **minimal 蓝本**（不挂 code 工具、无冗余，塑造专用平台体验）；
+- 兰亭 preset **最初设计**对齐 DSH 官方 **minimal 蓝本**（不挂 code 工具、无冗余，塑造专用平台体验）；
 - 实际基线采用 **standard 模板 + 精选工具**（禁用 codex/claude 等），原因是官方 minimal 在 Windows 上存在 PTY 兼容问题（`terminal inspection is unsupported on platform win32`）——这是对 Windows 的兼容性修正，不是偏离方向；
 - 当前 **首发 Windows**；macOS/Linux 安装脚本（install.sh）在 v1.1 路线中。
 
@@ -173,7 +175,7 @@ pwsh .\setup\install-community-plugins.ps1 -Verify
   2. GitHub 集成：`dsh-github-connector` 或自研 `folio_github` 工具
   3. Token 可视化：`context-vista` 或自研会话 Token 面板
   4. 团队可视化：`dsh-agent-teams` 或基于 DSH subagent 事件的自研面板
-- **v1.1 其余规划**：`domain-pack.yml` 方法论包契约（机械校验）+ 市场营销冒烟包 + PPT 工具链正式分发
+- **v1.1 其余规划**：`domain-pack.yml` 方法论包契约（机械校验）+ 市场营销冒烟包 + PPT 截图目检的跨平台支持（当前 `--shots` 依赖本机 PowerPoint）
 - 平台：Windows 首发（macOS/Linux 安装脚本待补，欢迎社区贡献 install.sh / 环境适配；或等待官方工具链更成熟后跟进）；PPT 转换的 PowerPoint 截图要求见安装脚本输出
 
 ## 许可证
