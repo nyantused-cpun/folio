@@ -453,7 +453,7 @@ _KEY_FEATURES = [
     ("VOLCENGINE_ACCESS_KEY", "字节搜索（AK/SK 方式，需配 SECRET_KEY）"),
     ("DEEPSEEK_API_KEY", "Chat 备选 provider"),
     ("MIMO_API_KEY", "Chat 备选 + 质量自评默认"),
-    ("MINIMAX_API_KEY", "Chat 备选 + 图片理解"),
+    ("MINIMAX_API_KEY", "Chat 备选 + 图片理解（视觉槽位，可替换为其他兼容视觉端点）"),
 ]
 
 

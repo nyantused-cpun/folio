@@ -1404,7 +1404,7 @@ def build_parser():
     p_vd = sub.add_parser("vision-describe", help="把图片转成文字描述，供纯文本 agent 当上下文使用")
     p_vd.add_argument("image", help="图片路径（png/jpg/gif/bmp/webp/svg/tiff/heic）")
     p_vd.add_argument("--prompt", "-p", default=None, help="问图模型的问题（默认：请描述这张图片的内容，json 模式追加结构化模板）")
-    p_vd.add_argument("--provider", default=None, help="vision provider（默认 minimax，当前在 _cloud_llm.PROVIDERS 里）")
+    p_vd.add_argument("--provider", default=None, help="vision provider（默认 minimax；可指定其他 OpenAI 兼容视觉端点）")
     p_vd.add_argument("--format", choices=["text", "json"], default="json",
                       help="输出格式：json（默认，含 source_image 字段，适合进 spec 引用）或 text")
     p_vd.add_argument("--rounds", type=int, choices=[1, 2], default=1,

@@ -79,6 +79,7 @@ Get-Content $envPath -Encoding UTF8 | ForEach-Object {
 }
 $level = "L0 (zero-key: BM25 recall + render + quality gates; DSH host covers vision/search/review)"
 $hasEmbed = $env:ZHIPU_API_KEY -or $env:SILICONFLOW_API_KEY
+# 视觉槽位：内置 provider 默认 MiniMax；如替换为其他 OpenAI 兼容视觉端点，在此按对应 key 扩展检测
 $hasVision = $env:MINIMAX_API_KEY
 $hasSearch = $env:TAVILY_API_KEY -or $env:ASK_ECHO_SEARCH_INFINITY_API_KEY
 if ($hasEmbed) {

@@ -219,4 +219,6 @@ legacy_bluegreen = v1.2 冻结蓝绿原样收编（老 spec 缺省，视觉不�
 改什么样式）。
 
 用法：`python _cli.py vision-describe <截图> --prompt "<第1/2/3层问题 + 输出格式>"`。
+若 vision-describe 返回空（视觉 key 未配置 / agent 自身多模态 / 网络失败），
+必须明确告知用户「视觉自检未执行」，不得声称已自检；可改为人工截图抽查。
 媒介差异要客观指出（16:9 PPT 页 vs 长滚动 HTML 页），但 PPT 侧必须做到老材料那种密度。
