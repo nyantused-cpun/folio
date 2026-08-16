@@ -1,15 +1,19 @@
 // @nyantused/folio-dsh-tools 纯函数自检脚本（沙箱内可跑：无 spawn、无外部依赖）
 // 用户终端可另跑 node --test test/cli-bridge.test.mjs（同一断言集合）。
 import assert from "node:assert/strict";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { TOOL_DEFS } from "../defs.js";
 import { createGuardRules } from "../guard.js";
 
 const byName = Object.fromEntries(TOOL_DEFS.map((d) => [d.name, d]));
 const CLI_WHITELIST_RE = /python\.exe"?\s+_cli\.py(?:\s+\S+)*\s*$/i;
-const PYTHON = "D:/folio/.venv/Scripts/python.exe";
+// PROJECT_DIR 仅作测试桩（纯字符串断言，无需真实存在）：从本文件位置推导，
+// 不硬编码作者机器路径。
+const PROJECT_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
+const PYTHON = PROJECT_DIR.replace(/\\/g, "/") + "/.venv/Scripts/python.exe";
 const cliCommandString = (def, args) => [PYTHON, "_cli.py", ...def.buildArgs(args)].join(" ");
 
-const PROJECT_DIR = "D:/folio";
 const rules = createGuardRules(PROJECT_DIR);
 const inProject = (name, command, extra = {}) => ({
   name,

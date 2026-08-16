@@ -60,7 +60,7 @@ Folio 是给 AI 宿主（DeepSeek Harness / Trae / Kimi 等）外挂的**长程�
 ## 快速开始
 
 ```powershell
-git clone <repo-url> folio
+git clone https://github.com/nyantused-cpun/folio.git folio
 cd folio
 .\setup\install.ps1        # 建 venv + 装依赖 + 生成配置 + 自检
 # DSH 插件层（可选，建议装）：

@@ -1,0 +1,5 @@
+# 开发/测试依赖（贡献者与 CI）：pip install -r requirements-dev.txt
+pytest>=8.0
+
+# 可选：本地跑渲染密度检查用例（tests/test_density.py）另装 playwright 并执行
+# `playwright install chromium`；CI 不安装（无浏览器时相关用例自动跳过）。

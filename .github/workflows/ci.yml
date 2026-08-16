@@ -1,0 +1,39 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+jobs:
+  test:
+    name: test (windows, py 3.12)
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
+
+      - name: Run pytest
+        run: pytest tests -q
+
+      - name: Plugin JS self-check (folio-tools)
+        run: node plugins/folio-tools/test/run-check.mjs
+
+      - name: Plugin JS syntax check
+        run: |
+          node --check plugins/folio-tools/index.js
+          node --check plugins/folio-tools/defs.js
+          node --check plugins/folio-tools/guard.js
+          node --check plugins/folio-events/index.js
+          node --check plugins/folio-events/state.js

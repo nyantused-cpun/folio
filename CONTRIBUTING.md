@@ -11,13 +11,18 @@
 > 环境要求：Windows 10/11 + PowerShell + Python ≥ 3.10（安装脚本自动探测 `py`/`python`/`python3`）；Node.js 不需要；`pptd-build --shots` 截图目检才需要本机 PowerPoint。
 
 ```powershell
-git clone <repo-url> folio
+git clone https://github.com/nyantused-cpun/folio.git folio
 cd folio
 .\setup\install.ps1     # 建 venv + 装依赖 + 生成 .env + 自检
 ```
 
 - 零配置即可跑（L0 能力等级）；升级语义召回按 `docs/能力配置引导` 配 1 个 key。
-- 测试：`.venv\Scripts\python.exe -m pytest tests`（tests 里不带客户数据，全部可公开运行）。
+- 测试：
+  ```powershell
+  .venv\Scripts\python.exe -m pip install -r requirements-dev.txt   # 首次
+  .venv\Scripts\python.exe -m pytest tests
+  ```
+  （tests 里不带客户数据，全部可公开运行；密度检查用例在无 playwright 时自动跳过。）
 
 ## 提交 Issue
 
@@ -27,7 +32,7 @@ cd folio
 
 ## 提交 PR
 
-1. 从 `main` 开分支，命名 `fix/`、`feat/` 或 `pack/` 前缀；
+1. 从 `master` 开分支，命名 `fix/`、`feat/` 或 `pack/` 前缀；
 2. 改动尽量小：一个 PR 一个主题；
 3. 文本改动不需要测试；代码改动请跑相关测试并说明；
 4. 涉及客户可见文案时，遵守 `skills/de-ai-style` 的检查项（禁用词、证据边界）；
