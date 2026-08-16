@@ -1,6 +1,22 @@
 # 兰亭（Folio）· 咨询/汇报材料生成引擎
 
-> **English TL;DR** — Folio is a DSH-native material-generation engine for consultants: 15 schema-validated `folio_*` tools, session-protocol auto-save, an L0 guard, and a swappable methodology-pack system. Zero API keys to start (L0); one embedding key unlocks semantic recall (L1). Requirements: Windows 10/11, PowerShell, Python ≥ 3.10 — **Node.js not required**. See the [English product brief](docs/product-brief_v4.0_en.md), or open the bilingual demo outputs in the [v1.0.2 release](https://github.com/nyantused-cpun/folio/releases/tag/v1.0.2).
+> ## 🚧 社区共建（Community help wanted）
+>
+> **当前欠缺（欢迎提供相关链接 / PR / 经验分享）**：
+> - **Word 处理排版**
+> - **Excel 带格式表格处理与公式处理**
+> - **Linux / macOS 适配**
+>
+> **下一步迭代计划**：
+> - 丰富 PPT 叙事模板与图例
+> - 丰富 UI 版式
+> - Word 处理优化
+> - 长文本优化
+> - 接入社区插件：选中某一部分直接发给 AI 改
+>
+> 有相关链接或想贡献，欢迎提 Issue / PR / Discussion。
+
+> **English TL;DR** — Folio is a DSH-native material-generation engine for consultants: 15 schema-validated `folio_*` tools, session-protocol auto-save, an L0 guard, and a swappable methodology-pack system. Zero API keys to start (L0); one embedding key unlocks semantic recall (L1). Requirements: Windows 10/11, PowerShell, Python ≥ 3.10 — **Node.js not required**. See the [English product brief](docs/product-brief_v4.0_en.md), or open the bilingual demo outputs in the [v1.0.2 release](https://github.com/nyantused-cpun/folio/releases/tag/v1.0.2). **Help wanted: Word layout, Excel formatting/formulas, Linux/mac ports.**
 
 > **材料生成引擎 + 可组合方法论包，首发深度适配 DSH。**
 > Folio = 对开本/作品集：把客户扔进来的材料，装订成能送达的汇报材料。
@@ -195,6 +211,12 @@ pwsh .\setup\install-community-plugins.ps1 -Verify
   3. Token 可视化：`context-vista` 或自研会话 Token 面板
   4. 团队可视化：`dsh-agent-teams` 或基于 DSH subagent 事件的自研面板
 - **v1.1 其余规划**：`domain-pack.yml` 方法论包契约（机械校验）+ 市场营销冒烟包 + PPT 截图目检的跨平台支持（当前 `--shots` 依赖本机 PowerPoint）
+- **下一步迭代（功能方向，欢迎共建）**
+  - 丰富 PPT 叙事的模板与图例
+  - 丰富 UI 版式
+  - Word 处理优化
+  - 长文本优化
+  - 接入社区插件：选中某一部分直接发给 AI 改
 - 平台：Windows 首发（macOS/Linux 安装脚本待补，欢迎社区贡献 install.sh / 环境适配；或等待官方工具链更成熟后跟进）；PPT 转换的 PowerPoint 截图要求见安装脚本输出
 
 ## 许可证
