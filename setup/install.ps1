@@ -1,6 +1,12 @@
 # Folio one-shot installer (Windows first)
 # Usage:  powershell -ExecutionPolicy Bypass -File .\setup\install.ps1
 # Creates .venv, installs deps, generates .env, prints capability level.
+#
+# Requirements:
+#   - Windows 10/11 + PowerShell (5.1+ or 7)
+#   - Python >= 3.10 (auto-detected: py / python / python3; must be pre-installed)
+#   - Network access to PyPI for pip install
+#   - Node.js NOT required; PowerPoint optional (only --shots screenshot needs COM)
 
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path

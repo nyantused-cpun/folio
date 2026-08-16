@@ -8,6 +8,8 @@
 
 ## 快速开始
 
+> 环境要求：Windows 10/11 + PowerShell + Python ≥ 3.10（安装脚本自动探测 `py`/`python`/`python3`）；Node.js 不需要；`pptd-build --shots` 截图目检才需要本机 PowerPoint。
+
 ```powershell
 git clone <repo-url> folio
 cd folio

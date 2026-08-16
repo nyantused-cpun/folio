@@ -9,6 +9,20 @@ Folio 是给 AI 宿主（DeepSeek Harness / Trae / Kimi 等）外挂的**长程�
 
 ---
 
+## 环境要求（Requirements）
+
+| 依赖 | 要求 | 说明 |
+|---|---|---|
+| 操作系统 | Windows 10/11 | 首发仅 Windows；macOS/Linux 安装脚本在 v1.1 路线 |
+| PowerShell | 5.1+ 或 7 | 安装脚本用 `powershell` / `pwsh` 均可 |
+| Python | **≥ 3.10** | 安装脚本自动探测 `py` / `python` / `python3`；未找到会失败并提示官网 |
+| Git | 需要 | `git clone` 获取仓库 |
+| 网络 | 首次安装需访问 PyPI | `install.ps1` 用 pip 安装 requirements.txt |
+| DSH | **仅插件层需要**：已安装且 `dsh` 在 PATH，版本对齐 0.1.0-rc.6 | 不装 DSH 也能用 CLI 内核（L0）；装了才有 15 工具 / 守卫 / 会话协议 |
+| Node.js | **不需要** | PPT 转换用 python-pptx；JS 插件由 DSH 宿主加载 |
+| PowerPoint | **可选** | 仅 `pptd-build --shots` 截图目检需要（COM）；不装则跳过截图，PPTX 生成正常 |
+| API key | 零 key 可跑（L0） | 建议按 `docs/能力配置引导` 配 1 个 embedding key 升级语义召回 |
+
 ## 快速开始（≤5 分钟）
 
 ```powershell
