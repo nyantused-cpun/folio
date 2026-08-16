@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
-"""skills-sync：.trae/skills/ -> .agents/skills/ 单向镜像。
+"""skills-sync：技能目录 -> .agents/skills/ 单向镜像。
 
-.trae/skills/ 是技能唯一事实源；.agents/skills/ 是派生副本（供其他 agent 环境使用），
-此前手工维持、已出现漂移。按目录内容哈希复制新增/变更，--prune 删除多余项。
+发布版技能事实源是仓库根 `skills/`（或运行时 `.folio/skills/`）；
+`.agents/skills/` 是 DSH 宿主派生副本，此前手工维持、已出现漂移。
+按目录内容哈希复制新增/变更，--prune 删除多余项。
 只同步含 SKILL.md 的目录。
 """
 import hashlib

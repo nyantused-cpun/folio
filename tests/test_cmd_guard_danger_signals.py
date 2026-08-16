@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+﻿# -*- coding: utf-8 -*-
 """pretool_cmd_guard 危险信号判定 + ask 记忆（2026-08-11 增强）的回归测试。
 
 场景：
@@ -17,7 +17,7 @@ import pytest
 SCRIPT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, SCRIPT_DIR)
 
-HOOKS_DIR = os.path.join(SCRIPT_DIR, ".trae", "hooks")
+HOOKS_DIR = os.path.join(SCRIPT_DIR, ".folio", "hooks")
 
 
 _HOOK_MODS = {}
@@ -39,7 +39,7 @@ def _load_hook(name):
 
 @pytest.fixture()
 def guard(tmp_path, monkeypatch):
-    """加载 guard + 隔离 ask 缓存到 tmp（不污染真实 .trae/logs/）。"""
+    """加载 guard + 隔离 ask 缓存到 tmp（不污染真实 .folio/logs/）。"""
     g = _load_hook("pretool_cmd_guard")
     monkeypatch.setattr(g, "_approved_cache_path", lambda: str(tmp_path / "approved.json"))
     monkeypatch.setattr(g, "ASK_TTL", 3600)

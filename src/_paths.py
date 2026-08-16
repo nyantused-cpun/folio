@@ -22,7 +22,7 @@ import pickle
 
 # 发布版目录契约（2026-08-16）：代码在 src/，用户工作区在仓库根。
 # CODE_DIR  = src/（styles.json / assets 等代码资源所在）
-# SCRIPT_DIR = 仓库根（.env / output / inbox / _knowledge / .trae 等用户数据所在）
+# SCRIPT_DIR = 仓库根（.env / output / inbox / _knowledge / .folio 等用户数据所在）
 CODE_DIR = os.path.dirname(os.path.abspath(__file__))
 SCRIPT_DIR = os.path.dirname(CODE_DIR)
 
@@ -32,7 +32,7 @@ KNOWLEDGE_DIR = os.path.join(SCRIPT_DIR, "_knowledge")
 INBOX_DIR = os.path.join(SCRIPT_DIR, "inbox")
 
 # 日志与历史
-LOGS_DIR = os.path.join(SCRIPT_DIR, ".trae", "logs")
+LOGS_DIR = os.path.join(SCRIPT_DIR, ".folio", "logs")
 TASK_HISTORY = os.path.join(LOGS_DIR, "task_history.json")
 
 # 渲染相关
@@ -42,7 +42,7 @@ STYLES_PATH = os.path.join(CODE_DIR, "_renderer", "styles.json")
 PROFILE_PATH = os.path.join(SCRIPT_DIR, "_knowledge", "me", "profile.md")
 
 # 产出扫描跳过目录（D-118：audit / stop_verify 单一数据源）
-# hooks 侧镜像在 .trae/hooks/_output_skip_dirs.json（hook 不能 import 内部模块，
+# hooks 侧镜像在 .folio/hooks/_output_skip_dirs.json（hook 不能 import 内部模块，
 # json.load + 硬编码 fallback；tests/test_skip_dirs_consistency.py 快照兜底一致性）
 OUTPUT_SKIP_DIRS = (
     "node_modules", ".versions", "dist", ".git",
@@ -68,8 +68,8 @@ BANNED_PHRASES = ["综上所述", "总而言之", "不难看出", "可以说"]
 # 世界书（spec 第三块）
 INSIGHTS_DIR = os.path.join(LOGS_DIR, "insights")
 
-# 技能（内部布局 .trae/skills 事实源 + 发布版根 skills/ 兼容）
-SKILLS_DIR = os.path.join(SCRIPT_DIR, ".trae", "skills")
+# 技能（发布版根 skills/ 优先；.folio/skills 兼容宿主工作区布局）
+SKILLS_DIR = os.path.join(SCRIPT_DIR, ".folio", "skills")
 if not os.path.isdir(SKILLS_DIR) and os.path.isdir(os.path.join(SCRIPT_DIR, "skills")):
     SKILLS_DIR = os.path.join(SCRIPT_DIR, "skills")
 SKILL_READ_DIR = os.path.join(LOGS_DIR, "skill_read")

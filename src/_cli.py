@@ -362,7 +362,7 @@ def cmd_index_rebuild(args):
 
 
 def cmd_skills_sync(args):
-    """技能目录（发布版 skills/ 或 .trae/skills）-> .agents/skills/ 单向镜像。"""
+    """技能目录（发布版 skills/ 或 .folio/skills）-> .agents/skills/ 单向镜像。"""
     from _paths import SKILLS_DIR
     from _skills_sync import sync_skills
     src = SKILLS_DIR
@@ -733,7 +733,7 @@ def cmd_quote_search(args):
 
 
 def cmd_consolidate(args):
-    """自动固化：检测客户反复出现的模式，升级到 .trae/rules/。"""
+    """自动固化：检测客户反复出现的模式，升级到 .folio/rules/。"""
     consolidate(args.client, threshold=args.threshold)
 
 
@@ -1369,13 +1369,13 @@ def build_parser():
     p_er.add_argument("--force", action="store_true", help="强制全量重建")
     sub.add_parser("embed-stats", help="查看 Embedding 索引统计")
 
-    # 技能目录同步（.trae/skills -> .agents/skills 单向镜像）
-    p_ssync = sub.add_parser("skills-sync", help="把 .trae/skills/ 单向同步到 .agents/skills/（事实源在前者，后者勿手改）")
+    # 技能目录同步（skills/ 或 .folio/skills -> .agents/skills 单向镜像）
+    p_ssync = sub.add_parser("skills-sync", help="把技能目录（发布版根 skills/ 或 .folio/skills/）单向同步到 .agents/skills/（DSH 识别副本）")
     p_ssync.add_argument("--prune", action="store_true", help="删除 .agents/skills/ 中源端不存在的技能")
 
     # load-skill：读 skill + 写已读哨兵（REQUIRE_SKILL_SENTINEL=true 时的门禁入口）
     p_ls = sub.add_parser("load-skill", help="打印 SKILL.md 全文并记录已读哨兵（生成前必读；配合 REQUIRE_SKILL_SENTINEL=true 机械门禁）")
-    p_ls.add_argument("skill", help="技能名（.trae/skills/<名称>/SKILL.md）或 list")
+    p_ls.add_argument("skill", help="技能名（skills/<名称>/SKILL.md）或 list")
 
     # 切片审计
     p_ci = sub.add_parser("chunk-inspect", help="检查某文件的分块结果")
@@ -1511,7 +1511,7 @@ def build_parser():
     p_pd.add_argument("--client", default=None, help="客户名（触发生成前验证）")
 
     # 自动固化
-    p_con = sub.add_parser("consolidate", help="检测客户反复出现的模式，升级到 .trae/rules/")
+    p_con = sub.add_parser("consolidate", help="检测客户反复出现的模式，升级到 .folio/rules/")
     p_con.add_argument("client", help="客户名")
     p_con.add_argument("--threshold", type=int, default=3, help="出现次数阈值（默认3）")
 

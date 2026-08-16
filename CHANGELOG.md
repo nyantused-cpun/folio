@@ -1,4 +1,4 @@
-# Changelog
+﻿# Changelog
 
 > 版本线说明：本仓库记录**对外发布线**（Folio），与内部工作区版本线（售前助手 v3.x）相互独立、不对齐。只有值得对外说的事才升版本。
 
@@ -6,7 +6,7 @@
 
 ### 修复
 
-- **发布版路径契约统一为「仓库根 = 用户工作区」**：根级 `_cli.py` 转发入口（插件/guard/skills 的 `python _cli.py` 口径全部可用）；`.env`、output、inbox、_knowledge、.trae 从 `src/` 内迁回仓库根；`load-skill`/`skills-sync` 兼容发布版根 `skills/` 布局。
+- **发布版路径契约统一为「仓库根 = 用户工作区」**：根级 `_cli.py` 转发入口（插件/guard/skills 的 `python _cli.py` 口径全部可用）；`.env`、output、inbox、_knowledge、.folio 从 `src/` 内迁回仓库根；`load-skill`/`skills-sync` 兼容发布版根 `skills/` 布局。
 - **PPT 后端口径更正**：README/RELEASE_NOTES/install.ps1 由「依赖 node」更正为自研 python-pptx 后端（`--shots` 截图需本机 PowerPoint）。
 - **skill 废弃命令清理**：`ui-design-system` 与 `spec-writing-guide` 中残留的 `ppt-page`/`ppt-build` 用法改为 `html-build` 双输出 + `pptd-build`（D-090）。
 - **文档冲突清理**：技术白皮书事件机制更新为 `agent/disposed` 扫描；产品定位 8 命令工具化更正为 15 个；guard 版本对外口径统一为「随 folio-dsh-tools 1.1.0 分发」；README 死链/测试数/版本状态修正；preset 移除内部模型硬编码。

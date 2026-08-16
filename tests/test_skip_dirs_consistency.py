@@ -1,7 +1,7 @@
-# -*- coding: utf-8 -*-
+﻿# -*- coding: utf-8 -*-
 """D-118：skip 目录三处一致快照测试。
 
-单一数据源链条：_paths.OUTPUT_SKIP_DIRS（CLI）== .trae/hooks/_output_skip_dirs.json
+单一数据源链条：_paths.OUTPUT_SKIP_DIRS（CLI）== .folio/hooks/_output_skip_dirs.json
 （hook 读取）== hook 内硬编码 fallback（fail-safe）。任一处漂移本测试挂掉。
 """
 
@@ -13,7 +13,7 @@ import sys
 import _paths
 
 SCRIPT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-JSON_PATH = os.path.join(SCRIPT_DIR, ".trae", "hooks", "_output_skip_dirs.json")
+JSON_PATH = os.path.join(SCRIPT_DIR, ".folio", "hooks", "_output_skip_dirs.json")
 
 
 def _load_hook_module(name, path):
@@ -41,14 +41,14 @@ def test_audit_uses_paths_constant():
 
 def test_path_guard_reads_json():
     mod = _load_hook_module("hook_path_guard_test",
-                            os.path.join(SCRIPT_DIR, ".trae", "hooks",
+                            os.path.join(SCRIPT_DIR, ".folio", "hooks",
                                          "pretool_path_guard.py"))
     assert set(mod.INTERMEDIATE_DIRS) == set(_paths.OUTPUT_INTERMEDIATE_DIRS)
 
 
 def test_stop_verify_fallback_matches_json():
     # fallback 硬编码应等于 json skip_dirs（源码级断言，防止 fallback 漂移）
-    src = open(os.path.join(SCRIPT_DIR, ".trae", "hooks",
+    src = open(os.path.join(SCRIPT_DIR, ".folio", "hooks",
                             "stop_verify.py"), encoding="utf-8").read()
     with open(JSON_PATH, encoding="utf-8") as f:
         cfg = json.load(f)

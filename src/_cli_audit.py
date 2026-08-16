@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+﻿# -*- coding: utf-8 -*-
 """CLI 审计模块：config/runtime/theme 审计 + 引用审查 + 主题覆盖检查。"""
 import os
 import sys
@@ -108,7 +108,7 @@ def _audit_output_provenance():
         return True
 
     # 读 task_history 拿 verify 记录
-    task_history_path = os.path.join(SCRIPT_DIR, ".trae", "logs", "task_history.json")
+    task_history_path = os.path.join(SCRIPT_DIR, ".folio", "logs", "task_history.json")
     all_verified_paths = set()
 
     if os.path.exists(task_history_path):
@@ -130,7 +130,7 @@ def _audit_output_provenance():
 
     # 扫 output/ 下文件
     # 跳过非产出物目录（D-118：单一数据源 _paths.OUTPUT_SKIP_DIRS，
-    # 与 .trae/hooks/_output_skip_dirs.json + 快照测试保持一致）
+    # 与 .folio/hooks/_output_skip_dirs.json + 快照测试保持一致）
     from _paths import OUTPUT_SKIP_DIRS
     SKIP_DIRS = set(OUTPUT_SKIP_DIRS)
     # 跳过备份文件

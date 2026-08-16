@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+﻿# -*- coding: utf-8 -*-
 """_archive_auto.py - 会话后自动归档（归属在会话内产生，归档在 save 时消费）。
 
 解决的问题：产出/接收文件在 A 对话，跑归档在 B 对话 -> 只能靠文件名猜客户，屡屡出错。
@@ -20,7 +20,7 @@ import shutil
 from datetime import datetime
 
 SCRIPT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # 仓库根
-LOG_DIR = os.path.join(SCRIPT_DIR, ".trae", "logs")
+LOG_DIR = os.path.join(SCRIPT_DIR, ".folio", "logs")
 SESSION_START_LOG = os.path.join(LOG_DIR, "session_start_time.txt")
 PENDING_LOG = os.path.join(LOG_DIR, "archive_pending.json")
 INDEX_PATH = os.path.join(SCRIPT_DIR, "_knowledge", "index.json")

@@ -1,4 +1,4 @@
----
+﻿---
 name: delivery-pipeline
 version: "1.2"
 description: "交付流水线：HTML 先行 -> 用户确认 -> 再出 PPT/DOCX/报价。当用户说生成方案 / 做方案 / 生成 HTML / 做 PPT / 生成报价时调用。Orchestrates the delivery flow: HTML first, user confirms, then PPT/DOCX/quote. v1.2: 内容设计改为按需参考（验收端已机械化，过程不设锁），spec 命令细节收敛到 spec-writing-guide；v1.1: 对齐 D-088/D-090。"
@@ -26,7 +26,7 @@ The order below is canonical — never reorder or skip.
 python _cli.py session-start "<用户输入>" --client <客户名>
 ```
 
-Read the output: `level` (创意/L5/L4/L3), `context_summary`, `recall`, `warnings`. If `level == L3`, spec.confirmed is required before any generation. If session-start fails, fall back manually: read `.trae/logs/task_history.json` + `_knowledge/clients/{客户}/context.md`.
+Read the output: `level` (创意/L5/L4/L3), `context_summary`, `recall`, `warnings`. If `level == L3`, spec.confirmed is required before any generation. If session-start fails, fall back manually: read `.folio/logs/task_history.json` + `_knowledge/clients/{客户}/context.md`.
 
 Output a context summary to the user: "上次做了 xxx，待办 yyy，要继续吗？"
 

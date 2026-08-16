@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+﻿# -*- coding: utf-8 -*-
 """上下文管理模块：context.md schema、层级判定、客户目录管理。
 
 从 _session.py 拆分（候选 4 · 模块化），无内部依赖（叶子模块）。
@@ -408,7 +408,7 @@ def show_all_clients(json_output=False):
 
 
 def consolidate(client_name, threshold=3):
-    """自动固化：检测反复出现的模式，升级到 .trae/rules/"""
+    """自动固化：检测反复出现的模式，升级到 .folio/rules/"""
     context_path = get_context_path(client_name)
     if not os.path.exists(context_path):
         print(f"客户 '{client_name}' 不存在")
@@ -417,9 +417,9 @@ def consolidate(client_name, threshold=3):
     with open(context_path, "r", encoding="utf-8") as f:
         content = f.read()
 
-    rules_dir = os.path.join(CLIENTS_DIR, client_name, ".trae", "rules")
+    rules_dir = os.path.join(CLIENTS_DIR, client_name, ".folio", "rules")
     if not os.path.isdir(rules_dir):
-        rules_dir = os.path.join(SCRIPT_DIR, ".trae", "rules")
+        rules_dir = os.path.join(SCRIPT_DIR, ".folio", "rules")
 
     patterns = {
         "主题色": r"#([0-9a-fA-F]{6})",

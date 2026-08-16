@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+﻿# -*- coding: utf-8 -*-
 """_inbox_scan.py - Inbox 定期扫描（检视+报告，不亲自移动）。
 
 职责：
@@ -11,7 +11,7 @@
 设计原则：
 - 只检视+报告，不直接 shutil.move（归档动作复用 _cli.py classify）
 - 报告落地到 inbox/_scan_reports/
-- 时间戳写到 .trae/logs/last_inbox_scan.txt（纯文本 ISO）
+- 时间戳写到 .folio/logs/last_inbox_scan.txt（纯文本 ISO）
 - 失败兜底：所有 IO 异常吞掉，返回空报告，Hook 不阻塞
 
 调用方式：
@@ -31,8 +31,8 @@ SCRIPT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # 仓�
 INBOX_DIR = os.path.join(SCRIPT_DIR, "inbox")
 UNCATEGORIZED_DIR = os.path.join(INBOX_DIR, "_uncategorized")
 REPORTS_DIR = os.path.join(INBOX_DIR, "_scan_reports")
-LAST_SCAN_LOG = os.path.join(SCRIPT_DIR, ".trae", "logs", "last_inbox_scan.txt")
-FAILURE_LOG = os.path.join(SCRIPT_DIR, ".trae", "logs", "inbox_scan_failures.log")
+LAST_SCAN_LOG = os.path.join(SCRIPT_DIR, ".folio", "logs", "last_inbox_scan.txt")
+FAILURE_LOG = os.path.join(SCRIPT_DIR, ".folio", "logs", "inbox_scan_failures.log")
 DEFAULT_TRASH_DIR = "_trash"
 
 # 时间窗：22:00-22:30（30 分钟容差，含头不含尾）
@@ -95,7 +95,7 @@ def _now_in_window(dt: Optional[datetime] = None) -> bool:
 
 def _read_last_scan(project_dir: str) -> Optional[datetime]:
     """读上次扫描时间戳；文件不存在返回 None。"""
-    path = os.path.join(project_dir, ".trae", "logs", "last_inbox_scan.txt")
+    path = os.path.join(project_dir, ".folio", "logs", "last_inbox_scan.txt")
     if not os.path.exists(path):
         return None
     try:
@@ -107,7 +107,7 @@ def _read_last_scan(project_dir: str) -> Optional[datetime]:
 
 def _write_last_scan(project_dir: str, dt: datetime) -> None:
     """原子写时间戳：先写 .tmp 再 os.replace，避免半写状态。"""
-    log_dir = os.path.join(project_dir, ".trae", "logs")
+    log_dir = os.path.join(project_dir, ".folio", "logs")
     os.makedirs(log_dir, exist_ok=True)
     final = os.path.join(log_dir, "last_inbox_scan.txt")
     tmp = final + ".tmp"
@@ -143,7 +143,7 @@ def _has_inbox_files(project_dir: str) -> bool:
 
 
 def _log_failure(project_dir: str, msg: str) -> None:
-    """失败兜底：写 .trae/logs/inbox_scan_failures.log。"""
+    """失败兜底：写 .folio/logs/inbox_scan_failures.log。"""
     try:
         os.makedirs(os.path.dirname(FAILURE_LOG), exist_ok=True)
         with open(FAILURE_LOG, "a", encoding="utf-8") as f:

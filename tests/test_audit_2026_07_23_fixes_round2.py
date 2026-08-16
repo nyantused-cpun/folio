@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+﻿# -*- coding: utf-8 -*-
 """audit_2026-07-23 报告 第二轮（剩余 bug + 机制项）修复的回归测试。
 
 覆盖：#3 #4 #9 #10 #11 #13 #14 #21 #22 M1 M3
@@ -15,7 +15,7 @@ import pytest
 SCRIPT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, SCRIPT_DIR)
 
-HOOKS_DIR = os.path.join(SCRIPT_DIR, ".trae", "hooks")
+HOOKS_DIR = os.path.join(SCRIPT_DIR, ".folio", "hooks")
 
 
 _HOOK_MODS = {}
@@ -95,7 +95,7 @@ class TestSkillsSyncAtomic:
 class TestCmdGuard:
     @pytest.fixture(autouse=True)
     def _isolate_ask_cache(self, tmp_path, monkeypatch):
-        """隔离 ask 记忆缓存：测试的 ask 不写真实 .trae/logs/。"""
+        """隔离 ask 记忆缓存：测试的 ask 不写真实 .folio/logs/。"""
         guard = _load_hook("pretool_cmd_guard")
         monkeypatch.setattr(guard, "_approved_cache_path",
                             lambda: str(tmp_path / "approved.json"))

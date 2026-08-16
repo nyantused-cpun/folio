@@ -1,5 +1,5 @@
-# -*- coding: utf-8 -*-
-"""skills-sync：.trae/skills/ -> .agents/skills/ 单向镜像。
+﻿# -*- coding: utf-8 -*-
+"""skills-sync：.folio/skills/ -> .agents/skills/ 单向镜像。
 
 只同步含 SKILL.md 的目录；按内容哈希复制新增/变更；--prune 删除多余项。
 """

@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+﻿# -*- coding: utf-8 -*-
 """pretool_path_guard output/** 细分（2026-08-11）的回归测试。
 
 - 最终交付物（.html/.pptx/.docx/.xlsx）-> deny（须走 CLI 生成）
@@ -13,7 +13,7 @@ import pytest
 SCRIPT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, SCRIPT_DIR)
 
-HOOKS_DIR = os.path.join(SCRIPT_DIR, ".trae", "hooks")
+HOOKS_DIR = os.path.join(SCRIPT_DIR, ".folio", "hooks")
 
 
 _HOOK_MODS = {}

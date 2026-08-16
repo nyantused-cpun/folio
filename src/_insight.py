@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+﻿# -*- coding: utf-8 -*-
 """洞察机制：AI 元认知反思。
 
 触发时机（project_rules.md）：
@@ -13,13 +13,13 @@
 输出结构（六部分）：
   目标回顾 → 进度 → 偏离度 → 关键洞察 → 建议 → 目标差距
 
-存档：.trae/logs/insights/{客户}_{日期}.md
+存档：.folio/logs/insights/{客户}_{日期}.md
 """
 import os
 from datetime import datetime
 
 SCRIPT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # 仓库根
-INSIGHTS_DIR = os.path.join(SCRIPT_DIR, ".trae", "logs", "insights")
+INSIGHTS_DIR = os.path.join(SCRIPT_DIR, ".folio", "logs", "insights")
 
 # 洞察触发关键词
 INSIGHT_TRIGGERS = ["总结一下", "回顾一下", "总结下", "回顾下"]
@@ -143,7 +143,7 @@ def generate_insight(client_name, context_summary, turn_count, provider=None):
 
 
 def save_insight(client_name, insight_text):
-    """洞察报告存档到 .trae/logs/insights/{客户}_{日期}.md。
+    """洞察报告存档到 .folio/logs/insights/{客户}_{日期}.md。
 
     同日多次洞察追加（不覆盖）。
     返回存档路径或 None。
