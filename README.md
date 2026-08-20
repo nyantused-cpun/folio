@@ -36,7 +36,7 @@ Folio 是给 AI 宿主（DeepSeek Harness / Trae / Kimi 等）外挂的**长程�
 | Python | **≥ 3.10** | 安装脚本自动探测 `py` / `python` / `python3`；未找到会失败并提示官网 |
 | Git | 需要 | `git clone` 获取仓库 |
 | 网络 | 首次安装需访问 PyPI | `install.ps1` 用 pip 安装 requirements.txt |
-| DSH | **仅插件层需要**：已安装且 `dsh` 在 PATH，版本对齐 0.1.0-rc.6 | 不装 DSH 也能用 CLI 内核（L0）；装了才有 15 工具 / 守卫 / 会话协议 |
+| DSH | **仅插件层需要**：已安装且 `dsh` 在 PATH，版本对齐 0.1.0-rc.8 | 不装 DSH 也能用 CLI 内核（L0）；装了才有 15 工具 / 守卫 / 会话协议 |
 | Node.js | **不需要** | PPT 转换用 python-pptx；JS 插件由 DSH 宿主加载 |
 | PowerPoint | **可选** | 仅 `pptd-build --shots` 截图目检需要（COM）；不装则跳过截图，PPTX 生成正常 |
 | API key | 零 key 可跑（L0） | 建议按 `docs/能力配置引导` 配 1 个 embedding key 升级语义召回 |
@@ -170,12 +170,12 @@ pwsh .\setup\install-community-plugins.ps1 -Verify
 
 ## 兼容性与生态取舍
 
-> 2026-08-15 对外口径：让使用者一眼知道 Folio 与 DSH 版本的绑定关系、社区插件为什么没直接引入、平台现状。
+> 2026-08-20 对外口径：让使用者一眼知道 Folio 与 DSH 版本的绑定关系、社区插件为什么没直接引入、平台现状。
 
 ### 1. 版本对齐
 
-- 当前对齐 **DSH 0.1.0-rc.6**（本机 `dsh -V` 实测）；插件 peer 依赖为 `@deepseek-ai/dsh-agent ^0.1.0-rc.6`、`@deepseek-ai/dsh-tools ^0.1.0-rc.6`、`@deepseek-ai/cordis ^4.0.1`。
-- 所有接口按 rc.6 源码逐行核实；DSH 升级后请重跑插件验证（`setup/install-folio-plugins.ps1 -Verify`）。
+- 当前对齐 **DSH 0.1.0-rc.8**（本机 `dsh --version` 实测）；插件 peer 依赖为 `@deepseek-ai/dsh-agent ^0.1.0-rc.8`、`@deepseek-ai/dsh-tools ^0.1.0-rc.8`、`@deepseek-ai/cordis ^4.0.1`。
+- 所有接口按 rc.8 源码核实，插件自检与 import 冒烟通过；运行级复测待重启 `dsh web` 后执行（`setup/install-folio-plugins.ps1 -Verify`）。
 
 ### 2. 社区插件：看了什么、为什么没直接装
 
