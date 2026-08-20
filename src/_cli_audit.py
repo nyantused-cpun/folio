@@ -1,4 +1,4 @@
-﻿# -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 """CLI 审计模块：config/runtime/theme 审计 + 引用审查 + 主题覆盖检查。"""
 import os
 import sys
@@ -13,11 +13,12 @@ def cmd_audit(args):
     --runtime: 动态功能测试（recall / import 阻断 / spec 阻断 / 路径阻断）
     --behavior: 对话行为审计（需要 AI 对话日志）
     --theme <客户>: 检查 decisions.md persistence 字段格式
+    --memory <客户>: 记忆证据健康（待补/待核/冲突未决/refs 状态，警告级）
     --all: 全部检查
     """
     mode = args.mode or "config"
     if mode == "all":
-        modes = ["config", "runtime", "theme"]
+        modes = ["config", "runtime", "theme", "memory"]
     else:
         modes = [mode]
 
@@ -32,6 +33,8 @@ def cmd_audit(args):
             ok = _audit_runtime()
         elif m == "theme":
             ok = _audit_theme(getattr(args, 'client', None))
+        elif m == "memory":
+            ok = _audit_memory(getattr(args, 'client', None))
         else:
             print(f"未知审计模式: {m}")
             continue
@@ -211,6 +214,59 @@ def _audit_runtime():
         ok = False
 
     return ok
+
+
+def _audit_memory(client_name=None, clients_dir=None):
+    """记忆证据健康检查（P0 记忆溯源 · T4）。
+
+    设计取向：只报健康度、不判 FAIL -- 待补/待核/冲突未决是「可见的债务」
+    不是错误；把警告当失败会让审计被日常噪音淹没（门禁恒红只会教人忽略它）。
+    「没做/读不到」≠「0 条」：refs 目录不存在报「未摄入或未归档」而非「0 个材料」。
+    clients_dir 参数留给单测注入 tmp 目录。
+    """
+    if clients_dir is None:
+        clients_dir = os.path.join(SCRIPT_DIR, "_knowledge", "clients")
+    if client_name:
+        from _paths import _validate_client_name
+        _validate_client_name(client_name)
+        clients = [client_name]
+    else:
+        if not os.path.isdir(clients_dir):
+            print("✗ _knowledge/clients/ 不存在")
+            return False
+        clients = [d for d in os.listdir(clients_dir)
+                   if os.path.isdir(os.path.join(clients_dir, d)) and not d.startswith("_")]
+
+    from _memory_guard import scan_memory_health
+
+    scanned = 0
+    for client in clients:
+        h = scan_memory_health(client, client_dir=os.path.join(clients_dir, client))
+        if not h["context_exists"] and not h["decisions_exists"]:
+            continue  # 无记忆文件的客户（如刚建目录）不算问题
+        scanned += 1
+        refs_dir = os.path.join(clients_dir, client, "refs")
+        if os.path.isdir(refs_dir):
+            n_refs = len([f for f in os.listdir(refs_dir) if not f.startswith(".")])
+            refs_note = f"refs {n_refs} 个文件"
+        else:
+            refs_note = "无 refs 目录（未摄入或未归档）"  # 「没做」≠「0 条」
+        flags = []
+        if h["pending_evidence"]:
+            flags.append(f"待补证据 {h['pending_evidence']}")
+        if h["unverified_evidence"]:
+            flags.append(f"证据待核 {h['unverified_evidence']}")
+        if h["conflicts_pending"]:
+            flags.append(f"冲突未决 {h['conflicts_pending']}")
+        mark = "⚠" if flags else "✓"
+        flag_note = "；".join(flags) if flags else "证据健康"
+        print(f"  {mark} [{client}] 会话 {h['sessions']} / 决策 {h['decision_entries']} / "
+              f"证据段 {h['evidence_sections']} / {flag_note}；{refs_note}")
+
+    if scanned == 0:
+        print("ℹ 无可扫描客户（context.md 与 decisions.md 均不存在）")
+    print("✓ 记忆证据健康检查完成（⚠ 为警告级，不影响审计结论）")
+    return True
 
 
 def _audit_theme(client_name=None):

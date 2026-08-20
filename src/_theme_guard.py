@@ -22,10 +22,17 @@ import os
 import re
 from datetime import datetime
 
+import _memory_guard
 from _paths import CLIENTS_DIR
 
 # 决策记录触发词（project_rules.md："记一下"=决策记录，区别于"总结一下"=洞察）
 DECISION_TRIGGERS = ["记一下", "记下", "记录一下"]
+
+# 最近一次 load_active_themes 跳过的未决冲突/已废弃条目数（count_skipped_conflicts 读取）
+_LAST_SKIPPED_CONFLICTS = 0
+
+# 已废弃状态行（resolve_conflict 写入后，load_active_themes 据此跳过，防矛盾铁律双加载）
+_DEPRECATED_RE = re.compile(r'[-*]\s*\*{0,2}状态\*{0,2}\s*[：:]\s*已废弃')
 
 
 # ============================================================
@@ -41,15 +48,72 @@ def detect_decision_trigger(user_input):
     return any(kw in user_input for kw in DECISION_TRIGGERS)
 
 
+def _append_conflict_flag(decisions_path, old_date, topic):
+    """在旧条目块的块尾插入未决冲突标记 `<!-- conflict: pending -->`。
+
+    精确块定位：`## [old_date] topic` 标题到下一个 `## ` 标题前（或文件尾）。
+    只插标记、不改正文；幂等（块内已有标记则不重复）；找不到旧块则静默返回。
+    """
+    try:
+        with open(decisions_path, "r", encoding="utf-8") as f:
+            content = f.read()
+    except Exception:
+        return  # 文件不存在/读取失败 -> 无处可插
+    wanted = str(topic).strip()
+    wanted_date = str(old_date).strip()
+    heading_re = re.compile(r'^## \[(\d{4}-\d{2}-\d{2})\]\s*(.*?)\s*$', re.MULTILINE)
+    for m in heading_re.finditer(content):
+        if m.group(1) != wanted_date:
+            continue
+        if m.group(2).strip() != wanted:
+            continue
+        tail = re.search(r'^## ', content[m.end():], re.MULTILINE)
+        insert_at = m.end() + tail.start() if tail else len(content)
+        block = content[m.start():insert_at]
+        if "<!-- conflict: pending -->" in block:
+            return  # 幂等：已有标记
+        content = content[:insert_at] + "\n<!-- conflict: pending -->\n" + content[insert_at:]
+        with open(decisions_path, "w", encoding="utf-8") as f:
+            f.write(content)
+        return  # 只处理第一个匹配的旧块
+
+
+def _build_source_line(source, client_name, strict):
+    """校验 source 引用串，返回来源行文本。
+
+    strict 且存在验不过的引用 -> 抛 ValueError（写入前，什么都不落盘）。
+    非 strict -> 照写，行尾追加「（证据待核：第一条失败原因）」。
+    user: 引用天然免校验（verify_source_ref 语义）。
+    """
+    if not source:
+        print("[决策] 未携带来源引用（source 参数可补）")
+        return "(待补)"
+    refs = _memory_guard.parse_source_refs(source)
+    failed = []
+    for ref in refs:
+        ok, reason = _memory_guard.verify_source_ref(ref, client_name)
+        if not ok:
+            failed.append(reason)
+    if failed:
+        if strict:
+            raise ValueError("证据待核，拒绝写入: " + "；".join(failed))
+        return f"{source}（证据待核：{failed[0]}）"
+    return source
+
+
 def save_decision(client_name, topic, decision, reason="", alternatives_rejected="",
-                  level="L4", persistence="task", scope="client", task_id=None):
-    """记录关键决策到 decisions.md。
+                  level="L4", persistence="task", scope="client", task_id=None,
+                  source="", confidence=0.5, strict=False):
+    """记录关键决策到 decisions.md（含溯源 + 冲突保留）。
 
     记"为什么这么定、为什么不要那个"。
     level: L3/L4/L5，标记决策时的自动化层级
     persistence: permanent（永久）/ task（临时，默认）
     scope: client（客户级）/ task（任务级）
     task_id: scope=task 时必填，任务结束后自动归档
+    source: 证据引用串（分号分隔 kind:value，见 _memory_guard.parse_source_refs）
+    confidence: 0.0-1.0 置信度（仅记录，不参与判定）
+    strict: True 时来源引用验不过 -> 抛 ValueError，什么都不落盘
     """
     from _paths import _validate_client_name
     _validate_client_name(client_name)
@@ -68,6 +132,18 @@ def save_decision(client_name, topic, decision, reason="", alternatives_rejected
     if scope == "task" and not task_id:
         task_id = datetime.now().strftime("%Y%m%d_%H%M%S")
 
+    # 写前冲突检测（读当前文件；同主题同内容 -> False，幂等重写）
+    conf = _memory_guard.detect_conflict(topic, decision, decisions_path)
+    conflict = bool(conf["conflict"])
+    old_date = conf["old_date"]
+
+    # 来源校验（必须在任何落盘之前；strict 失败抛异常 -> 文件保持原样）
+    source_line = _build_source_line(source, client_name, strict)
+
+    # 冲突：先给旧条目块尾插 pending 标记（不删不改旧正文）
+    if conflict:
+        _append_conflict_flag(decisions_path, old_date, topic)
+
     entry = f"""
 ## [{today}] {topic}
 - **决策**: {decision}
@@ -75,7 +151,13 @@ def save_decision(client_name, topic, decision, reason="", alternatives_rejected
 - **被否方案**: {alternatives_rejected or '(无)'}
 - **层级**: {level}
 - **persistence: {persistence}**
-- **scope: {scope}**""" + (f"\n- **task_id: {task_id}**" if scope == "task" else "")
+- **scope: {scope}**"""
+    if scope == "task":
+        entry += f"\n- **task_id: {task_id}**"
+    entry += f"\n- **来源**: {source_line}"
+    entry += f"\n- **confidence**: {confidence}"
+    if conflict:
+        entry += f"\n- **⚠️ 冲突**: 与 [{old_date}] 同主题条目矛盾，待人工裁决（resolve-conflict）"
 
     if not os.path.exists(decisions_path):
         with open(decisions_path, "w", encoding="utf-8") as f:
@@ -111,6 +193,8 @@ def load_active_themes(client_name, task_id=None, only_permanent=True):
     """
     from _paths import _validate_client_name
     _validate_client_name(client_name)
+    global _LAST_SKIPPED_CONFLICTS
+    _LAST_SKIPPED_CONFLICTS = 0
     decisions_path = os.path.join(CLIENTS_DIR, client_name, "decisions.md")
     if not os.path.exists(decisions_path):
         return []
@@ -125,6 +209,10 @@ def load_active_themes(client_name, task_id=None, only_permanent=True):
 
     themes = []
     for block in blocks[1:]:
+        # 跳过未决冲突 / 已废弃块（防矛盾铁律双加载）
+        if "<!-- conflict: pending -->" in block or _DEPRECATED_RE.search(block):
+            _LAST_SKIPPED_CONFLICTS += 1
+            continue
         # 标题：第一行
         title_match = re.match(r'^\s*([^\n]+?)(?:\n|$)', block)
         title = title_match.group(1).strip().rstrip(']') if title_match else ""
@@ -197,6 +285,94 @@ def load_active_themes(client_name, task_id=None, only_permanent=True):
         })
 
     return themes
+
+
+def count_skipped_conflicts():
+    """返回最近一次 load_active_themes 跳过的未决冲突/已废弃条目数。"""
+    return _LAST_SKIPPED_CONFLICTS
+
+
+def _split_decision_blocks(content):
+    """把 decisions.md 内容切成程序化块 [{date, topic, start, end, text}]（`## [日期] topic` 格式）。
+
+    块边界：`## [日期] topic` 标题到下一个 `## ` 标题前（或文件尾）。
+    遗留手写 `## 决策 N：` 块不匹配（无日期前缀），自然被忽略——冲突只发生在程序化块之间。
+    """
+    result = []
+    heading_re = re.compile(r'^## \[(\d{4}-\d{2}-\d{2})\]\s*(.*?)\s*$', re.MULTILINE)
+    for m in heading_re.finditer(content):
+        start = m.start()
+        tail = re.search(r'^## ', content[m.end():], re.MULTILINE)
+        end = m.end() + tail.start() if tail else len(content)
+        result.append({
+            "date": m.group(1),
+            "topic": m.group(2).strip(),
+            "start": start,
+            "end": end,
+            "text": content[start:end],
+        })
+    return result
+
+
+def resolve_conflict(client_name, topic, keep):
+    """人工裁决未决冲突。keep: "old"|"new"。返回 {"resolved": bool, "detail": str}。
+
+    keep=old：旧条目（较早日期）保留，新条目（较晚日期）标「已废弃」，旧块清 pending；
+    keep=new：新条目生效，旧条目标「已废弃」并清 pending，新条目标「冲突已裁决」。
+    """
+    from _paths import _validate_client_name
+    _validate_client_name(client_name)
+    if keep not in ("old", "new"):
+        return {"resolved": False, "detail": f"keep 参数非法: {keep}（应为 old|new）"}
+
+    decisions_path = os.path.join(CLIENTS_DIR, client_name, "decisions.md")
+    if not os.path.exists(decisions_path):
+        return {"resolved": False, "detail": "无未决冲突"}
+
+    with open(decisions_path, "r", encoding="utf-8") as f:
+        content = f.read()
+
+    wanted = str(topic).strip()
+    topic_blocks = [b for b in _split_decision_blocks(content) if b["topic"] == wanted]
+    if len(topic_blocks) > 2:
+        return {"resolved": False, "detail": f"条目数异常（{len(topic_blocks)} 条），请手工处理"}
+    if len(topic_blocks) < 2:
+        return {"resolved": False, "detail": "无未决冲突"}
+
+    pending = [b for b in topic_blocks if "<!-- conflict: pending -->" in b["text"]]
+    if not pending:
+        return {"resolved": False, "detail": "无未决冲突"}
+
+    old = pending[0]
+    new = [b for b in topic_blocks if b is not old][0]
+    # 注：pending 标记恒在「旧」块（save_decision 把标记插到 detect_conflict 命中的首个块，即最早块），
+    # 故以标记为准判 old/new，不按日期 swap（swap 会把标记块错当成 new，导致标记不被清除）。
+
+    edits = []
+    if keep == "old":
+        # 旧条目保留：清其 pending；新条目去掉过期的「待人工裁决」措辞后标已废弃
+        # （裁决后 ⚠️ 行仍说「待人工裁决」会误导后续读者——标记语义必须跟随状态走）
+        edits.append((old["start"], old["end"], old["text"].replace("<!-- conflict: pending -->", "")))
+        new_text = new["text"].replace("，待人工裁决（resolve-conflict）", "，已裁决") \
+            .rstrip("\n") + f"\n- **状态**: 已废弃（{old['date']} 条目保留）\n"
+        edits.append((new["start"], new["end"], new_text))
+    else:
+        # 新条目生效：旧条目清 pending + 标已废弃；新条目清过期裁决措辞并标已生效
+        old_text = old["text"].replace("<!-- conflict: pending -->", "").rstrip("\n") \
+            + f"\n- **状态**: 已废弃（{new['date']} 条目取代）\n"
+        edits.append((old["start"], old["end"], old_text))
+        new_text = new["text"].replace("，待人工裁决（resolve-conflict）", "，已裁决") \
+            .rstrip("\n") + f"\n- **状态**: 冲突已裁决（本条生效，{old['date']} 已废弃）\n"
+        edits.append((new["start"], new["end"], new_text))
+
+    # 从后往前应用编辑，保持位置有效
+    for start, end, text in sorted(edits, key=lambda e: e[0], reverse=True):
+        content = content[:start] + text + content[end:]
+
+    with open(decisions_path, "w", encoding="utf-8") as f:
+        f.write(content)
+
+    return {"resolved": True, "detail": f"已裁决：保留{'旧' if keep == 'old' else '新'}条目"}
 
 
 def build_head_context(themes):

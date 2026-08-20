@@ -405,21 +405,30 @@ def cmd_outline_to_spec(args):
 def cmd_review(args):
     """独立审查：用独立 LLM 会话审查产出质量（不带对话历史）。
 
-    用法：python _cli.py review <产出文件> --client <客户> [--spec <spec.yml>] [--adversarial]
+    用法：python _cli.py review <产出文件> --client <客户> [--spec <spec.yml>] [--adversarial] [--parallel]
     --adversarial：对抗性审查模式（挑刺者角色，只找问题不打分）
+    --parallel：并行审查模式（5 路独立会话各查一个维度，汇总去重，单路失败不阻断）
+    --adversarial --parallel：并行对抗审查（5 路独立挑刺者各查一个角度）
     """
     output_path = args.output_file
     client = getattr(args, 'client', None)
     spec_path = getattr(args, 'spec', None)
     adversarial = getattr(args, 'adversarial', False)
+    parallel = getattr(args, 'parallel', False)
 
     if not os.path.exists(output_path):
         print(f"错误：文件不存在: {output_path}")
         sys.exit(1)
 
-    if adversarial:
+    if adversarial and parallel:
+        from _review import review_adversarial_parallel as _do_review
+        print("[review] 并行对抗审查模式（5 路独立挑刺者各查一个角度，单路失败不阻断）")
+    elif adversarial:
         from _review import review_adversarial as _do_review
         print("[review] 对抗性审查模式（挑刺者角色，借鉴 Claude Dynamic Workflows adversarial verification）")
+    elif parallel:
+        from _review import review_parallel as _do_review
+        print("[review] 并行审查模式（5 路独立会话，维度隔离防锚定，单路失败不阻断）")
     else:
         from _review import review as _do_review
 
@@ -430,8 +439,15 @@ def cmd_review(args):
         quiet=False,
     )
 
-    if result.get("verdict") == "FAIL":
-        print("[审查] 发现问题，请检查上方报告")
+    # T11 fail-closed：exit 0 ⇔ verdict == "PASS"（唯一通过）；
+    # FAIL/ERROR/SKIP 一律 exit 2 —— 判定不可得（LLM/API 故障返回 ERROR）≠ 通过，
+    # 此前只查 FAIL，ERROR 走 exit 0 → 工具层 ok:true → 审查静默通过（fail-open 漏洞）。
+    verdict = result.get("verdict")
+    if verdict != "PASS":
+        if verdict == "FAIL":
+            print("[审查] 发现问题，请检查上方报告")
+        else:
+            print(f"[审查] 判定不可得 ≠ 通过（verdict={verdict}），fail-closed 退出码 2")
         sys.exit(2)
 
 

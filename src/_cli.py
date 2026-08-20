@@ -39,7 +39,7 @@ from _cloud_llm import vision_chat
 from _quote_spec_gen import gen_quote_spec
 from _quote_engine import ExcelRenderer
 from _quote_data import Library
-from _theme_guard import save_decision, pre_check
+from _theme_guard import save_decision, pre_check, resolve_conflict
 from _insight import run_insight
 from _feedback import record_diff
 from _embed_index import build_embedding_index, get_stats, inspect_chunks
@@ -91,12 +91,33 @@ def cmd_load(args):
     load_context(args.client)
 
 
+def cmd_memory_health(args):
+    """记忆证据健康：扫描客户 context.md / decisions.md 的证据与冲突状态（P0 记忆溯源 · T4）。"""
+    from _memory_guard import scan_memory_health
+    h = scan_memory_health(args.client)
+    print(f"=== 记忆证据健康: {args.client} ===")
+    ctx_note = f"存在（会话 {h['sessions']} 次 / 证据段 {h['evidence_sections']}）" if h["context_exists"] else "不存在"
+    dec_note = (f"存在（决策 {h['decision_entries']} 条 / 冲突未决 {h['conflicts_pending']} 条）"
+                if h["decisions_exists"] else "不存在")
+    print(f"context.md:   {ctx_note}")
+    print(f"decisions.md: {dec_note}")
+    if h["pending_evidence"] or h["unverified_evidence"]:
+        print(f"证据状态: ⚠ 待补 {h['pending_evidence']} / 待核 {h['unverified_evidence']}（save 带 --evidence= 可消除）")
+    else:
+        print("证据状态: 无待补/待核")
+    if h["conflicts_pending"]:
+        print(f"⚠ 冲突未决 {h['conflicts_pending']} 条（resolve-conflict 裁决）")
+
+
 def cmd_save(args):
     kwargs = parse_session_args(args.extra)
     if not any(kwargs.values()):
-        save_session(args.client)
+        result = save_session(args.client)
     else:
-        save_session(args.client, **kwargs)
+        result = save_session(args.client, **kwargs)
+    # P0 记忆溯源（T2）：--strict-evidence 阻断时 save_session 返回 False -> 退出码 2。
+    if result is False:
+        sys.exit(2)
     # 归档目标客户：与 save_session 内部保持一致（别名/近似解析到正式客户名）
     try:
         from _aliases import resolve_client_name
@@ -122,6 +143,16 @@ def cmd_save(args):
             print(f"[归档] {result['reason']}")
     except Exception as e:
         print(f"[归档] 自动归档跳过: {e}")
+
+
+def cmd_resolve_conflict(args):
+    """裁决 decisions.md 同主题矛盾决策（P0 记忆溯源 · T3）。"""
+    result = resolve_conflict(args.client, args.topic, args.keep)
+    if result.get("resolved"):
+        print(f"[裁决] {result['detail']}")
+    else:
+        print(f"[裁决] {result['detail']}")
+        sys.exit(1)
 
 
 def cmd_classify(args):
@@ -1318,10 +1349,18 @@ def build_parser():
                         help="确认成本守门（>50 次云端调用时需此）")
     p_load = sub.add_parser("load", help="加载客户上下文")
     p_load.add_argument("client", help="客户名")
+    p_memory = sub.add_parser("memory-health", help="记忆证据健康扫描（P0 记忆溯源）",
+                              description="扫描客户 context.md/decisions.md 的证据引用与冲突状态")
+    p_memory.add_argument("client", help="客户名")
     p_save = sub.add_parser("save", help="保存会话",
-                            epilog='示例: python _cli.py save 蓝海集团 --input="完成架构图" --decisions="两步走" --outputs="output/蓝海集团/x.html" --pending="等客户确认"')
+                            epilog='示例: python _cli.py save 蓝海集团 --input="完成架构图" --decisions="两步走" --outputs="output/蓝海集团/x.html" --pending="等客户确认" --evidence="file:output/蓝海集团/x.html;user:微信确认" --strict-evidence=1')
     p_save.add_argument("client", help="客户名")
-    p_save.add_argument("extra", nargs="*", help="会话内容键（原样传入）: --input= --decisions= --outputs= --pending=")
+    p_save.add_argument("extra", nargs="*", help="会话内容键（原样传入）: --input= --decisions= --outputs= --pending= --evidence= --strict-evidence=1")
+    p_resolve = sub.add_parser("resolve-conflict", help="裁决 decisions.md 同主题矛盾决策（P0 记忆溯源）",
+                               description="裁决未决冲突：--keep old 保留旧条目 / --keep new 保留新条目")
+    p_resolve.add_argument("client", help="客户名")
+    p_resolve.add_argument("--topic", required=True, help="冲突主题（与 decisions.md 条目标题一致）")
+    p_resolve.add_argument("--keep", required=True, choices=["old", "new"], help="保留哪一方")
     p_classify = sub.add_parser("classify", help="分类 inbox/")
     p_classify.add_argument("--extract", action="store_true", help="分类后自动提取内容摘要到 context.md")
     p_classify.add_argument("--client", help="显式指定客户（跳过规则猜客户，直接归档到该客户 refs）")
@@ -1564,9 +1603,9 @@ def build_parser():
     # audit（验证与审计）
     p_kd = sub.add_parser("key-doctor", help="检查各 API key 来源与可用性（默认活体探测）")
     p_kd.add_argument("--no-probe", action="store_true", help="只列来源，不联网探测")
-    p_audit = sub.add_parser("audit", help="审计：配置/运行时/主题/行为")
-    p_audit.add_argument("--mode", choices=["config", "runtime", "behavior", "theme", "all"], default="config")
-    p_audit.add_argument("--client", help="客户名（--mode theme 时使用）")
+    p_audit = sub.add_parser("audit", help="审计：配置/运行时/主题/记忆/行为")
+    p_audit.add_argument("--mode", choices=["config", "runtime", "behavior", "theme", "memory", "all"], default="config")
+    p_audit.add_argument("--client", help="客户名（--mode theme / --mode memory 时使用）")
 
     p_cite = sub.add_parser("cite-audit", help="引用及审查报告：从 spec 提取引用 + 反向校验来源 + 主题覆盖")
     p_cite.add_argument("spec", help="spec.yml 路径")
@@ -1674,11 +1713,13 @@ def _build_dispatch():
         "recall-eval": cmd_recall_eval,
         "me": cmd_me,
         "load": cmd_load,
+        "memory-health": cmd_memory_health,
         "theme-guard": cmd_theme_guard,
         "theme-verify": cmd_theme_verify,
         # === 状态写入（6）===
         "new": cmd_new,
         "save": cmd_save,
+        "resolve-conflict": cmd_resolve_conflict,
         "classify": cmd_classify,
         "archive-note": cmd_archive_note,
         "inbox-scan": cmd_inbox_scan,

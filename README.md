@@ -222,3 +222,7 @@ pwsh .\setup\install-community-plugins.ps1 -Verify
 ## 许可证
 
 MIT · 中文名「兰亭」取自《兰亭集序》——材料亦可成章。
+
+## 设计致谢
+
+记忆可信度设计理念（证据溯源 / 三态表达 / 冲突保留 / 检查点）受 [openTrinity/mycontext](https://github.com/openTrinity/mycontext)（Elastic License 2.0）启发；Folio 的实现为独立原创（标识符、数据结构、架构均无复制，零复制验证见 [对照报告](docs/MyContext与兰亭记忆系统对照_2026-08-18.md)）。

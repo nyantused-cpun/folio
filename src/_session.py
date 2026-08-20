@@ -222,10 +222,150 @@ def _extract_case_cards(client_name, max_age_days=30):
     return written
 
 
-def save_session(client_name, input_desc="", decisions="", outputs="", pending="", insight=""):
+def _render_decisions_with_marker(decisions, marker):
+    """决策正文拼接证据标记（P0 记忆溯源 T2）。
+
+    decisions 非空且 marker 非空时追加 marker，否则原样返回（含 None / 空串）。
+    纯函数，供测试直接覆盖三态拼接。
+    """
+    return (decisions + marker) if (decisions and marker) else decisions
+
+
+def _build_session_entry(today, session_num, input_desc, decisions_rendered, outputs,
+                         pending, evidence_lines, dsh_session):
+    """构造会话块文本（T8a）。
+
+    dsh_session 非空时在标题行下一行写 HTML 注释标记 `<!-- dsh:session:ID -->`；
+    dsh_session 为空时输出与旧版 f-string 逐字节一致（P0 回归零感知）。
+    纯函数，供测试直接覆盖两种输出。
+    """
+    entry = f"""
+### [{today}] 第 {session_num} 次会话
+#### 本次输入
+{input_desc or '(未记录)'}
+#### 关键决策
+{decisions_rendered or '(未记录)'}
+#### 产出文件
+{outputs or '(未记录)'}
+#### 待办 / 下次要做的
+{pending or '(未记录)'}
+"""
+    if dsh_session:
+        entry = entry.replace(
+            f"### [{today}] 第 {session_num} 次会话\n",
+            f"### [{today}] 第 {session_num} 次会话\n<!-- dsh:session:{dsh_session} -->\n",
+            1,
+        )
+    if evidence_lines:
+        entry += "#### 证据\n" + "\n".join(evidence_lines) + "\n"
+    return entry
+
+
+def _upsert_session_block(content, entry, dsh_session):
+    """T8a：context.md 会话级 upsert —— 定位「最后一块」并整块替换。
+
+    扫描 content 中最后一块会话块（`#{2,3} [日期]` 开头，兼容 `### ` 新格式与
+    `## ` compact 格式）：若该块内带 `<!-- dsh:session:ID -->` 标记且 ID 与
+    dsh_session 相同，则用 entry 的正文（保留旧标题行：日期与会话号不变）
+    整块替换；否则原样返回 content（调用方走现有 append）。
+
+    合并语义（监工修复 2026-08-19）：新 entry 某字段为空（含 "(未记录)"）时
+    保留旧块对应字段；新 entry 无证据段但旧块有则保留。否则 light/dispose 的
+    空参数 save 会把先前更丰富的内容覆盖掉。
+
+    返回 (new_content, replaced, old_head)：
+      - replaced=True 时 old_head = (旧日期, 旧会话号)，无法解析则为 None。
+    """
+    matches = list(re.finditer(r'(?m)^#{2,3} \[\d{4}-\d{2}-\d{2}\]', content))
+    if not matches:
+        return content, False, None
+    start = matches[-1].start()
+    last_block = content[start:]
+    m = re.search(r'<!--\s*dsh:session:([^\s>]+)\s*-->', last_block)
+    if not m or m.group(1) != dsh_session:
+        return content, False, None
+    head_line = last_block.split("\n", 1)[0]
+    old_head = None
+    hm = re.search(r'\[(\d{4}-\d{2}-\d{2})\] 第 (\d+) 次会话', head_line)
+    if hm:
+        old_head = (hm.group(1), int(hm.group(2)))
+    merged_entry = _merge_session_entry(entry, _parse_session_sections(last_block))
+    body = merged_entry[1:] if merged_entry.startswith("\n") else merged_entry  # 去掉前导换行
+    nl = body.find("\n")
+    new_block = (head_line + body[nl:]) if nl >= 0 else (head_line + body)
+    return content[:start] + new_block, True, old_head
+
+
+_SESSION_SECTION_RE = re.compile(
+    r'(?ms)^#### (本次输入|关键决策|产出文件|待办 / 下次要做的|证据)\n(.*?)(?=^#### |\Z)')
+
+
+def _parse_session_sections(block_text):
+    """T8a 合并用：解析会话块的五个字段（含可选 证据 段）。纯函数。"""
+    sections = {}
+    for m in _SESSION_SECTION_RE.finditer(block_text):
+        sections[m.group(1)] = m.group(2).rstrip("\n")
+    return sections
+
+
+def _merge_session_entry(entry, old_sections):
+    """T8a 合并语义（监工修复 2026-08-19）：新 entry 字段为空或 "(未记录)" 时
+    保留旧块同名字段；新 entry 无证据段但旧块有则保留旧证据段。
+
+    纯函数：无字段可合并时返回原 entry（逐字节不变）。
+    """
+    if not old_sections:
+        return entry
+    changed = False
+
+    def _repl(m):
+        nonlocal changed
+        key, body = m.group(1), m.group(2)
+        had_nl = body.endswith("\n")
+        body = body.rstrip("\n")
+        if not body.strip() or body.strip() == "(未记录)":
+            old = old_sections.get(key)
+            if old is not None and old.strip():
+                changed = True
+                # 保留原段尾换行（组 2 惰性匹配会吞掉它，必须补回，
+                # 否则下一段标题与正文挤同一行）
+                return f"#### {key}\n{old}" + ("\n" if had_nl else "")
+        return m.group(0)
+
+    out = _SESSION_SECTION_RE.sub(_repl, entry)
+    if "#### 证据" not in out:
+        old_ev = old_sections.get("证据")
+        if old_ev is not None and old_ev.strip():
+            changed = True
+            out = out.rstrip("\n") + "\n#### 证据\n" + old_ev.rstrip("\n") + "\n"
+    return out if changed else entry
+
+
+def _find_task_history_entry(history, client_name, dsh_session):
+    """T8a：task_history 按 (project, dsh_session) 查重，返回条目下标或 None。"""
+    project = f"client:{client_name}"
+    for i, e in enumerate(history):
+        if isinstance(e, dict) and e.get("project") == project \
+                and e.get("dsh_session") == dsh_session:
+            return i
+    return None
+
+
+def save_session(client_name, input_desc="", decisions="", outputs="", pending="", insight="",
+                 evidence="", strict_evidence=False, dsh_session=None, light=False):
     """追加一条会话记录到客户 context.md 和 task_history.json
 
     insight: 本次会话的洞察摘要（如有，由 _insight.py 生成）
+    evidence: 分号分隔的来源引用串（file:/session:/decision:/user:），写入前经
+              _memory_guard.gate_entry 校验；空串 = 不携带证据（老调用零感知）。
+    strict_evidence: True 时证据校验失败即阻断（返回 False，不写任何文件），
+                     否则仅警告并照写。
+    dsh_session: DSH 会话 ID（T8a）。非空时启用会话级 upsert：context.md 会话块
+                 标题下一行写 `<!-- dsh:session:ID -->`，最后一块带同 ID 标记则整块
+                 替换（会话号不变）；task_history 条目追加 dsh_session 键，同
+                 (project, dsh_session) 已存在则原地更新。为空 = 现状 append。
+    light: True 时只做证据守门 + context.md upsert + task_history upsert，
+           跳过 embedding/graph/bm25/case_cards/session_notes（终点全量 save 补齐索引）。
     """
     # 客户名纠错：避免把别名当新客户创建空目录
     try:
@@ -240,190 +380,272 @@ def save_session(client_name, input_desc="", decisions="", outputs="", pending="
     except Exception as e:
         print(f"[warn] 客户名解析失败: {e}")
 
+    # P0 记忆溯源（T2）：写入前守门。放在别名解析之后、ensure_client_dir/快照/
+    # 任何写入之前 —— strict 阻断路径零副作用（不建目录、不写快照、不写历史）。
+    from _memory_guard import gate_entry
+    gate = gate_entry(decisions, evidence, client_name, strict=strict_evidence)
+    if gate["verdict"] == "blocked":
+        for r in gate["reasons"]:
+            print(f"[证据] 阻断：{r}")
+        print("[证据] --strict-evidence 生效，会话未保存")
+        return False
+
     client_path = ensure_client_dir(client_name)
     context_path = os.path.join(client_path, "context.md")
 
-    today = datetime.now().strftime("%Y-%m-%d")
+    # P1 健壮性（T7）：按客户文件锁。放在别名解析与证据守门之后、任何写入之前；
+    # 获取失败（默认 30s 超时）大声失败：print 明确中文原因并返回 False（不抛异常），
+    # cmd_save 据此 exit 2 —— 绝不静默跳过、绝不绕锁写入。
+    from _save_lock import acquire_save_lock, release_save_lock
+    lock_fd = acquire_save_lock(client_path)
+    if lock_fd is None:
+        print(f"[锁] 获取保存锁失败：{os.path.join(client_path, '.save_lock')} "
+              f"被其他进程持有且 30s 内未释放，会话未保存（避免并发写坏 context.md/task_history）")
+        return False
 
-    # P1: 写前快照（用于回溯）
-    snapshot_path = _snapshot_context(context_path)
-    if snapshot_path:
-        print(f"[快照] context.md 快照已保存: {os.path.basename(snapshot_path)}")
+    try:
+        today = datetime.now().strftime("%Y-%m-%d")
 
-    with open(context_path, "r", encoding="utf-8") as f:
-        content = f.read()
+        # P1: 写前快照（用于回溯）
+        snapshot_path = _snapshot_context(context_path)
+        if snapshot_path:
+            print(f"[快照] context.md 快照已保存: {os.path.basename(snapshot_path)}")
 
-    # 统计现有会话数（兼容旧 ## 格式和新 ### 格式）
-    sessions = re.findall(r'#{2,3} \[(\d{4}-\d{2}-\d{2})\]', content)
-    session_num = len(sessions) + 1
+        with open(context_path, "r", encoding="utf-8") as f:
+            content = f.read()
 
-    entry = f"""
-### [{today}] 第 {session_num} 次会话
-#### 本次输入
-{input_desc or '(未记录)'}
-#### 关键决策
-{decisions or '(未记录)'}
-#### 产出文件
-{outputs or '(未记录)'}
-#### 待办 / 下次要做的
-{pending or '(未记录)'}
-"""
+        # 统计现有会话数（兼容旧 ## 格式和新 ### 格式）
+        sessions = re.findall(r'#{2,3} \[(\d{4}-\d{2}-\d{2})\]', content)
+        session_num = len(sessions) + 1
 
-    with open(context_path, "a", encoding="utf-8") as f:
-        f.write(entry)
+        decisions_rendered = _render_decisions_with_marker(decisions, gate["marker"])
+        entry = _build_session_entry(today, session_num, input_desc, decisions_rendered,
+                                     outputs, pending, gate["evidence_lines"], dsh_session)
 
-    # P1: 写后 schema 校验
-    schema_ok, schema_issues = _validate_context_schema(context_path)
-    if not schema_ok:
-        print("[warn] context.md schema 问题：")
-        for issue in schema_issues:
-            print(f"  - {issue}")
+        # T8a：会话级 upsert。dsh_session 非空时检查 context.md 最后一块是否带同 ID
+        # 标记——是则整块替换（保留旧标题行：日期与会话号不变），否则走现有 append。
+        replaced = False
+        old_date = old_num = None
+        if dsh_session:
+            content, replaced, old_head = _upsert_session_block(content, entry, dsh_session)
+            if replaced:
+                if old_head:
+                    old_date, old_num = old_head
+                with open(context_path, "w", encoding="utf-8") as f:
+                    f.write(content)
+            else:
+                with open(context_path, "a", encoding="utf-8") as f:
+                    f.write(entry)
+        else:
+            with open(context_path, "a", encoding="utf-8") as f:
+                f.write(entry)
 
-    # 同时写入 task_history
-    if os.path.exists(TASK_HISTORY):
-        with open(TASK_HISTORY, "r", encoding="utf-8") as f:
-            raw = f.read()
-        try:
-            history = json.loads(raw)
-            if not isinstance(history, list):
-                # dict 格式（旧版兼容）：抽取 tasks 字段
-                if isinstance(history, dict) and isinstance(history.get("tasks"), list):
-                    history = history["tasks"]
-                else:
-                    history = []
-        except Exception as e:
-            # JSON 解析失败：备份原文件再重置，避免历史记录全丢
-            backup = TASK_HISTORY + f".corrupt.{datetime.now().strftime('%Y%m%d%H%M%S')}"
+        # 会话号口径：upsert 替换时沿用旧块编号，其余情况用新计算值
+        reported_num = old_num if replaced else session_num
+
+        # P1: 写后 schema 校验
+        schema_ok, schema_issues = _validate_context_schema(context_path)
+        if not schema_ok:
+            print("[warn] context.md schema 问题：")
+            for issue in schema_issues:
+                print(f"  - {issue}")
+
+        # 同时写入 task_history
+        if os.path.exists(TASK_HISTORY):
+            with open(TASK_HISTORY, "r", encoding="utf-8") as f:
+                raw = f.read()
             try:
-                with open(backup, "w", encoding="utf-8") as f:
-                    f.write(raw)
-                print(f"[警告] task_history.json 解析失败({e})，已备份到 {backup}")
-            except Exception:
-                print(f"[警告] task_history.json 解析失败({e})，备份失败")
+                history = json.loads(raw)
+                if not isinstance(history, list):
+                    # dict 格式（旧版兼容）：抽取 tasks 字段
+                    if isinstance(history, dict) and isinstance(history.get("tasks"), list):
+                        history = history["tasks"]
+                    else:
+                        history = []
+            except Exception as e:
+                # JSON 解析失败：备份原文件再重置，避免历史记录全丢
+                backup = TASK_HISTORY + f".corrupt.{datetime.now().strftime('%Y%m%d%H%M%S')}"
+                try:
+                    with open(backup, "w", encoding="utf-8") as f:
+                        f.write(raw)
+                    print(f"[警告] task_history.json 解析失败({e})，已备份到 {backup}")
+                except Exception:
+                    print(f"[警告] task_history.json 解析失败({e})，备份失败")
+                history = []
+        else:
+            os.makedirs(os.path.dirname(TASK_HISTORY), exist_ok=True)
             history = []
-    else:
-        os.makedirs(os.path.dirname(TASK_HISTORY), exist_ok=True)
-        history = []
 
-    history.append({
-        "date": today,
-        "project": f"client:{client_name}",
-        "session": session_num,
-        "decisions": decisions,
-        "outputs": outputs,
-        "pending": pending,
-        "insight": insight
-    })
+        entry_task = {
+            "date": today,
+            "project": f"client:{client_name}",
+            "session": reported_num,
+            "decisions": decisions,
+            "outputs": outputs,
+            "pending": pending,
+            "insight": insight,
+            "evidence": evidence,
+        }
+        if dsh_session:
+            entry_task["dsh_session"] = dsh_session
+            # T8a：按 (project, dsh_session) 查重，已存在 -> 原地更新（date/session 等标识保持）
+            idx = _find_task_history_entry(history, client_name, dsh_session)
+            if idx is not None:
+                old = history[idx]
+                # 监工修复（2026-08-19）：合并语义——新值非空才覆盖，
+                # 空参 upsert 不抹掉先前内容（与 context.md 合并一致）
+                for _k, _v in (("decisions", decisions), ("outputs", outputs),
+                               ("pending", pending), ("insight", insight),
+                               ("evidence", evidence)):
+                    if _v:
+                        old[_k] = _v
+            else:
+                if replaced:
+                    # 罕见情形：context.md 命中整块替换但 task_history 无同 ID 条目
+                    # （如历史被重置/清理）——用旧块的日期与会话号对齐，避免编号错位
+                    entry_task["date"] = old_date or today
+                    entry_task["session"] = old_num or reported_num
+                history.append(entry_task)
+        else:
+            history.append(entry_task)
 
-    with open(TASK_HISTORY, "w", encoding="utf-8") as f:
-        json.dump(history, f, ensure_ascii=False, indent=2)
+        with open(TASK_HISTORY, "w", encoding="utf-8") as f:
+            json.dump(history, f, ensure_ascii=False, indent=2)
 
-    print(f"会话已保存: {client_name} 第 {session_num} 次")
+        # P0 记忆溯源（T2）：证据引用汇总。静默失效是最高优先级 bug，计数必须可见。
+        if gate["counts"]["total_refs"] > 0:
+            print(f"[证据] 引用 {gate['counts']['total_refs']}：通过 {gate['counts']['passed']} / 待核 {gate['counts']['failed']}{gate['marker']}")
+        elif decisions and str(decisions).strip():
+            print("[证据] 决策未携带证据（--evidence= 可补）")
 
-    # 自动增量更新 Embedding 索引（失败不影响主流程）
-    try:
-        from _embed_index import build_embedding_index
-        print("[索引] 自动增量更新 Embedding...")
-        result = build_embedding_index(batch_size=50, force=False)
-        if result and isinstance(result, dict):
-            total = len(result.get("vectors", {}))
-            print(f"[索引] 完成: 总计 {total} 个向量")
-    except Exception as e:
-        print(f"[索引] 增量更新跳过: {e}")
+        print(f"会话已保存: {client_name} 第 {reported_num} 次")
 
-    # 自动同步 BM25 索引（D-117/P1-5 修复：此前 save 只更 Embedding，
-    # BM25 长期滞后导致 RRF 双路不对称；节流逻辑见 _sync_bm25_if_stale）
-    try:
-        _sync_bm25_if_stale(os.path.dirname(TASK_HISTORY), today)
-    except Exception as e:
-        print(f"[索引] BM25 同步跳过: {e}")
+        # T8a：light 模式只做证据守门 + context.md upsert + task_history upsert，
+        # 跳过 embedding/graph/bm25/case_cards/session_notes（终点全量 save 补齐索引）。
+        if light:
+            print("[light-save] 跳过索引/图谱/笔记")
+        else:
+            # 自动增量更新 Embedding 索引（失败不影响主流程）
+            try:
+                from _embed_index import build_embedding_index
+                print("[索引] 自动增量更新 Embedding...")
+                result = build_embedding_index(batch_size=50, force=False)
+                if result and isinstance(result, dict):
+                    total = len(result.get("vectors", {}))
+                    print(f"[索引] 完成: 总计 {total} 个向量")
+            except Exception as e:
+                print(f"[索引] 增量更新跳过: {e}")
 
-    # 自动更新 outputs_index.json（graph 读取它，必须先于 graph 更新；失败不影响主流程）
-    try:
-        n_added = update_outputs_index(client_name)
-        if n_added:
-            print(f"[索引] outputs_index 新增 {n_added} 条产出记录")
-    except Exception as e:
-        print(f"[索引] outputs_index 更新跳过: {e}")
+            # 自动同步 BM25 索引（D-117/P1-5 修复：此前 save 只更 Embedding，
+            # BM25 长期滞后导致 RRF 双路不对称；节流逻辑见 _sync_bm25_if_stale）
+            try:
+                _sync_bm25_if_stale(os.path.dirname(TASK_HISTORY), today)
+            except Exception as e:
+                print(f"[索引] BM25 同步跳过: {e}")
 
-    # 自动提取案例卡（D-123，业务启动包；失败不影响主流程）
-    try:
-        n_cards = _extract_case_cards(client_name)
-        if n_cards:
-            print(f"[案例] 新增/更新 {n_cards} 张案例卡")
-    except Exception as e:
-        print(f"[案例] 案例卡提取跳过: {e}")
+        # 自动更新 outputs_index.json（graph 读取它，必须先于 graph 更新；失败不影响主流程）
+        try:
+            n_added = update_outputs_index(client_name)
+            if n_added:
+                print(f"[索引] outputs_index 新增 {n_added} 条产出记录")
+        except Exception as e:
+            print(f"[索引] outputs_index 更新跳过: {e}")
 
-    # 自动更新世界书 client_graph.json + client_index.md（失败不影响主流程）
-    try:
-        print("[graph] 自动更新 client_graph...")
-        build_client_graph(client_name)
-    except Exception as e:
-        print(f"[graph] 更新跳过: {e}")
+        # 自动提取案例卡（D-123，业务启动包；失败不影响主流程）
+        if not light:
+            try:
+                n_cards = _extract_case_cards(client_name)
+                if n_cards:
+                    print(f"[案例] 新增/更新 {n_cards} 张案例卡")
+            except Exception as e:
+                print(f"[案例] 案例卡提取跳过: {e}")
 
-    # 三项强制检查（project_rules.md 会话结束 MANDATORY）
-    import glob
-    warnings = []
-    # 检查 1：inbox/ 残留 .py/.log/.tmp/.pyc/.bak
-    for ext in (".py", ".log", ".tmp", ".pyc", ".bak"):
-        junk = glob.glob(os.path.join(INBOX_DIR, f"*{ext}"))
-        if junk:
-            warnings.append(f"inbox/ 有残留: {[os.path.basename(f) for f in junk]}")
-    # 检查 2：产出路径合规（outputs 字段提到的文件应落在 output/{客户}/ 下）
-    if outputs and isinstance(outputs, str):
-        for line in outputs.splitlines():
-            line = line.strip()
-            if line and (line.endswith(".html") or line.endswith(".pptx") or line.endswith(".docx") or line.endswith(".xlsx")):
-                # 检查是否在 output/{客户}/ 路径下
-                expected_prefix = os.path.join(SCRIPT_DIR, "output", client_name)
-                if not os.path.isabs(line):
-                    line_abs = os.path.join(SCRIPT_DIR, line)
-                else:
-                    line_abs = line
-                if not os.path.abspath(line_abs).startswith(os.path.abspath(expected_prefix)):
-                    warnings.append(f"产出路径不合规（应在 output/{client_name}/）: {line}")
-    # 检查 3：_uncategorized/ 堆积
-    uncat = os.path.join(KNOWLEDGE_DIR, "clients", "_uncategorized")
-    if os.path.isdir(uncat):
-        n = len(os.listdir(uncat))
-        if n > 0:
-            warnings.append(f"_uncategorized/ 堆积 {n} 个文件")
+        # 自动更新世界书 client_graph.json + client_index.md（失败不影响主流程）
+        if not light:
+            try:
+                print("[graph] 自动更新 client_graph...")
+                build_client_graph(client_name)
+            except Exception as e:
+                print(f"[graph] 更新跳过: {e}")
 
-    if warnings:
-        print("[warn] 会话结束检查警告：")
-        for w in warnings:
-            print(f"  - {w}")
+        # 三项强制检查（project_rules.md 会话结束 MANDATORY）
+        import glob
+        warnings = []
+        # 检查 1：inbox/ 残留 .py/.log/.tmp/.pyc/.bak
+        for ext in (".py", ".log", ".tmp", ".pyc", ".bak"):
+            junk = glob.glob(os.path.join(INBOX_DIR, f"*{ext}"))
+            if junk:
+                warnings.append(f"inbox/ 有残留: {[os.path.basename(f) for f in junk]}")
+        # 检查 2：产出路径合规（outputs 字段提到的文件应落在 output/{客户}/ 下）
+        if outputs and isinstance(outputs, str):
+            for line in outputs.splitlines():
+                line = line.strip()
+                if line and (line.endswith(".html") or line.endswith(".pptx") or line.endswith(".docx") or line.endswith(".xlsx")):
+                    # 检查是否在 output/{客户}/ 路径下
+                    expected_prefix = os.path.join(SCRIPT_DIR, "output", client_name)
+                    if not os.path.isabs(line):
+                        line_abs = os.path.join(SCRIPT_DIR, line)
+                    else:
+                        line_abs = line
+                    if not os.path.abspath(line_abs).startswith(os.path.abspath(expected_prefix)):
+                        warnings.append(f"产出路径不合规（应在 output/{client_name}/）: {line}")
+        # 检查 3：_uncategorized/ 堆积
+        uncat = os.path.join(KNOWLEDGE_DIR, "clients", "_uncategorized")
+        if os.path.isdir(uncat):
+            n = len(os.listdir(uncat))
+            if n > 0:
+                warnings.append(f"_uncategorized/ 堆积 {n} 个文件")
 
-    # 生成 session_notes 独立笔记（v2.9.7 · 结构化笔记持久化）
-    try:
-        notes_path = os.path.join(client_path, f"session_notes_{today}.md")
-        notes_lines = [
-            f"# 会话笔记 · {client_name} · {today}（第 {session_num} 次）",
-            "",
-            "## 本次目标",
-            input_desc[:200] if input_desc else "(未记录)",
-            "",
-            "## 完成项",
-            outputs[:500] if outputs else "(未记录)",
-            "",
-            "## 待办",
-            pending[:500] if pending else "(无待办)",
-            "",
-            "## 关键决策",
-            decisions[:500] if decisions else "(未记录)",
-            "",
-        ]
-        with open(notes_path, "w", encoding="utf-8") as f:
-            f.write("\n".join(notes_lines))
-        print(f"[笔记] session_notes 已生成: {os.path.basename(notes_path)}")
-    except Exception as e:
-        print(f"[笔记] session_notes 生成失败（不阻断）: {e}")
+        if warnings:
+            print("[warn] 会话结束检查警告：")
+            for w in warnings:
+                print(f"  - {w}")
 
-    return warnings  # 空列表=无问题
+        # 生成 session_notes 独立笔记（v2.9.7 · 结构化笔记持久化；light 模式跳过）
+        if not light:
+            try:
+                notes_path = os.path.join(client_path, f"session_notes_{today}.md")
+                notes_lines = [
+                    f"# 会话笔记 · {client_name} · {today}（第 {reported_num} 次）",
+                    "",
+                    "## 本次目标",
+                    input_desc[:200] if input_desc else "(未记录)",
+                    "",
+                    "## 完成项",
+                    outputs[:500] if outputs else "(未记录)",
+                    "",
+                    "## 待办",
+                    pending[:500] if pending else "(无待办)",
+                    "",
+                    "## 关键决策",
+                    decisions[:500] if decisions else "(未记录)",
+                    "",
+                ]
+                with open(notes_path, "w", encoding="utf-8") as f:
+                    f.write("\n".join(notes_lines))
+                print(f"[笔记] session_notes 已生成: {os.path.basename(notes_path)}")
+            except Exception as e:
+                print(f"[笔记] session_notes 生成失败（不阻断）: {e}")
+
+        return True  # 正常完成（旧版返回 warnings 且调用方均忽略；T2 起改 bool 供 _cli 判阻断）
+    finally:
+        # P1 健壮性（T7）：任何路径（含异常传播）都释放锁；自己持有的锁 remove 必成功
+        release_save_lock(client_path, lock_fd)
 
 
 def parse_args(args):
-    result = {"input_desc": "", "decisions": "", "outputs": "", "pending": ""}
+    """解析 save 子命令的会话内容键（原样传入，见 _cli.py p_save 的 extra 参数）。
+
+    返回 dict：
+      - input_desc / decisions / outputs / pending：原有四键，行为不变；
+      - evidence：分号分隔的来源引用串（file:/session:/decision:/user:），原样存；
+      - strict_evidence："1"/"true"/"yes"（大小写不敏感）为 True，其余 False，缺省 False；
+      - dsh_session：`--dsh-session=ID` 的 DSH 会话 ID（T8a），缺省 None；
+      - light：`--light` 或 `--light=1` 为 True（T8a），缺省 False。
+    """
+    result = {"input_desc": "", "decisions": "", "outputs": "", "pending": "",
+              "evidence": "", "strict_evidence": False,
+              "dsh_session": None, "light": False}
     for arg in args:
         if arg.startswith("--input="):
             result["input_desc"] = arg[8:]
@@ -433,6 +655,16 @@ def parse_args(args):
             result["outputs"] = arg[10:]
         elif arg.startswith("--pending="):
             result["pending"] = arg[10:]
+        elif arg.startswith("--evidence="):
+            result["evidence"] = arg[len("--evidence="):]
+        elif arg.startswith("--strict-evidence="):
+            result["strict_evidence"] = arg[len("--strict-evidence="):].strip().lower() in ("1", "true", "yes")
+        elif arg.startswith("--dsh-session="):
+            result["dsh_session"] = arg[len("--dsh-session="):] or None
+        elif arg == "--light":
+            result["light"] = True
+        elif arg.startswith("--light="):
+            result["light"] = arg[len("--light="):].strip().lower() in ("1", "true", "yes")
     return result
 
 

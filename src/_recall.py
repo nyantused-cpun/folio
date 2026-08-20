@@ -68,8 +68,15 @@ def recall(input_text, force_keyword=False, client_name=None, rerank=True,
                    None（默认）时自动按是否有 client_name 决定。
 
     返回（return_results=True 时）：
-        [{"client", "score", "path", "snippet"}, ...] 或 None
+        [{"client", "score", "path", "snippet", "parent_context",
+          "source", "mode", "degraded"}, ...] 或 None
+        source: "客户=X | 文档=Y"（现有 print 的来源标注数据化）
+        mode: 实际生效链路（"BM25 + Embedding RRF" / "BM25" / "Embedding" / "关键词降级"）
+        degraded: 任一降级路径触发即 True（请求 Embedding 无返回 / RRF 阈值 / 依赖缺失 / 关键词 fallback）
     """
+    # T9：降级状态跟踪。任一降级路径（见下方分支）触发后置 True，
+    # 结果 item 的 "degraded" 键随之置位，供 folio_recall / RAG 注入识别质量折扣。
+    degraded = False
     if not force_keyword:
         try:
             from _bm25 import query_bm25
@@ -115,6 +122,15 @@ def recall(input_text, force_keyword=False, client_name=None, rerank=True,
             else:
                 bm25_results = query_bm25(query_text, top_k=_RECALL_CONFIG["bm25"]["top_k"], client_filter=index_filter)
 
+            # T9：降级检测 —— 请求了 Embedding 但该路无返回（内部降级：索引模型不一致 /
+            # 无 API key / 无索引 / 异常均以 None 返回）。双路缺一路 = 结果质量打折，必须可见。
+            if use_embedding and emb_results is None:
+                degraded = True
+            # 监工补充（对称规则，B 批报告指出）：BM25 路无返回（索引缺失/损坏
+            # return None）同样 = 缺一路，单腿 Embedding 结果也必须标降级。
+            if bm25_results is None:
+                degraded = True
+
             # RRF 融合
             if bm25_results is not None and emb_results:
                 results = _rrf_fuse(bm25_results, emb_results, k=_RECALL_CONFIG["rrf"]["k"])
@@ -128,6 +144,7 @@ def recall(input_text, force_keyword=False, client_name=None, rerank=True,
             else:
                 results = None
                 mode = None
+            base_mode = mode  # T9：rerank 前的基础链路，作为结果 item["mode"]（不含 rerank 后缀）
 
             # 关键词降级：RRF 最高分低于阈值时降级到关键词模式
             if results and _RECALL_CONFIG.get("rrf", {}).get("fallback_threshold"):
@@ -267,6 +284,14 @@ def recall(input_text, force_keyword=False, client_name=None, rerank=True,
                 else:
                     enriched = enriched[:3]  # top 3（改动7：从 5 降为 3）
 
+                # T9：来源锚 + 模式 + 降级标记（纯加法，不删不改既有键——
+                # folio_recall 工具 / RAG 注入消费这些 dict）
+                for _item in enriched:
+                    _doc_name = os.path.basename(str(_item["path"]).split("#")[0])
+                    _item["source"] = f"客户={_item['client']} | 文档={_doc_name}"
+                    _item["mode"] = base_mode
+                    _item["degraded"] = degraded
+
                 print(f"=== {mode} 检索结果 ===")
                 # 报价引用约束：检测是否涉及报价/价格，提示来源标注
                 quote_keywords = ["报价", "价格", "单价", "费用", "万元", "元/", "报价单", "预算"]
@@ -274,16 +299,16 @@ def recall(input_text, force_keyword=False, client_name=None, rerank=True,
                 if has_quote:
                     print("[报价引用约束] 本次检索涉及价格信息，引用时必须标注：客户名+文档名+版本")
                     print("[报价引用约束] 不同客户的价格严禁混用；如检索结果无精确匹配，需人工确认")
+                # 人读路径：降级时每条结果行前缀 [降级]（不再只在过程日志里闪一次）
+                _deg_prefix = "[降级] " if degraded else ""
                 for item in enriched:
-                    print(f"\n[{item['client']}] 分数: {item['score']:.3f}")
-                    print(f"  路径: {item['path']}")
-                    # 来源标注：从 path 提取文档名
-                    doc_name = os.path.basename(str(item['path']).split("#")[0])
-                    print(f"  来源: 客户={item['client']} | 文档={doc_name}")
-                    print(f"  片段: {item['snippet']}")
+                    print(f"\n{_deg_prefix}[{item['client']}] 分数: {item['score']:.3f}")
+                    print(f"{_deg_prefix}  路径: {item['path']}")
+                    print(f"{_deg_prefix}  来源: {item['source']}")
+                    print(f"{_deg_prefix}  片段: {item['snippet']}")
                     # P0: 父级上下文
                     if item.get("parent_context"):
-                        print(f"  父级上下文: {item['parent_context']}")
+                        print(f"{_deg_prefix}  父级上下文: {item['parent_context']}")
                     # 图扩展结果
                     for exp_line in item.get("graph_expansions", []):
                         print(exp_line)
@@ -344,10 +369,14 @@ def _keyword_fallback(input_text, return_results=False):
     for client, score in sorted_items[:5]:
         ctx_path = get_context_path(client)
         content = content_cache[client]
-        print(f"\n[{client}] 命中词数: {score}")
-        print(f"  {content[:80]}")
+        print(f"\n[降级] [{client}] 命中词数: {score}")
+        print(f"[降级]   {content[:80]}")
+        # T9：关键词降级链路固定携带 source/mode/degraded（关键词模式 = 质量打折）
+        doc_name = os.path.basename(str(ctx_path).split("#")[0])
         results.append({"client": client, "score": float(score),
-                         "path": ctx_path, "snippet": content[:200]})
+                         "path": ctx_path, "snippet": content[:200],
+                         "source": f"客户={client} | 文档={doc_name}",
+                         "mode": "关键词降级", "degraded": True})
     return results if return_results else None
 
 
@@ -470,7 +499,7 @@ def _detect_client_from_path(path):
     # D-121：docs 方法论白名单文档无客户归属，显示为「方法论」
     if "docs" in path and "clients" not in path:
         return "方法论"
-    # P1-11：按客户名长度降序匹配，避免 "蓝" 先于 "蓝海集团" 匹配
+    # P1-11：按客户名长度降序匹配，避免 "蓝" 先于 "蓝海" 匹配（示例：客户名「蓝海集团」）
     clients = sorted(list_clients(), key=len, reverse=True)
     for client in clients:
         if client in path:
