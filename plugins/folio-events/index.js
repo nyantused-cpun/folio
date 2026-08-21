@@ -13,7 +13,7 @@
 //     dsh-agent-loop ReactLoopAgent 构造于 session 之上，官方先例：
 //     systemPrompt.variable("cwd", context.agent?.session.header.cwd)）。
 //
-// 接口依据（本机 @deepseek-ai/dsh 0.1.0-rc.6 逐行核实）：
+// 接口依据（本机 @deepseek-ai/dsh 0.1.0-rc.8 逐行核实）：
 //   - agent/session-start、agent/disposed：dsh-agent 官方 live 词汇（non-vetoing notification）；
 //   - agent.followup(message)：dsh-agent 官方入队原语（next-turn FIFO 唤醒）；消息用
 //     dsh-llm/message 的 createUserMessage 构造（mint MessageId，形状正确）；

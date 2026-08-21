@@ -9,5 +9,5 @@ export default {
   ],
   dispatchHints:
     "【主代理流程（兰亭版）】① PPTX 成品先用 pptx_screenshot 渲染，HTML 成品走 gewu_prep；② 整稿审阅分批读图（每批 4-6 张），页数 >12 时先粗扫标可疑页再对可疑页深查；③ 关键发现逐条 gewu_locate 核验（文字/数字/页码归属）；语义类判罚（⭐/三态色/分隔手段）对照视觉规范要义与决策记录后再采信；④ 高危项（错别字、数字口径、连线断头、遮挡）须与结构事实交叉核实后才写进正式审阅报告。",
-  requires: { dshVersion: "0.1.0-rc.6" },
+  requires: { dshVersion: "0.1.0-rc.8" },
 };

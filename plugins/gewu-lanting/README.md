@@ -48,10 +48,10 @@ $env:GEWU_BRIEF_PRESET = "<workspace>/folio/plugins/gewu-lanting/brief-preset.js
 
 | 内容 | 来源 |
 |---|---|
-| 视觉规范 v3.0（双主题/版式/密度/图表） | `docs/dev_plan_visual_v3_2026-08-11.md` |
-| 三态色 D-092 | `decisions.md` |
-| 实测坑位（⭐/虚线框/带色块数字） | `gewu/docs/TESTING.md` |
-| 调度 SOP（分批/核验/交叉核实） | `<workspace>/.agents/skills/vision-review/SKILL.md（发布版 skills 挂载目录）` |
+| 视觉规范 v3.0（双主题/版式/密度/图表） | 内部规范文档（不随发布版分发） |
+| 三态色 D-092 | 内部决策记录 |
+| 实测坑位（⭐/虚线框/带色块数字） | 格物内部测试记录 |
+| 调度 SOP（分批/核验/交叉核实） | 内部技能文档（安装后同步到 `.agents/skills/`） |
 
 ## 变更纪律
 

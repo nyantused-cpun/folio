@@ -11,7 +11,7 @@
 // 2. tools/pre-execute：拦非 CLI 的 python 直调
 //    （纪律：一律 .venv/Scripts/python.exe _cli.py，禁 python xxx.py / -m / -c）
 //
-// 接口依据（本机 @deepseek-ai/dsh 0.1.0-rc.6 源码逐行核实）：
+// 接口依据（本机 @deepseek-ai/dsh 0.1.0-rc.8 源码逐行核实）：
 // - ctx.on + ctx.waterfall 是同一事件总线的读写两端（dsh-tool-fs lib/index.js:658/809
 //   触发 "fs/write-intent"/"fs/edit-intent"，handler 链 next() 续链、throw 拒绝）
 // - "tools/pre-execute" 瀑布（dsh-tools lib/index.js:3098）gate 语义：

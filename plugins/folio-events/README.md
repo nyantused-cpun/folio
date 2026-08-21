@@ -11,7 +11,7 @@
 
 > 作用域隔离（2026-08-15）：本插件挂在 pre-sales preset 层，仅「售前助手」模式生效；原 `session/event` 实时观察依赖 root scope 广播，preset 内收不到，故改为 disposed 时扫描会话事件。
 
-## 2. 接口依据（rc.6 逐行核实）
+## 2. 接口依据（rc.8 逐行核实）
 
 - `agent/session-start` / `agent/disposed`：dsh-agent 官方 live 词汇（non-vetoing）；
 - `tool/call` 会话事件形状 `{turn, step, callId, name, arguments}`：dsh-agent-loop `appendToolCall`（`session.append("tool/call", ...)`）；
@@ -26,14 +26,14 @@
 
 ## 4. 验证
 
-- 沙箱内：`node --check index.js state.js` + `node test/run-check.mjs`（2026-08-14：7/7 通过）；
+- 沙箱内：`node --check index.js state.js` + `node test/run-check.mjs`（2026-08-14：7/7 通过；2026-08-20：rc.8 源码复核 + import 冒烟通过）；
 - 运行级（待 dsh web 重启）：新会话第一条消息后应出现【兰亭入口协议】提醒；会话关闭后宿主日志出现 `[folio-events] auto-save` 行。
 
 ## 5. 已知限制
 
 - host 插件改动需重启 `dsh web` 生效；
 - 客户名提取依赖模型调用过 folio_session_start/folio_save（否则 dispose 时无客户名、跳过自动 save——日志会注明）；
-- 事件 payload 形状按 rc.6 源码 + 防御式解析编写，DSH 升级后需按漂移复测（verifiedAgainst 记录在 package.json）。
+- 事件 payload 形状按 rc.8 源码 + 防御式解析编写，DSH 升级后需按漂移复测（verifiedAgainst 记录在 package.json）。
 
 ## 6. 目录
 

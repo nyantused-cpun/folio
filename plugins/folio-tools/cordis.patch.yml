@@ -1,6 +1,6 @@
 # folio-tools 激活 patch（profile 层；dsh.bundle.patch 声明于此）
 #
-# 写法依据：cordis-plugin-include applyEntryPatches 语义（0.1.0-rc.6 逐行核实）
+# 写法依据：cordis-plugin-include applyEntryPatches 语义（0.1.0-rc.8 逐行核实）
 #   - 新增插件 entry 必须用「无 id 的 insert」（直接追加到 entry 列表）
 #   - 安装：把本目录软链/复制到 profiles/<name>/node_modules/@nyantused/folio-dsh-tools，
 #     并在 profiles/<name>/cordis.patch.yml 顶层写同一段

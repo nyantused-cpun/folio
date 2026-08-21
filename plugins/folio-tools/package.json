@@ -43,14 +43,14 @@
       "patch": "./cordis.patch.yml"
     },
     "verifiedAgainst": {
-      "dshVersion": "0.1.0-rc.6",
-      "evidenceLevel": "L1 源码级（defineTool/subprocess/事件接口逐行核实）；L4 运行级待 dsh web 重启后执行",
-      "testedAt": "2026-08-16"
+      "dshVersion": "0.1.0-rc.8",
+      "evidenceLevel": "L1 源码级（defineTool/subprocess/事件接口逐行核实）；L2 沙箱自检/import 冒烟；L4 运行级待 dsh web 重启后执行",
+      "testedAt": "2026-08-20"
     }
   },
   "peerDependencies": {
-    "@deepseek-ai/dsh-agent": "^0.1.0-rc.6",
-    "@deepseek-ai/dsh-tools": "^0.1.0-rc.6",
+    "@deepseek-ai/dsh-agent": "^0.1.0-rc.8",
+    "@deepseek-ai/dsh-tools": "^0.1.0-rc.8",
     "@deepseek-ai/cordis": "^4.0.1"
   }
 }

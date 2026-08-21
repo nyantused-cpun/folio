@@ -4,7 +4,7 @@
 //   判据 = 命令是不是「模型的决策点」。记忆面/质量面是模型高频决策点 → 工具化；
 //   生成型机械命令（html-build/pptd-*/docx-build/quote-* 等）留 pwsh。
 //
-// 接口依据（本机 @deepseek-ai/dsh 0.1.0-rc.6 源码逐行核实）：
+// 接口依据（本机 @deepseek-ai/dsh 0.1.0-rc.8 源码逐行核实）：
 //   - ctx.tools.register(defineTool(...))：dsh-tools 官方注册面；分层=调用方 ctx 的 scope
 //     （本插件 apply 于 profile 层 = host 层全局注册，与 vision-bridge 同）；
 //   - ctx.subprocess.spawn(spec)：vision-bridge 已验证模式（spec.argv/cwd/stdio.maxBytes/graceMs/

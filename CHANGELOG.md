@@ -2,11 +2,15 @@
 
 > 版本线说明：本仓库记录**对外发布线**（Folio），与内部工作区版本线（售前助手 v3.x）相互独立、不对齐。只有值得对外说的事才升版本。
 
-## [Unreleased] - 2026-08-17
+## [Unreleased] - 2026-08-20
 
 ### 新增
 
-- **新增 `plugins/gewu-lanting/`**：格物兰亭 preset：视觉规范 v3.0 要义 + 业务标记语义注入格物简报，M2 落地，方案见 docs/格物双版本开发计划与整体规范_2026-08-17.md。
+- **新增 `plugins/gewu-lanting/`**：格物兰亭 preset：视觉规范 v3.0 要义 + 业务标记语义注入格物简报，M2 落地（内部方案文档，不随发布版分发）。
+
+### 变更
+
+- **DSH 对齐升级 0.1.0-rc.6 → 0.1.0-rc.8**：插件 peer 依赖、`verifiedAgainst`、README/技术白皮书/插件 README 与源码注释统一锚定 rc.8；`plugins/gewu-lanting/brief-preset.js` 的 `requires.dshVersion` 同步更新。已通过 folio-tools/folio-events 自检、`node --check` 与 rc.8 环境 import 冒烟；运行级复测按内部 RC.8 升级 SOP 执行（重启 `dsh web` 后逐项验证）。
 
 ## [1.0.2] - 2026-08-16
 
