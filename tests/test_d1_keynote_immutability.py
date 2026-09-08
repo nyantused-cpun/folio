@@ -28,6 +28,7 @@ import re
 import _cli_guards
 import _domain_guard
 import _memory_guard
+import _paths
 import _session
 import _theme_guard
 from _cli_audit import _audit_keynote_hash
@@ -93,7 +94,8 @@ def _make_client(tmp_path, monkeypatch, register_event=True):
                "- **type: keynote_change**\n")
         (cdir / "decisions.md").write_bytes(dec.encode("utf-8"))
     monkeypatch.setattr(_theme_guard, "CLIENTS_DIR", str(clients))
-    monkeypatch.setattr(_theme_guard, "SCRIPT_DIR", str(tmp_path))
+    # 指针相对路径由 _paths.rel_to_script 计算（跨盘回退绝对），故重定向 _paths.SCRIPT_DIR
+    monkeypatch.setattr(_paths, "SCRIPT_DIR", str(tmp_path))
     monkeypatch.setattr(_memory_guard, "SCRIPT_DIR", str(tmp_path))
     return clients, cdir
 
