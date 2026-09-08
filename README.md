@@ -34,7 +34,7 @@ Folio 是给 AI 宿主（DeepSeek Harness / Trae / Kimi 等）外挂的**长程�
 
 | 依赖 | 要求 | 说明 |
 |---|---|---|
-| 操作系统 | Windows 10/11 | 首发仅 Windows；macOS/Linux 安装脚本在 v1.1 路线 |
+| 操作系统 | Windows 10/11 | 首发仅 Windows；macOS/Linux 安装脚本在后续版本规划（欢迎社区贡献） |
 | PowerShell | 5.1+ 或 7 | 安装脚本用 `powershell` / `pwsh` 均可 |
 | Python | **≥ 3.10** | 安装脚本自动探测 `py` / `python` / `python3`；未找到会失败并提示官网 |
 | Git | 需要 | `git clone` 获取仓库 |
@@ -201,7 +201,7 @@ pwsh .\setup\install-community-plugins.ps1 -Verify
 
 - 兰亭 preset **最初设计**对齐 DSH 官方 **minimal 蓝本**（不挂 code 工具、无冗余，塑造专用平台体验）；
 - 实际基线采用 **standard 模板 + 精选工具**（禁用 codex/claude 等），原因是官方 minimal 在 Windows 上存在 PTY 兼容问题（`terminal inspection is unsupported on platform win32`）——这是对 Windows 的兼容性修正，不是偏离方向；
-- 当前 **首发 Windows**；macOS/Linux 安装脚本（install.sh）在 v1.1 路线中。
+- 当前 **首发 Windows**；macOS/Linux 安装脚本（install.sh）在后续版本规划中（欢迎社区贡献 install.sh / 环境适配）。
 
 ### 4. Linux / macOS 适配
 
@@ -213,12 +213,13 @@ pwsh .\setup\install-community-plugins.ps1 -Verify
 - **v1.0.2（2026-08-16）**：CI 流水线 + 社区友好基建（Issue/PR 模板、dev 依赖、真实仓库地址）+ 运行时目录去宿主化（`.trae` → `.folio`）+ 中英双语示例产出（HTML/PPTX）。
 - **v1.0.1**：guard 作用域隔离 + 插件包名 @nyantused/folio-dsh-* + preset 入仓。
 - **v1.0.0**：首个正式发布——五段价值链全链路 + DSH 深度适配 + LLM host 模式（0 key 起步）+ 安装脚本/自检。
-- **v1.1 优先补全（开源后第一波）**
+- **下一版优先补全（v2.x，开源后第一波）**
   1. 右侧预览区：接入 DSH-better-sidebar（或自研 folio-preview 兜底）
   2. GitHub 集成：`dsh-github-connector` 或自研 `folio_github` 工具
   3. Token 可视化：`context-vista` 或自研会话 Token 面板
   4. 团队可视化：`dsh-agent-teams` 或基于 DSH subagent 事件的自研面板
-- **v1.1 其余规划**：`domain-pack.yml` 方法论包契约（机械校验）+ 市场营销冒烟包 + PPT 截图目检的跨平台支持（当前 `--shots` 依赖本机 PowerPoint）
+  > 注：P0 社区插件当前**暂缓启用**（peer 依赖双副本 / Symbol 分裂，见上文「社区插件」节）；自研兜底路线不受影响。
+- **后续版本规划**：DSH 0.1.2-rc.1 兼容层同步进发布版（见 [§1 版本对齐](#1-版本对齐)）+ `domain-pack.yml` 方法论包契约（机械校验）+ 市场营销冒烟包 + PPT 截图目检的跨平台支持（当前 `--shots` 依赖本机 PowerPoint）
 - **下一步迭代（功能方向，欢迎共建）**
   - 丰富 PPT 叙事的模板与图例
   - 丰富 UI 版式
