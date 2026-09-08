@@ -28,7 +28,7 @@ import re
 from html.parser import HTMLParser
 
 from _cli_infra import SCRIPT_DIR
-from _paths import OUTPUT_SKIP_DIRS, REVIEW_LOG as _REVIEW_LOG
+from _paths import OUTPUT_SKIP_DIRS, REVIEW_LOG as _REVIEW_LOG, rel_to_script
 
 # 口径对齐 _renderer/_spec_hex._HEX_RE（{3,8}+\\b）；只扫内联属性与可见文本，
 # <style>/<script>/注释三类运行时/说明面豁免（见模块 docstring 白名单）
@@ -217,7 +217,7 @@ def _audit_track(output_dir=None, review_log_path=None):
                 std_files += 1  # 纯 standard：无轨混用面，不深扫（存量零打扰）
                 continue
             decks += 1
-            rel = os.path.relpath(fpath, SCRIPT_DIR)
+            rel = rel_to_script(fpath)
             for pid, val, where in rep["stray_hex"]:
                 print(f"✗ [{rel}] standard 页 {pid} 游离 hex {val}（{where}）")
                 fails += 1

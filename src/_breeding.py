@@ -40,6 +40,7 @@ import re
 import sys
 
 from _cli_infra import SCRIPT_DIR
+from _paths import rel_to_script
 
 REGISTRY_REL_DIR = os.path.join("_knowledge", "breeding")  # 登记库目录（相对项目根）
 LOCK_NAME = ".breeding.lock"
@@ -346,7 +347,7 @@ def scan_observation_ttl(targets=None):
                 lines = f.readlines()
         except OSError:
             continue
-        rel = os.path.relpath(path, SCRIPT_DIR)
+        rel = rel_to_script(path)
         for i, line in enumerate(lines, 1):
             if _OBS_TERM_RE.search(line) and not _TTL_RE.search(line):
                 missing.append((rel, i, line.strip()[:100]))

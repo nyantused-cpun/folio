@@ -30,6 +30,7 @@ v1.0.2 之后 16 天内部演进的整体对齐版（同源对齐，一次性发
 
 - 测试文件 69 → 191；Python 3.12 全量绿（folio 侧 pytest 基线 + 主仓移植面）。
 - 发布面脱敏：源码与测试客户名 0 命中（17 词强制门），示例知识卡为虚构数据（蓝海集团）。
+- **首跑 CI 收口（2026-09-08）**：`rank-bm25` 补入 requirements（BM25 是核心检索路径，原漏声明）；跨盘符 `os.path.relpath` 统一走 `_paths.rel_to_script`（GitHub Windows runner 工作区在 D:、TEMP 在 C:，save/audit/breeding/theme 四处链断，本机同盘符不复现）；两处测试夹具去掉对运行时状态的隐式依赖。CI 等价复现（C 盘 tmp + 屏蔽 CI 不装的包）**2237 passed / 0 failed / 24 skipped**。
 
 ## [Unreleased] - 2026-08-20
 

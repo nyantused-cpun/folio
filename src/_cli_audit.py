@@ -4,7 +4,7 @@ import os
 import sys
 
 from _cli_infra import SCRIPT_DIR
-from _paths import LOGS_DIR, REVIEW_LOG as _REVIEW_LOG, list_client_dirs
+from _paths import LOGS_DIR, REVIEW_LOG as _REVIEW_LOG, list_client_dirs, rel_to_script
 
 from _cli_audit_p0 import (
     _audit_p0_required_skills, _audit_p0_engineering_wording,
@@ -238,7 +238,7 @@ def _audit_anti_regeneration():
                 text = open(p, "r", encoding="utf-8").read()
                 nums = [int(m.group(1)) for m in re.finditer(r"(\d+)\s*种子类型", text)]
                 if nums:
-                    declaring.append((os.path.relpath(p, SCRIPT_DIR), nums))
+                    declaring.append((rel_to_script(p), nums))
         drifted = [(f, nums) for f, nums in declaring if actual not in nums]
         if not declaring:
             print("✗ diagram 计数漂移：skill 文档无任何「N 种子类型」声明")
@@ -270,7 +270,7 @@ def _audit_anti_regeneration():
             except Exception:
                 continue
             if re.search(r"^\|\s*元素\s*\|\s*预算\s*\|", text, re.M):
-                duplicates.append(os.path.relpath(path, SCRIPT_DIR))
+                duplicates.append(rel_to_script(path))
     if duplicates:
         print(f"✗ 容量预算表出现在非唯一位置: {duplicates}")
         ok = False
@@ -294,7 +294,7 @@ def _audit_anti_regeneration():
                 except Exception:
                     continue
                 if re.search(r"\| 字段 \| 必填 \| 缺省 \| 说明 \|", text):
-                    field_dups.append(os.path.relpath(path, SCRIPT_DIR))
+                    field_dups.append(rel_to_script(path))
     if field_dups:
         print(f"✗ spec 顶层字段表出现在非唯一位置: {field_dups}")
         ok = False
@@ -367,7 +367,7 @@ def _audit_output_provenance():
                 continue
             fpath = os.path.join(root, fname)
             norm_fpath = os.path.normpath(fpath)
-            rel_fpath = os.path.relpath(fpath, SCRIPT_DIR)
+            rel_fpath = rel_to_script(fpath)
             # 路径在 task_history 里既可能是绝对，也可能是相对 — 两种都尝试
             found = False
             for v in all_verified_paths:
@@ -377,7 +377,7 @@ def _audit_output_provenance():
                     found = True
                     break
             if not found:
-                rel_path = os.path.relpath(fpath, SCRIPT_DIR)
+                rel_path = rel_to_script(fpath)
                 unverified.append(rel_path)
 
     if unverified:

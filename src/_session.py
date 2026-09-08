@@ -109,7 +109,7 @@ def update_outputs_index(client_name):
                 continue
             if not fname.lower().endswith(_OUTPUT_INDEX_EXTS):
                 continue
-            rel = os.path.relpath(fpath, _paths.SCRIPT_DIR).replace(os.sep, "/")
+            rel = _paths.rel_to_script(fpath).replace(os.sep, "/")
             if rel in known:
                 continue
             stem = os.path.splitext(fname)[0]

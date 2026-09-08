@@ -137,6 +137,21 @@ def is_internal_client_dir(client_path, clients_dir=None):
             or rel.startswith(INTERNAL_CLIENTS_DIRNAME + os.sep))
 
 
+def rel_to_script(path):
+    """相对项目根的展示路径；跨盘符（Windows ValueError）回退为绝对路径。
+
+    CI（GitHub Windows runner）工作区在 D:、TEMP 在 C:，对 tmp_path 产物做
+    `os.path.relpath(fpath, SCRIPT_DIR)` 会抛 ValueError 把整条链打断（2026-09-08
+    CI 实证：save/audit/breeding/theme 四处）。本函数只用于展示与登记，不参与
+    路径拼接，回退绝对路径即可保证调用方继续。
+    """
+    abs_path = os.path.abspath(path)
+    try:
+        return os.path.relpath(abs_path, SCRIPT_DIR)
+    except ValueError:
+        return abs_path
+
+
 # Windows 保留设备名（P2-2）：作为目录名会指向设备而非文件系统
 _WINDOWS_DEVICE_NAMES = {
     "CON", "PRN", "AUX", "NUL",

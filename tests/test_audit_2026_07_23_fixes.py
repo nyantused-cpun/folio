@@ -226,9 +226,17 @@ class TestCompactDictHistory:
 # ---------------------------------------------------------------------------
 class TestAuditThemePath:
     def test_works_outside_project_root(self, tmp_path, monkeypatch):
+        """cwd 不在项目根也能工作（路径锚定 SCRIPT_DIR，不依赖 cwd）。
+
+        夹具自建 clients 目录：干净 checkout 没有 _knowledge/clients/（运行时数据，
+        不入库），原先依赖本机存量，CI 上必红（2026-09-08 实证）。
+        """
+        import _cli_audit
+        fake_root = tmp_path / "proj"
+        (fake_root / "_knowledge" / "clients").mkdir(parents=True)
+        monkeypatch.setattr(_cli_audit, "SCRIPT_DIR", str(fake_root))
         monkeypatch.chdir(tmp_path)
-        from _cli_audit import _audit_theme
-        assert _audit_theme() is True
+        assert _cli_audit._audit_theme() is True
 
     def test_rejects_traversal_client(self):
         from _cli_audit import _audit_theme

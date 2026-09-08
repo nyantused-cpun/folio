@@ -26,7 +26,7 @@ from datetime import datetime
 import _memory_guard
 from _graph import DECISION_HEADING_SPLIT_RE, _split_decision_blocks as _graph_split_decision_blocks
 from _memory_guard import _extract_theme_title, _CONFLICT_PENDING_HTML
-from _paths import CLIENTS_DIR, SCRIPT_DIR
+from _paths import CLIENTS_DIR, rel_to_script
 
 # I-3 A2：keynote_change 决策条目类型（ADR-009 案 2' 事件流；登记见 _memory_guard._VALID_ENTRY_TYPES）
 KEYNOTE_ENTRY_TYPE = "keynote_change"
@@ -428,7 +428,7 @@ def append_keynote_change(client_name, summary, approver="用户", conflict_note
                 f"｜批准人: {approver}")
     if conflict_note:
         decision += f"｜冲突并列: {conflict_note}"
-    rel = os.path.relpath(kn["path"], SCRIPT_DIR).replace(os.sep, "/")
+    rel = rel_to_script(kn["path"]).replace(os.sep, "/")
     return append_session_decision(
         client_name, keynote_change_topic(version), decision,
         session_ref=session_ref,

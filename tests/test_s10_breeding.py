@@ -217,8 +217,9 @@ class TestScanObservationTtl:
         f2 = tmp_path / "b.md"
         f2.write_text("普通行，不含观察词\n- **机检状态**：⚠️ 观察中（review 判语义）\n", encoding="utf-8")
         missing = _breeding.scan_observation_ttl(targets=[str(f1), str(f2)])
-        rel1 = os.path.relpath(str(f1), _breeding.SCRIPT_DIR)
-        rel2 = os.path.relpath(str(f2), _breeding.SCRIPT_DIR)
+        # 与被测代码同源：跨盘符（CI：tmp 在 C:、仓库在 D:）回退绝对路径
+        rel1 = _breeding.rel_to_script(str(f1))
+        rel2 = _breeding.rel_to_script(str(f2))
         hits = {(rel, ln) for rel, ln, _ in missing}
         assert (rel1, 1) in hits
         assert (rel1, 2) not in hits and (rel1, 3) not in hits  # 带标注的行不列
