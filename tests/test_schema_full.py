@@ -68,7 +68,14 @@ class TestKnownTypesConsistency:
         assert KNOWN_ELEMENT_TYPES == set(CAPABILITIES)
         # 10 v1 + 13 v2 页面构件 + D-092 page_header + D-093 view_cards/
         # callout_block + 4 v3.0 版式构件 + B-3/B-4/B-5/B-6 四个批次 B 组件
-        assert len(KNOWN_ELEMENT_TYPES) == 31
+        # 另含 image 基础元素 + Step5 ui_mock/conclusion_band + S8 Wave A
+        # screenshot/raw_html + S8 Wave B sla_block/profile_card/logo_wall，
+        # 当前全集 39
+        assert len(KNOWN_ELEMENT_TYPES) == 39
+
+    def test_screenshot_and_raw_html_in_known_types(self):
+        assert "screenshot" in KNOWN_ELEMENT_TYPES
+        assert "raw_html" in KNOWN_ELEMENT_TYPES
 
 
 # ---------------------------------------------------------------------------
@@ -187,6 +194,22 @@ class TestInvalidBaseElements:
         errors = validate_element({"type": "heading", "text": "x", "level": "abc"})
         assert any("level" in e for e in errors)
 
+    # screenshot / raw_html ----
+    def test_screenshot_missing_src(self):
+        errors = validate_element({"type": "screenshot"})
+        assert any("src" in e for e in errors)
+
+    def test_raw_html_missing_content(self):
+        errors = validate_element({"type": "raw_html"})
+        assert any("content" in e for e in errors)
+
+    def test_raw_html_hex_exempt_in_v2_spec(self):
+        spec = {"theme": "consulting_kpmg", "pages": [
+            {"id": "p1", "elements": [
+                {"type": "raw_html",
+                 "content": "<div style='color:#FF5733;'>x</div>"}]}]}
+        assert validate_spec(spec) == []
+
     # architecture_4a ----
     def test_architecture_4a_missing_layers(self):
         errors = validate_element({"type": "architecture_4a"})
@@ -253,7 +276,7 @@ class TestValidateSpecAggregation:
                    for e in errors)
 
     def test_spec_without_pages_is_clean(self):
-        """无 pages / 页面无 elements[]（报价 spec、蓝海集团 bespoke schema）零错误。"""
+        """无 pages / 页面无 elements[]（报价 spec、蓝海 bespoke schema）零错误。"""
         assert validate_spec({}) == []
         assert validate_spec({"pages": [{"id": "p", "title": "无元素页"}]}) == []
 
@@ -284,17 +307,22 @@ def test_real_spec_has_no_unexpected_errors(spec_path):
 
     - MRO客户门户方案_spec.yml：9 个 role/text 旧元素（无 type 键）必须报出
       ——它们本来就渲染不出，报出正是 §6.2 的目的；
-    - 蓝海集团 bespoke schema（无 elements[]）与报价 spec（无 pages）自然零错误；
+    - 蓝海 bespoke schema（无 elements[]）与报价 spec（无 pages）自然零错误；
     - 其余 spec 任何报错都视为误报，本测试即防误报护栏。
     """
     with open(spec_path, encoding="utf-8") as f:
         spec = yaml.safe_load(f) or {}
     errors = validate_spec(spec)
+    # Step 2：存量 spec 可能仍带 style/scenario，这两类是预期迁移错误
+    unexpected = [e for e in errors
+                  if not (e.startswith("style:") or e.startswith("scenario:"))]
     if "MRO客户门户方案_spec" in os.path.basename(spec_path):
-        assert len(errors) == 9, f"MRO 应报 9 条无 type 错误，实际: {errors}"
-        assert all("未知元素类型 ''" in e for e in errors)
+        assert len(unexpected) == 9, \
+            f"MRO 应报 9 条无 type 错误，实际: {unexpected}"
+        assert all("未知元素类型 ''" in e for e in unexpected)
     else:
-        assert errors == [], f"{spec_path} 出现意外校验错误: {errors[:5]}"
+        assert unexpected == [], \
+            f"{spec_path} 出现意外校验错误: {unexpected[:5]}"
 
 
 class TestSchemaAcceptanceFixture:

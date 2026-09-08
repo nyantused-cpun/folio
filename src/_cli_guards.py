@@ -1,24 +1,31 @@
 # -*- coding: utf-8 -*-
 """CLI 生成前后检查守卫：pre_check / post_check / auto_review。"""
 import os
+import sys
 import time
+import json
 
 
-# 生成前必读 skill（仅作用于哨兵门禁 REQUIRE_SKILL_SENTINEL=true 时，默认关）
-# 此清单是"全量机械拦截"清单，与 session-start 的提示层（AI 自判层级）解耦
+# 生成前必读 skill（唯一事实源；作用于哨兵门禁 REQUIRE_SKILL_SENTINEL，默认开）
+# 此清单是"生成前机械拦截"清单，AGENTS.md / _cli.py 提示 / 测试均由 audit 校验与本常量一致。
 # delivery-pipeline = 交付顺序（HTML 先行->确认->PPT）
 # spec-writing-guide = spec 字段/容量/confirmed 门禁
-# de-ai-style = 客户可见文案去 AI 化
-# presentation-content-design = 表达内容设计（做方案/汇报前置）
-REQUIRED_GEN_SKILLS = ["delivery-pipeline", "spec-writing-guide", "de-ai-style", "presentation-content-design"]
+# visual-craft-guide = 视觉与图形规范（反模式/选型/容量/画法）
+# 按需项（不进哨兵）：de-ai-style、presentation-content-design
+REQUIRED_GEN_SKILLS = ["delivery-pipeline", "spec-writing-guide", "visual-craft-guide"]
+OPTIONAL_GEN_SKILLS = ["de-ai-style", "presentation-content-design"]
 
-# 哨兵开关（环境变量，默认关）。观察当前模型不老实读 skill 时手动开启：
-#   设为 true/1/yes 后，*-build 前必须先用 `python _cli.py load-skill <名称>` 读必读 skill
+# 哨兵开关（环境变量，阶段 4-6 拍板默认开：未设即视为开）。
+# 显式 false/0/no/off 才关闭；开启后 *-build 前必须先用
+# `python _cli.py load-skill <名称>` 读必读 skill，否则机械拦截。
 _SENTINEL_FLAG = "REQUIRE_SKILL_SENTINEL"
+_SENTINEL_OFF_VALUES = ("0", "false", "no", "off")
 
 
 def _sentinel_enabled():
-    return os.environ.get(_SENTINEL_FLAG, "").strip().lower() in ("1", "true", "yes")
+    """哨兵默认开（4-6）：env 未设或任意非显式关闭值都视为开。"""
+    return os.environ.get(_SENTINEL_FLAG, "").strip().lower() \
+        not in _SENTINEL_OFF_VALUES
 
 
 def mark_skill_read(skill_name):
@@ -34,10 +41,10 @@ def mark_skill_read(skill_name):
 
 
 def require_skill_read(skill_names=None):
-    """哨兵门禁：REQUIRE_SKILL_SENTINEL=true 且未 load-skill 时抛 RenderBlockedError。
+    """哨兵门禁（默认开，4-6）：未 load-skill 时抛 RenderBlockedError。
 
     机械拦截"没读 skill"这一行为（对无 Hook 环境/不遵循 skill 的模型）。
-    默认关——env 未设/false 时直接放行，不影响正常流程。
+    默认开——env 未设即生效；显式 REQUIRE_SKILL_SENTINEL=false/0/no/off 才放行。
     """
     if not _sentinel_enabled():
         return
@@ -49,28 +56,76 @@ def require_skill_read(skill_names=None):
         from _renderer import RenderBlockedError  # 延迟 import 防循环
         hint = "\n".join(f"  python _cli.py load-skill {m}" for m in missing)
         raise RenderBlockedError(
-            "REQUIRE_SKILL_SENTINEL=true：生成前必须先读必读 skill（未检测到已读记录）：\n"
+            "生成前 skill 哨兵门禁（REQUIRE_SKILL_SENTINEL 默认开，"
+            "显式 false 可关）：未检测到必读 skill 已读记录：\n"
             f"{hint}\n"
             "（load-skill 会打印 SKILL.md 全文并记录已读；这是对不遵循 skill 加载的模型设置的机械门禁）"
         )
 
 
-def is_confirmed(spec):
+def _sidecar_path(spec_path):
+    """spec 同目录 <名>.confirm.json。"""
+    base = os.path.splitext(os.path.basename(spec_path))[0]
+    return os.path.join(os.path.dirname(os.path.abspath(spec_path)),
+                        base + ".confirm.json")
+
+
+def _confirm_hash_ok(spec_path):
+    """sidecar 存在且 spec_sha256 与当前文件一致时返回 True。"""
+    import hashlib
+    path = _sidecar_path(spec_path)
+    if not os.path.exists(path):
+        return False
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            payload = json.load(f)
+        with open(spec_path, "rb") as f:
+            current = hashlib.sha256(f.read()).hexdigest()
+        return payload.get("spec_sha256") == current
+    except Exception:
+        return False
+
+
+def is_confirmed(spec, spec_path=None):
     """confirmed 门唯一判定（单点实现）。
 
     所有 confirmed 检查点（Renderer / quote-build / pptd-gen / _auto_review）
     必须走这里，不得各自 spec.get("confirmed")。
     见 docs/refactor_plan_spec_pipeline_2026-07-20.md §五 0.6。
+    Step 6：传入 spec_path 时启用事件化 sidecar 校验（confirmed=True 且
+    sidecar 存在且哈希一致）。
     """
-    return bool((spec or {}).get("confirmed"))
+    if not bool((spec or {}).get("confirmed")):
+        return False
+    if spec_path is None:
+        return True
+    return _confirm_hash_ok(spec_path)
 
 
-def require_confirmed(spec, context=""):
+def require_confirmed(spec, context="", spec_path=None):
     """confirmed 门硬阻断：未确认抛 RenderBlockedError（与 Renderer 同异常）。"""
-    if not is_confirmed(spec):
+    if not is_confirmed(spec, spec_path):
         from _renderer import RenderBlockedError  # 延迟 import 防循环
         suffix = f"（{context}）" if context else ""
+        if spec_path and (spec or {}).get("confirmed"):
+            raise RenderBlockedError(
+                f"spec 已标记 confirmed，但 confirm sidecar 缺失或哈希不一致"
+                f"（{suffix}）。请重新执行：python _cli.py confirm {spec_path}")
         raise RenderBlockedError(f"spec.confirmed 未设为 true，无法生成{suffix}")
+
+
+def keynote_pre_check_warn(client_name):
+    """I-3 A4：客户无 keynote.md -> 返回 WARN 文本（不 block）；有/无客户名 -> None。"""
+    if not client_name:
+        return None
+    try:
+        from _theme_guard import load_keynote
+        if load_keynote(client_name) is None:
+            return (f"客户 '{client_name}' 未定基调（keynote.md 缺失），"
+                    "不得从材料猜权重——权重以人批 keynote 为唯一基准")
+    except Exception:
+        return None
+    return None
 
 
 def _run_pre_check(client_name=None):
@@ -82,7 +137,7 @@ def _run_pre_check(client_name=None):
     - 其他异常（代码 bug / 文件损坏）-> 直接抛出阻断生成
     - _style_guard.pre_check 内部已 catch 软失败（塞到 warnings），不会抛
     """
-    # 哨兵门禁（默认关，REQUIRE_SKILL_SENTINEL=true 时生效）：
+    # 哨兵门禁（默认开，REQUIRE_SKILL_SENTINEL 显式 false 才关）：
     # 未读必读 skill 直接抛 RenderBlockedError，机械拦截"没读 skill"
     require_skill_read()
 
@@ -97,6 +152,12 @@ def _run_pre_check(client_name=None):
     guard = style_pre_check(client_name=client_name)
     for w in guard.get("warnings", []):
         print(f"[style_guard] [warn] {w}")
+
+    # I-3 A4：未定基调 WARN（不 block，新客户首轮入口提示）
+    kn_warn = keynote_pre_check_warn(client_name)
+    if kn_warn:
+        guard.setdefault("warnings", []).append(kn_warn)
+        print(f"[keynote] [warn] {kn_warn}")
 
     # 检查上次 review 结果（spec 5.1.1）
     try:
@@ -157,81 +218,66 @@ def _run_post_check(output_path, client_name=None):
     webapp-testing skill，且与思维链规约 §5 L2「lint 0 error 不截图」正面冲突）。
     目检建议改由 print_visual_check_advice 按 L2 规则输出，由调用方在拿到
     lint 结果后调用。
+
+    F0-5 fail-closed：不再裸 try/except 吞掉“无法判定”。
+      - critical 主题缺失 → print FAIL + exit 2（与 theme-verify 同口径）
+      - 非 critical 缺失 → warn 不阻断
+      - 无法读文件 / 客户无主题 / 依赖异常 → exit 1（无法判定 ≠ 通过）
     """
     # 主题覆盖检查（仅 HTML，因为 PPT/DOCX 是二进制）
-    if client_name and output_path.endswith((".html", ".htm")):
-        try:
-            from _theme_guard import pre_check as theme_pre_check, check_coverage
-            tg = theme_pre_check(client_name)
-            themes = tg.get("themes", [])
-            if themes:
-                with open(output_path, "r", encoding="utf-8") as f:
-                    text = f.read()
-                result = check_coverage(text, themes)
-                for m in result.get("missing", []):
-                    print(f"[theme_guard] [warn] 未覆盖核心诉求: {m['theme']}")
-                if result.get("covered"):
-                    print(f"[theme_guard] 已覆盖 {len(result['covered'])} 个核心诉求")
-        except Exception as e:
-            print(f"[theme_guard] 跳过覆盖检查: {e}")
+    # P3：lower() 归一扩展名——".HTML"/".Html" 旧写法会静默跳过主题覆盖检查
+    if not (client_name and output_path.lower().endswith((".html", ".htm"))):
+        return
+
+    try:
+        from _theme_guard import pre_check as theme_pre_check, check_coverage
+        tg = theme_pre_check(client_name)
+        themes = tg.get("themes", [])
+        if not themes:
+            print(f"[theme_guard] 客户 '{client_name}' 无 permanent 主题记录，"
+                  "无法判定主题覆盖，fail-closed exit 1")
+            sys.exit(1)
+        with open(output_path, "r", encoding="utf-8") as f:
+            text = f.read()
+        result = check_coverage(text, themes)
+        for m in result.get("missing", []):
+            print(f"[theme_guard] [warn] 未覆盖核心诉求: {m['theme']}")
+        if result.get("covered"):
+            print(f"[theme_guard] 已覆盖 {len(result['covered'])} 个核心诉求")
+        critical_missing = [m for m in result.get("missing", [])
+                            if m.get("priority") == "critical"]
+        if critical_missing:
+            print(f"[theme_guard] [FAIL] {len(critical_missing)} 条 critical 铁律未覆盖"
+                  "（fail-closed，exit 2）")
+            sys.exit(2)
+    except SystemExit:
+        raise
+    except Exception as e:
+        print(f"[theme_guard] 无法验证主题覆盖（{e}），fail-closed exit 1")
+        sys.exit(1)
 
 
-def _auto_review(output_path, client_name=None, spec_path=None):
+def _auto_review(output_path, client_name=None, spec_path=None, skip_review=False):
     """generate 命令内部自动调用的审查（静默模式，PASS 时不打印）。
 
-    P2 优化（2026-07-20）：条件触发跳过 LLM review。
-    跳过条件（全部满足才跳过）：
-      1. spec.confirmed=true（用户已确认 spec）
-      2. 本地禁用词检查通过（_review._check_banned 无命中）
-    跳过时仍写 verdict="SKIP" 到 review_log.json，保持 _run_pre_check 闭环。
-    首次生成或 spec 未 confirmed 时仍跑 LLM review。
+    F0-1 fail-closed：不再因为 spec.confirmed=true 自动跳过 LLM review。
+    只有调用方显式传 `skip_review=True` 才写 SKIP 记录并跳过；否则正常跑 LLM review。
+    SKIP 仍通过 write_review_log 记录（显式跳过），保持 review_log 闭环。
+
+    返回结构化 result（dict），或异常时返回 None（调用方应 fail-closed 处理）。
     """
-    import os
-
-    # --- 条件触发判断 ---
-    can_skip_llm = False
-
-    if spec_path and os.path.exists(spec_path):
-        try:
-            import yaml
-            with open(spec_path, "r", encoding="utf-8") as f:
-                spec = yaml.safe_load(f) or {}
-            # 注意方向：confirmed=true 是"可跳过 LLM review"的条件之一，
-            # 不是阻断条件（阻断走 require_confirmed）
-            if not is_confirmed(spec):
-                pass
-            else:
-                # 本地禁用词检查
-                try:
-                    from _review import _check_banned, _read_output_text
-                    output_text = _read_output_text(output_path)
-                    if output_text is None:
-                        pass
-                    else:
-                        banned = _check_banned(output_text)
-                        if banned:
-                            print(f"[独立审查] 禁用词命中 {len(banned)} 处，不跳过 LLM review")
-                        else:
-                            can_skip_llm = True
-                except Exception:
-                    pass
-        except Exception:
-            pass
-    else:
-        pass
-
-    # --- 跳过 LLM，写 SKIP 记录保持闭环 ---
-    if can_skip_llm:
+    # --- 显式跳过：写 SKIP 记录保持闭环 ---
+    if skip_review:
         try:
             from _review import write_review_log
             skip_result = {
                 "verdict": "SKIP",
                 "issues": [],
-                "summary": "spec.confirmed=true + 本地禁用词检查通过，跳过 LLM review",
+                "summary": "调用方显式 --skip-review 跳过 LLM review",
                 "scores": {},
             }
             write_review_log(skip_result, output_path, client_name)
-            print("[独立审查] 跳过 LLM review（spec 已 confirmed + 禁用词检查通过）")
+            print("[独立审查] 跳过 LLM review（--skip-review 显式指定）")
             return skip_result
         except Exception as e:
             print(f"[独立审查] SKIP 记录写入失败，回退到 LLM review: {e}")
@@ -246,5 +292,5 @@ def _auto_review(output_path, client_name=None, spec_path=None):
             quiet=True,
         )
     except Exception as e:
-        print(f"[独立审查] 跳过（{e}）")
+        print(f"[独立审查] 无法完成审查（{e}），fail-closed 由调用方处理")
         return None

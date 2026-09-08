@@ -73,18 +73,14 @@ class TestStyleResolution:
     """测试风格解析功能。"""
 
     def test_resolve_existing_style(self):
-        """解析存在的风格。"""
+        """旧 style 名映射到 v2 theme。"""
         from _renderer import _resolve_style
-        style = _resolve_style('enterprise')
-        assert style is not None
-        assert style.get('name') == '企业通用'
+        assert _resolve_style('enterprise') == 'corporate_navy'
 
     def test_resolve_nonexistent_style(self):
-        """解析不存在的风格返回 enterprise。"""
+        """未知风格名回退 consulting_kpmg。"""
         from _renderer import _resolve_style
-        style = _resolve_style('nonexistent')
-        assert style is not None
-        assert style.get('name') == '企业通用'
+        assert _resolve_style('nonexistent') == 'consulting_kpmg'
 
 
 class TestOutputPathValidation:

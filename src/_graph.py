@@ -1,6 +1,10 @@
 # -*- coding: utf-8 -*-
-"""世界书模块：client_graph.json + client_index.md 构建与查询。
+"""版本链索引模块：client_graph.json 构建与查询。
 
+M2-R2：client_graph.json 定位为版本链索引（version lineage）/历史调试资产，
+不再参与自动召回链路。
+M2-R1：client_index.md（世界书）已由 _worldbook.build_worldbook 直读真源生成，
+本模块不再写 client_index.md。
 从 _session.py 拆分（候选 4 · 模块化），无内部依赖（叶子模块）。
 """
 import os
@@ -11,21 +15,42 @@ from datetime import datetime
 
 __all__ = [
     # 常量
-    "DECISION_SUBTYPES", "_STOPWORDS",
+    "DECISION_SUBTYPES",
     # 函数
-    "_infer_decision_subtype", "_extract_keywords",
-    "_extract_decision_nodes", "_extract_output_nodes", "_extract_insight_nodes",
+    "_infer_decision_subtype",
+    "_split_decision_blocks", "_extract_decision_nodes", "_extract_output_nodes", "_extract_insight_nodes",
     "_infer_edges", "_materialize_transitive_edges", "_consolidate_decisions",
-    "_generate_client_index", "_file_hash",
+    "_file_hash",
     "build_client_graph", "_full_build", "_incremental_update",
-    "_write_graph", "query_graph", "_expand_graph_2hop", "_find_pivot_nodes",
+    "_write_graph", "query_graph", "search_graph_nodes",
     "add_graph_node", "add_graph_edge",
 ]
 
 
 # ============================================================
-# 世界书：client_graph.json + client_index.md（spec 第三块）
+# 版本链索引：client_graph.json（历史/调试资产）；世界书由 _worldbook.py 直生
 # ============================================================
+
+# ── P0 决策单轨化：统一决策标题切分（三种格式）──────────────────────────
+# 格式1：## 决策 N：标题
+# 格式2：### D-NNN · 标题
+# 格式3：## [YYYY-MM-DD] 标题 或 ## YYYY-MM-DD：标题（早期客户遗留格式）
+# 本正则/切分函数是「统一决策解析器」的唯一事实源，
+# _theme_guard / _memory_guard 复用（不再各自维护一份不完整正则）。
+DECISION_HEADING_SPLIT_RE = re.compile(
+    r'(?=^(?:## 决策 \d+|### D-\d+|## \[?\d{4}-\d{2}-\d{2}\]?))',
+    re.MULTILINE,
+)
+
+
+def _split_decision_blocks(content):
+    """按三种决策标题格式切块，返回块列表。
+
+    第一个块通常是文件头（如 `# 客户 决策记录`，不以决策标题开头），
+    调用方应跳过；其余每个块以决策标题行开头。
+    """
+    return DECISION_HEADING_SPLIT_RE.split(content or "")
+
 
 # 决策子类型关键词映射（改动2）
 # 顺序即优先级：tie 时前面的胜出
@@ -48,28 +73,6 @@ def _infer_decision_subtype(text):
             best_count = count
             best_subtype = subtype
     return best_subtype
-
-# 中文停用词（边推断关键词匹配时过滤）- 用集合存储完整词而非单字符
-_STOPWORDS = {"的", "在", "了", "和", "与", "及", "或", "而", "但", "也",
-              "要", "就", "都", "还", "又", "不", "这", "那", "个",
-              "把", "被", "让", "使", "往", "向", "从", "对", "给", "为",
-              "以", "是", "着", "过"}
-
-
-def _extract_keywords(text, min_len=2):
-    """提取中文关键词（2字以上片段），去停用词。"""
-    if not text:
-        return set()
-    # 取连续中文字符片段
-    segments = re.findall(r'[\u4e00-\u9fff]{2,}', text)
-    result = set()
-    for seg in segments:
-        for i in range(len(seg) - min_len + 1):
-            piece = seg[i:i+min_len]
-            if piece not in _STOPWORDS:
-                result.add(piece)
-    return result
-
 
 def _normalize_output_title(title):
     """归一化产出标题：去扩展名 + 去版本号片段，用于判断是否同一文档系列。"""
@@ -98,9 +101,8 @@ def _extract_decision_nodes(decisions_content):
     - 格式3：## 日期：标题 或 ## [日期] 标题 + 字段列表（早期客户遗留格式）
     """
     nodes = []
-    # 兼容三种格式切分：## 决策 N / ### D-NNN / ## 日期（可带 []）
-    blocks = re.split(r'(?=^(?:## 决策 \d+|### D-\d+|## \[?\d{4}-\d{2}-\d{2}\]?))',
-                      decisions_content, flags=re.MULTILINE)
+    # 统一决策解析器：兼容三种格式切分（## 决策 N / ### D-NNN / ## 日期，可带 []）
+    blocks = _split_decision_blocks(decisions_content)
     for block in blocks:
         block_stripped = block.strip()
         # 格式1：## 决策 N：标题
@@ -147,6 +149,23 @@ def _extract_decision_nodes(decisions_content):
         scope_match = re.search(r'[-*]\s*\*{0,2}scope\*{0,2}\s*[：:]\s*(\w+)', block)
         scope = scope_match.group(1).strip().lower() if scope_match else "client"
 
+        # M2-R1：世界书直生需要的附加元数据（来源/task_id/状态/pending），
+        # 不改变既有 graph 行为，仅补充字段供 _worldbook 使用。
+        source_match = re.search(r'[-*]\s*\*{0,2}来源\*{0,2}\s*[：:]\s*(.+)', block)
+        source = source_match.group(1).strip() if source_match else ""
+        task_id_match = re.search(r'[-*]\s*\*{0,2}task_id\*{0,2}\s*[：:]\s*([^\s*]+)', block)
+        task_id = task_id_match.group(1).strip() if task_id_match else ""
+        status_match = re.search(r'[-*]\s*\*{0,2}状态\*{0,2}\s*[：:]\s*([^\n]+)', block)
+        status = status_match.group(1).strip() if status_match else ""
+        superseded_match = re.search(r'[-*]\s*\*{0,2}superseded_by\*{0,2}\s*[：:]\s*(\S+)', block)
+        superseded_by = superseded_match.group(1).strip() if superseded_match else ""
+        # 待补/待确认/遗留/待办（一行一条）
+        pending_items = []
+        for label in ("待补", "待确认", "遗留", "待办"):
+            for m in re.finditer(
+                    rf'[-*]\s*\*{{0,2}}{label}\*{{0,2}}\s*[：:]\s*(.+)', block):
+                pending_items.append(m.group(1).strip())
+
         summary = decision_text[:200] if decision_text else title
 
         # 子类型推断（改动2）
@@ -165,6 +184,12 @@ def _extract_decision_nodes(decisions_content):
                 "scope": scope,
                 "subtype": subtype,
                 "decision_num": decision_num,
+                "source": source,
+                "task_id": task_id,
+                "status": status,
+                "superseded_by": superseded_by,
+                "pending_items": pending_items,
+                "decision_text": decision_text,
             },
             "created": date,
             "updated": date,
@@ -218,6 +243,9 @@ def _extract_output_nodes(outputs_index, client_name):
         # output 节点
         outputs = outputs_index.get("outputs", [])
         for _i, out in enumerate(outputs):
+            # W1-5：missing（已归档/缺失）条目不建节点——悬空路径不进版本链
+            if isinstance(out, dict) and out.get("missing"):
+                continue
             # 兼容两种格式：字符串（文件路径）或 dict（结构化）
             if isinstance(out, str):
                 file_path = out
@@ -226,7 +254,6 @@ def _extract_output_nodes(outputs_index, client_name):
                 status = ""
                 out_type = ""
                 date = ""
-                method = ""
             else:
                 file_path = out.get("file", "")
                 title = os.path.basename(file_path) if file_path else out.get("type", "未命名产出")
@@ -234,7 +261,6 @@ def _extract_output_nodes(outputs_index, client_name):
                 status = out.get("status", "")
                 out_type = out.get("type", "")
                 date = out.get("date", "")
-                method = out.get("method", "")
 
             output_nodes.append({
                 "id": f"n{len(output_nodes)+1:03d}",
@@ -245,7 +271,6 @@ def _extract_output_nodes(outputs_index, client_name):
                 "metadata": {
                     "version": version,
                     "status": status,
-                    "method": method,
                     "file_type": os.path.splitext(file_path)[1].lstrip("."),
                     "date": date,
                 },
@@ -329,34 +354,8 @@ def _infer_edges(nodes):
                     edges.append({"from": out2["id"], "to": out1["id"],
                                   "type": "revised_from", "note": ""})
 
-    # output -> method (used_method)
-    for n in nodes:
-        method = n["metadata"].get("method", "") if n["type"] == "output" else ""
-        if method:
-            # 找或建 method 节点
-            method_node = next((m for m in nodes if m["type"] == "method"
-                                and m["title"] == method), None)
-            if method_node:
-                edges.append({"from": n["id"], "to": method_node["id"],
-                              "type": "used_method", "note": ""})
-
-    # ---- 改动1：补边推断（decided_by / supersedes / triggers）----
-
+    # 显式版本链：决策标题/摘要含"修订决策 N" -> supersedes
     decisions = [n for n in nodes if n["type"] == "decision"]
-
-    # decided_by: output -> decision（关键词重叠）
-    for out in outputs:
-        out_kw = _extract_keywords(out["title"])
-        if not out_kw:
-            continue
-        for dec in decisions:
-            dec_kw = _extract_keywords(dec["title"])
-            if out_kw & dec_kw:
-                edges.append({"from": out["id"], "to": dec["id"],
-                              "type": "decided_by", "note": "keyword match"})
-                break  # 每个output只关联一个最匹配的decision
-
-    # supersedes: decision -> decision（标题含"修订决策 N"）
     for dec in decisions:
         match = re.search(r'修订决策\s*(\d+)', dec["title"] + " " + dec.get("summary", ""))
         if match:
@@ -370,41 +369,22 @@ def _infer_edges(nodes):
                                   "type": "supersedes", "note": "title match"})
                     break
 
-    # triggers: decision -> output（日期 <= + 关键词重叠）
-    for dec in decisions:
-        dec_kw = _extract_keywords(dec["title"])
-        if not dec_kw:
-            continue
-        for out in outputs:
-            out_kw = _extract_keywords(out["title"])
-            if not out_kw:
-                continue
-            if not (dec_kw & out_kw):
-                continue
-            # 日期检查：决策日期 <= 产出物日期
-            dec_date = dec.get("created", "")
-            out_date = out.get("created", "")
-            if dec_date and out_date and dec_date <= out_date:
-                edges.append({"from": dec["id"], "to": out["id"],
-                              "type": "triggers", "note": "keyword+date match"})
-
-    # ---- 改动3：传递性物化（indirectly_revised_from）----
+    # 传递性物化：仅 revised_from 版本链（indirectly_revised_from）；
+    # 不物化 supersedes 的任意传递（M2-R2）。
     edges = _materialize_transitive_edges(edges, "revised_from")
 
-    # ---- P4: Consolidate —— 同 subtype + 不同日期 + 关键词重叠 => supersedes ----
+    # 保留 stale 标记（P4 洞察过期检测）；M2-R2 已删除自动 supersedes 猜测。
     edges = _consolidate_decisions(nodes, edges)
 
     return edges
 
 
 def _consolidate_decisions(nodes, edges):
-    """Consolidate：检测同 subtype 决策的时间覆盖关系。
+    """保留洞察过期 stale 标记；M2-R2 已移除自动 supersedes 猜测规则。
 
-    规则：
-    - 同 subtype + 不同日期 + 标题关键词重叠 >= 2 => 新决策 supersedes 旧决策
-    - 同日期的决策不互相覆盖（同一次会话提取的互补决策）
-    - 被覆盖的决策标记 metadata.superseded_by
-    - 90 天未被引用的 insight 标记 stale
+    原规则（同 subtype + 不同日期 + 关键词重叠 >= 2 => 自动 supersedes）
+    已删除，避免图产生不可审计的伪版本链。显式“修订决策 N”的 supersedes
+    推断仍在 _infer_edges 中保留。
     """
     from datetime import datetime, timedelta
 
@@ -416,50 +396,7 @@ def _consolidate_decisions(nodes, edges):
             if created and created < cutoff:
                 n.setdefault("metadata", {})["stale"] = True
 
-    decisions = [n for n in nodes if n["type"] == "decision"
-                 and n.get("metadata", {}).get("status") != "removed"]
-    if len(decisions) < 2:
-        return edges
-
-    # 按 subtype 分组
-    by_subtype = {}
-    for d in decisions:
-        sub = d.get("metadata", {}).get("subtype", "general")
-        by_subtype.setdefault(sub, []).append(d)
-
-    existing_supersedes = {(e["from"], e["to"]) for e in edges if e["type"] == "supersedes"}
-    new_edges = []
-
-    for sub, group in by_subtype.items():
-        if len(group) < 2:
-            continue
-        # 按日期排序
-        group.sort(key=lambda x: x.get("created", ""))
-        # 两两比较：新 vs 旧
-        for i in range(len(group)):
-            for j in range(i + 1, len(group)):
-                older = group[i]
-                newer = group[j]
-                # 同日期不覆盖
-                if older.get("created", "") == newer.get("created", ""):
-                    continue
-                # 关键词重叠检测
-                older_kw = _extract_keywords(older.get("title", "") + " " + older.get("summary", ""))
-                newer_kw = _extract_keywords(newer.get("title", "") + " " + newer.get("summary", ""))
-                overlap = older_kw & newer_kw
-                if len(overlap) >= 2:
-                    pair = (newer["id"], older["id"])
-                    if pair not in existing_supersedes:
-                        new_edges.append({
-                            "from": newer["id"], "to": older["id"],
-                            "type": "supersedes",
-                            "note": f"auto-consolidate: same subtype '{sub}', overlap={len(overlap)}"
-                        })
-                        existing_supersedes.add(pair)
-                        # 标记旧决策被覆盖
-                        older.setdefault("metadata", {})["superseded_by"] = newer["id"]
-
-    return edges + new_edges
+    return edges
 
 
 def _materialize_transitive_edges(edges, edge_type="revised_from"):
@@ -489,86 +426,6 @@ def _materialize_transitive_edges(edges, edge_type="revised_from"):
     return edges
 
 
-def _generate_client_index(graph):
-    """从 client_graph.json 生成 client_index.md（≤ 80 行）。"""
-    client = graph.get("client", "")
-    summary = graph.get("index_summary", "")
-    nodes = graph.get("nodes", [])
-
-    lines = [f"# {client} 索引", ""]
-    if summary:
-        lines.append(f"> {summary}")
-        lines.append("")
-
-    # client_profile
-    profiles = [n for n in nodes if n["type"] == "client_profile"]
-    if profiles:
-        lines.append("## 客户背景")
-        for p in profiles:
-            lines.append(f"- {p['summary']} -> [详情]({p.get('details_path', '')})")
-        lines.append("")
-
-    # 决策时间线（共 N 条，最近 10 条，排除被覆盖的）
-    decisions = [n for n in nodes if n["type"] == "decision"
-                 and n["metadata"].get("status") != "removed"
-                 and not n["metadata"].get("superseded_by")]  # P4: 排除已被覆盖
-    decisions.sort(key=lambda x: x.get("created", ""), reverse=True)
-    superseded_count = len([n for n in nodes if n["type"] == "decision"
-                            and n.get("metadata", {}).get("superseded_by")])
-    if decisions:
-        header = f"## 决策时间线（共 {len(decisions)} 条有效"
-        if superseded_count:
-            header += f"，{superseded_count} 条已被覆盖"
-        header += "，最近 10 条）"
-        lines.append(header)
-        for i, d in enumerate(decisions[:10], 1):
-            date = d.get("created", "")
-            lines.append(f"{i}. [{date}] {d['title']} - {d['summary'][:150]}")
-        lines.append("")
-
-    # 产出物（共 N 个，最近 8 个）
-    outputs = [n for n in nodes if n["type"] == "output"
-               and n["metadata"].get("status") != "removed"]
-    outputs.sort(key=lambda x: x.get("created", ""), reverse=True)
-    if outputs:
-        lines.append(f"## 产出物（共 {len(outputs)} 个，最近 8 个）")
-        lines.append("| 版本 | 标题 | 状态 | 日期 |")
-        lines.append("|------|------|------|------|")
-        for o in outputs[:8]:
-            v = o["metadata"].get("version", "")
-            s = o["metadata"].get("status", "")
-            d = o.get("created", "")
-            lines.append(f"| {v} | {o['title'][:40]} | {s} | {d} |")
-        lines.append("")
-
-    # 洞察（最近 5 条，排除 stale）
-    insights = [n for n in nodes if n["type"] == "insight"
-                and not n.get("metadata", {}).get("stale")]  # P4: 排除过期
-    if insights:
-        lines.append("## 洞察")
-        for ins in insights[:5]:
-            lines.append(f"- [{ins.get('created', '')}] {ins['summary'][:120]}")
-        lines.append("")
-
-    # 方法论
-    methods = [n for n in nodes if n["type"] == "method"]
-    if methods:
-        lines.append("## 方法论使用记录")
-        lines.append("| 方法论 | 使用次数 | 最近使用 |")
-        lines.append("|--------|---------|---------|")
-        for m in methods:
-            count = m["metadata"].get("usage_count", 0)
-            last = m["metadata"].get("last_used", "")
-            lines.append(f"| {m['title']} | {count} | {last} |")
-        lines.append("")
-
-    # 截断到 120 行
-    if len(lines) > 120:
-        lines = lines[:119] + ["...(完整列表见 client_graph.json)"]
-
-    return "\n".join(lines)
-
-
 def _file_hash(filepath):
     """计算文件内容的 hash（用于增量检测）。"""
     import hashlib
@@ -580,7 +437,7 @@ def _file_hash(filepath):
 
 
 def build_client_graph(client_name):
-    """从现有文件构建/更新 client_graph.json + client_index.md。
+    """从现有文件构建/更新 client_graph.json（版本链索引，不写 client_index.md）。
 
     增量更新（改动4）：
     - 对比源文件 hash，未变则跳过
@@ -644,7 +501,7 @@ def build_client_graph(client_name):
 
 def _full_build(client_name, decisions_path, oij_path, insights_dir,
                 graph_path_fn, index_path_fn, source_hashes):
-    """全量构建 client_graph.json + client_index.md（含 ID 重分配）。"""
+    """全量构建 client_graph.json（版本链索引；client_index.md 由 _worldbook 负责）。"""
     nodes = []
     edges = []
 
@@ -746,35 +603,68 @@ def _incremental_update(client_name, existing_graph, new_hashes,
     manual_nodes = [n for n in existing_nodes if n.get("manual") is True]
     manual_edges = [e for e in existing_edges if e.get("manual") is True]
 
-    # ---- decisions 增量：按去重键检测新增（D-116，复用自愈步骤的键集合）----
+    # ---- decisions 增量：按去重键对账（D-116 键集合；B3 补编辑/删除传播）----
+    # 提取成功才对账（decisions_ok）：失败不传播删除、不记 hash（下次重试防固化）
     new_decision_nodes = []
+    stale_decision_ids = set()
+    decisions_ok = False
+    all_decision_nodes = []
     if os.path.exists(decisions_path):
         try:
             with open(decisions_path, "r", encoding="utf-8") as f:
                 decisions_content = f.read()
             all_decision_nodes = _extract_decision_nodes(decisions_content)
-            for d in all_decision_nodes:
-                key = _decision_dedupe_key(d)
-                if key not in seen_decision_keys:
-                    new_decision_nodes.append(d)
-                    seen_decision_keys.add(key)  # 批内去重
+            decisions_ok = True
         except Exception:
             pass
+    if decisions_ok:
+        fresh_by_key = {}
+        for d in all_decision_nodes:
+            key = _decision_dedupe_key(d)
+            fresh_by_key[key] = d
+            if key not in seen_decision_keys:
+                new_decision_nodes.append(d)
+                seen_decision_keys.add(key)  # 批内去重
+        for n in existing_nodes:
+            if n["type"] != "decision" or n.get("manual"):
+                continue
+            key = _decision_dedupe_key(n)
+            fresh = fresh_by_key.get(key)
+            if fresh is None:
+                # key 已不在当前 decisions.md -> 编辑改号/删除，传播移除
+                stale_decision_ids.add(n["id"])
+            else:
+                # 同 key 内容漂移（编辑）：原位刷新字段，保留节点 id 与连边
+                n["title"] = fresh["title"]
+                n["summary"] = fresh["summary"]
+                n["details_path"] = fresh["details_path"]
+                n["metadata"] = fresh["metadata"]
+                n["updated"] = datetime.now().strftime("%Y-%m-%d")
 
     # ---- outputs 增量：按 file 检测新增/修改/删除 ----
-    new_outputs_index = {}
+    # outputs_index_ok：文件存在但读失败/格式异常 = 状态未知，原样保留存量
+    # output 节点（瞬时读失败曾把全部产出误标 removed 且 hash 照记固化）
+    outputs_index_ok = True
+    new_outputs_index = None
     if os.path.exists(oij_path):
         try:
             with open(oij_path, "r", encoding="utf-8") as f:
                 new_outputs_index = json.load(f)
+            if not isinstance(new_outputs_index, dict):
+                outputs_index_ok = False
         except Exception:
-            pass
+            outputs_index_ok = False
 
     new_output_files = set()
     new_output_map = {}  # file -> out dict
-    if isinstance(new_outputs_index, dict):
+    if outputs_index_ok and isinstance(new_outputs_index, dict):
         for out in new_outputs_index.get("outputs", []):
             if isinstance(out, dict):
+                # W1-5：missing（已归档/缺失）条目不进增量产出集，
+                # 对应存量节点落入下方「不在新文件中」分支标 removed
+                # （与全量重建 _extract_output_nodes 的过滤口径一致）
+                if out.get("missing"):
+                    continue
                 f = out.get("file", "")
             else:
                 f = out
@@ -787,6 +677,9 @@ def _incremental_update(client_name, existing_graph, new_hashes,
     removed_count = 0
     for n in existing_nodes:
         if n["type"] != "output":
+            continue
+        if not outputs_index_ok:
+            updated_nodes.append(n)
             continue
         # 从 details_path 或 title 找 file
         f = n.get("details_path", "") or n.get("title", "")
@@ -838,8 +731,10 @@ def _incremental_update(client_name, existing_graph, new_hashes,
     # ---- 合并：已有节点（保留 + 更新）+ 新节点 + manual ----
     # 保留非 manual 的已有节点（已在上面更新了 output 的 status）
     kept_nodes = [n for n in existing_nodes if not n.get("manual")]
-    # 但只保留非 output 的已有节点（output 已经在 updated_nodes 中处理了）
-    kept_non_output = [n for n in kept_nodes if n["type"] != "output"]
+    # 但只保留非 output 的已有节点（output 已经在 updated_nodes 中处理了）；
+    # stale 决策（编辑改号/删除）不保留（B3 传播移除）
+    kept_non_output = [n for n in kept_nodes if n["type"] != "output"
+                       and n["id"] not in stale_decision_ids]
 
     all_new_nodes = new_decision_nodes + new_output_nodes + new_insight_nodes
 
@@ -868,6 +763,15 @@ def _incremental_update(client_name, existing_graph, new_hashes,
     index_summary = (f"{client_name}（{industry}），"
                      f"共 {decision_count} 条决策、{output_count} 个产出物。")
 
+    # P2（B3）：只记处理成功的源 hash——decisions 提取 / outputs_index 读失败
+    # 不落对应 hash，下次 hash 不匹配自动重试；旧逻辑「先记 hash 后处理、
+    # 失败照记」曾让失败固化（编辑/删除永不传播）
+    saved_hashes = dict(new_hashes)
+    if not decisions_ok:
+        saved_hashes.pop("decisions.md", None)
+    if not outputs_index_ok:
+        saved_hashes.pop("outputs_index.json", None)
+
     graph = {
         "client": client_name,
         "industry": industry,
@@ -876,28 +780,69 @@ def _incremental_update(client_name, existing_graph, new_hashes,
         "index_summary": index_summary,
         "nodes": merged_nodes,
         "edges": edges,
-        "_source_hashes": new_hashes,
+        "_source_hashes": saved_hashes,
     }
 
     _write_graph(graph, graph_path_fn, index_path_fn, client_name)
     return graph
 
 
+def _atomic_write_json(path, data):
+    """原子写 JSON：先写同目录 tmp 再 os.replace（P3-6，照 _embed_index
+    _save_npy 的 tmp+replace 范式）——中断只留 .tmp 残片，不会留下半截
+    client_graph.json 让加载侧 json.load 直接炸掉。"""
+    tmp_path = f"{path}.tmp"
+    with open(tmp_path, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+    os.replace(tmp_path, path)
+
+
 def _write_graph(graph, graph_path_fn, index_path_fn, client_name):
-    """写 client_graph.json + client_index.md。"""
+    """写 client_graph.json（版本链索引）。
+
+    M2-R1：client_index.md 不再由 _graph 生成，改由 _worldbook.build_worldbook
+    直读真源单独负责。index_path_fn 仅保留参数兼容旧调用方，不使用。
+    """
     try:
         os.makedirs(os.path.dirname(graph_path_fn(client_name)), exist_ok=True)
-        with open(graph_path_fn(client_name), "w", encoding="utf-8") as f:
-            json.dump(graph, f, ensure_ascii=False, indent=2)
+        _atomic_write_json(graph_path_fn(client_name), graph)
     except Exception as e:
         print(f"[graph-build] 写 client_graph.json 失败: {e}")
 
-    index_md = _generate_client_index(graph)
+
+def search_graph_nodes(client_name, query, include_removed=False):
+    """按自由文本搜索节点标题/摘要（大小写不敏感）。
+
+    简单匹配策略：把 query 按空白拆成 tokens，任一 token 出现在
+    title + summary 中即返回该节点（不做排序/重排，适合人工调试）。
+    """
+    from _paths import client_graph_path
+
+    graph_path = client_graph_path(client_name)
+    if not os.path.exists(graph_path):
+        return {"client": client_name, "nodes": [], "edges": [], "error": "graph not found"}
+
     try:
-        with open(index_path_fn(client_name), "w", encoding="utf-8") as f:
-            f.write(index_md)
+        with open(graph_path, "r", encoding="utf-8") as f:
+            graph = json.load(f)
     except Exception as e:
-        print(f"[graph-build] 写 client_index.md 失败: {e}")
+        return {"client": client_name, "nodes": [], "edges": [], "error": str(e)}
+
+    nodes = graph.get("nodes", [])
+    if not include_removed:
+        nodes = [n for n in nodes if n.get("metadata", {}).get("status") != "removed"]
+
+    q = (query or "").strip()
+    if not q:
+        return {"client": client_name, "nodes": [], "edges": [], "error": "empty query"}
+
+    tokens = [t.lower() for t in q.split() if t]
+    matched = []
+    for n in nodes:
+        text = f"{n.get('title', '')} {n.get('summary', '')}".lower()
+        if any(t in text for t in tokens):
+            matched.append(n)
+    return {"client": client_name, "nodes": matched, "edges": []}
 
 
 def query_graph(client_name, node_id=None, node_type=None, edges_of=None, include_removed=False):
@@ -944,113 +889,8 @@ def query_graph(client_name, node_id=None, node_type=None, edges_of=None, includ
     return {"client": client_name, "nodes": nodes, "edges": edges}
 
 
-def _expand_graph_2hop(graph_path, node_id):
-    """图扩展召回：从指定节点出发，沿边扩展 2 跳，返回关联节点列表。
-
-    返回 [{"id", "title", "summary", "type", "edge_type", "hops"}, ...]
-    hops=1 表示直接关联，hops=2 表示间接关联。
-    """
-    if not os.path.exists(graph_path):
-        return []
-    try:
-        with open(graph_path, "r", encoding="utf-8") as f:
-            graph = json.load(f)
-    except Exception:
-        return []
-
-    nodes = graph.get("nodes", [])
-    edges = graph.get("edges", [])
-    node_map = {n["id"]: n for n in nodes}
-
-    if node_id not in node_map:
-        return []
-
-    def _entry(target, edge_type, hops):
-        return {
-            "id": target["id"],
-            "title": target.get("title", ""),
-            "summary": target.get("summary", ""),
-            "type": target.get("type", ""),
-            "edge_type": edge_type,
-            "hops": hops,
-        }
-
-    result = []
-    visited = {node_id}
-
-    # 1 跳：直接关联的节点
-    hop1_ids = set()
-    for e in edges:
-        if e["from"] == node_id and e["to"] not in visited:
-            hop1_ids.add(e["to"])
-            target = node_map.get(e["to"])
-            if target:
-                result.append(_entry(target, e["type"], 1))
-                visited.add(e["to"])
-        elif e["to"] == node_id and e["from"] not in visited:
-            hop1_ids.add(e["from"])
-            target = node_map.get(e["from"])
-            if target:
-                result.append(_entry(target, e["type"], 1))
-                visited.add(e["from"])
-
-    # 2 跳：从 1 跳节点再扩展
-    for hop1_id in list(hop1_ids):
-        for e in edges:
-            other_id = None
-            if e["from"] == hop1_id and e["to"] not in visited:
-                other_id = e["to"]
-            elif e["to"] == hop1_id and e["from"] not in visited:
-                other_id = e["from"]
-            if other_id:
-                target = node_map.get(other_id)
-                if target:
-                    result.append(_entry(target, e["type"], 2))
-                    visited.add(other_id)
-
-    return result
-
-
-def _find_pivot_nodes(query_text, graph, top_k=3):
-    """Pivot Search：用查询文本关键词匹配图节点，返回 top_k 个入口节点。
-
-    匹配逻辑：query 关键词与节点 title+summary 关键词的交集大小排序。
-    跳过 status=removed 的节点。
-    优先返回有边连接的节点（孤立节点扩展无意义）。
-    返回 [{"node": node_dict, "score": overlap_count}, ...]
-    """
-    if not query_text:
-        return []
-    query_kw = _extract_keywords(query_text)
-    if not query_kw:
-        return []
-
-    # 预计算有边的节点集合
-    connected_ids = set()
-    for e in graph.get("edges", []):
-        connected_ids.add(e["from"])
-        connected_ids.add(e["to"])
-
-    scored = []
-    for n in graph.get("nodes", []):
-        if n.get("metadata", {}).get("status") == "removed":
-            continue
-        node_text = n.get("title", "") + " " + n.get("summary", "")
-        node_kw = _extract_keywords(node_text)
-        overlap = len(query_kw & node_kw)
-        if overlap > 0:
-            # 有边连接的节点加分（确保扩展有意义）
-            bonus = 1 if n["id"] in connected_ids else 0
-            # output 节点优先（local 层优先命中具体产出物，而非工程决策）
-            type_bonus = 1 if n["type"] == "output" else 0
-            scored.append({"node": n, "score": overlap + bonus + type_bonus})
-
-    scored.sort(key=lambda x: -x["score"])
-    return scored[:top_k]
-
-
-def add_graph_node(client_name, node_type, title, summary="", method=""):
-    """手动添加节点到 client_graph.json。
+def add_graph_node(client_name, node_type, title, summary=""):
+    """人工调试：手动添加版本链索引节点到 client_graph.json。
 
     返回 {"node": 新节点, "graph": 更新后的 graph}
     """
@@ -1077,10 +917,6 @@ def add_graph_node(client_name, node_type, title, summary="", method=""):
     # 手动添加的节点用 m 前缀避免冲突
     new_id = f"m{max_num + 1:03d}"
 
-    metadata = {}
-    if method:
-        metadata["method"] = method
-
     now = datetime.now().strftime("%Y-%m-%d")
     new_node = {
         "id": new_id,
@@ -1088,7 +924,7 @@ def add_graph_node(client_name, node_type, title, summary="", method=""):
         "title": title,
         "summary": summary[:200] if summary else title,
         "details_path": "",
-        "metadata": metadata,
+        "metadata": {},
         "created": now,
         "updated": now,
         "manual": True,
@@ -1098,8 +934,7 @@ def add_graph_node(client_name, node_type, title, summary="", method=""):
     graph["updated"] = now
 
     try:
-        with open(graph_path, "w", encoding="utf-8") as f:
-            json.dump(graph, f, ensure_ascii=False, indent=2)
+        _atomic_write_json(graph_path, graph)
     except Exception as e:
         print(f"[graph-add] 写 client_graph.json 失败: {e}")
 
@@ -1130,8 +965,7 @@ def add_graph_edge(client_name, from_id, to_id, edge_type, note=""):
     graph["updated"] = datetime.now().strftime("%Y-%m-%d")
 
     try:
-        with open(graph_path, "w", encoding="utf-8") as f:
-            json.dump(graph, f, ensure_ascii=False, indent=2)
+        _atomic_write_json(graph_path, graph)
     except Exception as e:
         print(f"[graph-link] 写 client_graph.json 失败: {e}")
 

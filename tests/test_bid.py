@@ -115,7 +115,8 @@ class TestCheckAiTraces:
             assert ok is False
             assert any("赋能" in i for i in issues)
             assert any("闭环" in i for i in issues)
-            assert any("生态" in i for i in issues)
+            # C-C1：生态已移出硬禁 5 词（8→5 拍板），不再判定
+            assert not any("生态" in i for i in issues)
             assert any("综上所述" in i for i in issues)
         finally:
             os.unlink(path)

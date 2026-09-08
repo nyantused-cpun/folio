@@ -31,6 +31,7 @@ CAPABILITIES = {
     # pullquote 的 docx、heading 的 html/pptd 是本次补齐
     "pullquote": {END_HTML: RENDER, END_DOCX: RENDER, END_PPTD: RENDER},
     "heading":  {END_HTML: RENDER, END_DOCX: RENDER, END_PPTD: RENDER},
+    "image":    {END_HTML: RENDER, END_DOCX: RENDER, END_PPTD: RENDER},
     # 4A 架构图只有 docx 有原生渲染（layers 段落），html/pptd 降级
     "architecture_4a": {END_HTML: DEGRADE, END_DOCX: RENDER, END_PPTD: DEGRADE},
     # diagram 走专用渲染管线（_renderer.diagram），docx 无原生渲染，降级
@@ -65,6 +66,23 @@ CAPABILITIES = {
     "risk_register":  {END_HTML: RENDER, END_DOCX: RENDER, END_PPTD: RENDER},
     "raci_matrix":    {END_HTML: RENDER, END_DOCX: RENDER, END_PPTD: RENDER},
     "decision_board": {END_HTML: RENDER, END_DOCX: RENDER, END_PPTD: RENDER},
+    # ---- Step 5 新增元素（2026-08-30）----
+    # ui_mock：界面示意卡，HTML/PPTD 原生 DOM/形状绘制，DOCX 降级文本
+    "ui_mock":       {END_HTML: RENDER, END_DOCX: DEGRADE, END_PPTD: RENDER},
+    # conclusion_band：页底结论色带，三端同构（DOCX 为整段底纹段落）
+    "conclusion_band": {END_HTML: RENDER, END_DOCX: RENDER, END_PPTD: RENDER},
+    # ---- S8 Wave A：元素协议一次升版（C-E1 + C-G1）----
+    # screenshot：截图+绝对定位标注层；HTML/PPTD 原生渲染，DOCX 降级
+    "screenshot":    {END_HTML: RENDER, END_DOCX: DEGRADE, END_PPTD: RENDER},
+    # raw_html：crafted 定制页容器；HTML 原样嵌入并带 data-track="crafted"
+    "raw_html":      {END_HTML: RENDER, END_DOCX: DEGRADE, END_PPTD: DEGRADE},
+    # ---- S8 Wave B：泛微 182 页实证三缺口（C-E2，生产线调研收敛报告 2026-08-30）----
+    # sla_block：SLA 服务承诺卡（三小表标准件）；HTML/PPTD 原生，DOCX 降级
+    "sla_block":     {END_HTML: RENDER, END_DOCX: DEGRADE, END_PPTD: RENDER},
+    # profile_card：人员卡（左照片联系卡 + 右项目经历）；DOCX 降级
+    "profile_card":  {END_HTML: RENDER, END_DOCX: DEGRADE, END_PPTD: RENDER},
+    # logo_wall：logo 墙（收尾标配，网格 ≤8）；DOCX 降级
+    "logo_wall":     {END_HTML: RENDER, END_DOCX: DEGRADE, END_PPTD: RENDER},
 }
 
 # ---- v2 枚举合法值（协议层单点；schema 校验与渲染层共用，§5.3）----
@@ -77,6 +95,10 @@ LEGEND_SWATCHES = (                              # legend_bar 色块（三态/ke
 )
 RISK_LEVELS = ("高", "中", "低")                 # risk_register 等级（B-4）
 RACI_ENUM = ("R", "A", "C", "I")                 # raci_matrix 单元格值（B-5）
+UI_MOCK_VARIANTS = ("document", "console")       # ui_mock 界面示意类型（Step 5）
+UI_MOCK_FRAMES = ("browser", "plain")            # ui_mock 外框（缺省 browser）
+CONCLUSION_TONES = ("primary", "accent", "muted")  # conclusion_band 色带语义
+DUO_TONES = ("before", "after")  # duo_compare 语义强化（C-E3：before 灰/after 主色）
 
 
 def _first_str(elem, keys, default=""):
@@ -349,11 +371,12 @@ def normalize_callout_block(elem):
     关键数字） + 1-2 行 desc。整组 2-3 个点（视觉平衡）。
     """
     points = []
-    for pt in _as_list(elem.get("points")):
+    for i, pt in enumerate(_as_list(elem.get("points"))):
         if not isinstance(pt, dict):
             pt = {}
         points.append({
-            "num": _first_str(pt, ("num",)),
+            # 存量 spec 未写 num 时自动补 01/02…，渲染端不再读到空编号
+            "num": _first_str(pt, ("num",)) or f"{i + 1:02d}",
             "title": _first_str(pt, ("title",)),
             "highlight": _first_str(pt, ("highlight",)),
             "desc": _first_str(pt, ("desc",)),
@@ -378,15 +401,32 @@ def normalize_toc_cards(elem):
 
 
 def normalize_duo_compare(elem):
-    """duo_compare：双栏对比（P14，v3.0）。左/右各标题 + 要点列表。"""
+    """duo_compare：双栏对比（P14，v3.0）。左/右各标题 + 要点列表。
+
+    S8 Wave B 语义强化（C-E3，向后兼容）：
+    - side.tone: before|after 可选——before 灰（现状）/after 主色（未来）；
+      存量 spec 不写 tone 走原双栏中性样式
+    - metrics: 可选量化对比行 [{label, left, right}]，随双栏后面出对照表
+    """
     def _side(s):
         s = s if isinstance(s, dict) else {}
         return {
             "title": _first_str(s, ("title",)),
             "points": [str(p) for p in _as_list(s.get("points"))],
+            "tone": _first_str(s, ("tone",)),
         }
+    metrics = []
+    for m in _as_list(elem.get("metrics")):
+        if not isinstance(m, dict):
+            m = {}
+        metrics.append({
+            "label": _first_str(m, ("label",)),
+            "left": _first_str(m, ("left", "from")),
+            "right": _first_str(m, ("right", "to")),
+        })
     return {"left": _side(elem.get("left")),
-            "right": _side(elem.get("right"))}
+            "right": _side(elem.get("right")),
+            "metrics": metrics}
 
 
 def normalize_pros_cons(elem):
@@ -471,6 +511,155 @@ def normalize_decision_board(elem):
     }
 
 
+def _norm_int_list(value, default=0):
+    """数值列表归一：非数字/None 回退 default，保留整数。"""
+    out = []
+    for item in _as_list(value):
+        try:
+            out.append(int(item))
+        except (TypeError, ValueError):
+            out.append(default)
+    return out
+
+
+def normalize_ui_mock(elem):
+    """ui_mock：界面示意卡（Step 5）。
+
+    - variant: document|console（必填，schema 校验）
+    - frame: browser|plain，缺省 browser
+    - tabs: 字符串列表，可选
+    - title: 必填，≤30 字
+    - sections: 必填，[{subtitle?, bars: [int]}]
+    - seal: 可选 document 型 {text≤6, company≤20}
+    - caption: 可选图题
+    """
+    sections = []
+    for sec in _as_list(elem.get("sections")):
+        if not isinstance(sec, dict):
+            sec = {}
+        sections.append({
+            "subtitle": _first_str(sec, ("subtitle",)),
+            "bars": _norm_int_list(sec.get("bars")),
+        })
+    seal_raw = elem.get("seal")
+    seal = {}
+    if isinstance(seal_raw, dict):
+        seal = {
+            "text": _first_str(seal_raw, ("text",)),
+            "company": _first_str(seal_raw, ("company",)),
+        }
+    return {
+        "variant": _first_str(elem, ("variant",)),
+        "frame": _first_str(elem, ("frame",)) or "browser",
+        "tabs": [str(t) for t in _as_list(elem.get("tabs"))],
+        "title": _first_str(elem, ("title",)),
+        "sections": sections,
+        "seal": seal,
+        "caption": _first_str(elem, ("caption",)),
+    }
+
+
+def normalize_conclusion_band(elem):
+    """conclusion_band：页底结论色带（Step 5）。
+
+    - text: 必填 ≤80 字；`**红字**` 关键词主色加粗/泛微强调红
+    - tone: primary|accent|muted，缺省 primary
+    """
+    return {
+        "text": _first_str(elem, ("text",)),
+        "tone": _first_str(elem, ("tone",)) or "primary",
+    }
+
+
+def _norm_annotations(value):
+    """截图标注归一：每项 {x, y, text}，缺省 0/''。"""
+    out = []
+    for ann in _as_list(value):
+        if not isinstance(ann, dict):
+            ann = {}
+        try:
+            x = int(ann.get("x", 0))
+        except (TypeError, ValueError):
+            x = 0
+        try:
+            y = int(ann.get("y", 0))
+        except (TypeError, ValueError):
+            y = 0
+        out.append({
+            "x": x,
+            "y": y,
+            "text": _first_str(ann, ("text", "label")),
+        })
+    return out
+
+
+def normalize_screenshot(elem):
+    """screenshot：截图 + 绝对定位标注层。
+
+    - src: 图片路径（必填）
+    - caption: 图题（可选）
+    - width: 相对版心宽度比例，缺省 0.9
+    - alignment: center|left，缺省 center
+    - annotations: 标注列表 [{x, y, text}]，坐标为图片内相对 px
+    """
+    try:
+        width = float(elem.get("width", 0.9))
+    except (TypeError, ValueError):
+        width = 0.9
+    return {
+        "src": _first_str(elem, ("src",)),
+        "caption": _first_str(elem, ("caption",)),
+        "width": max(0.1, min(1.0, width)),
+        "alignment": _first_str(elem, ("alignment",)) or "center",
+        "annotations": _norm_annotations(elem.get("annotations")),
+    }
+
+
+def normalize_raw_html(elem):
+    """raw_html：crafted 定制页容器，content 为原样 HTML 字符串。"""
+    return {
+        "content": _first_str(elem, ("content",)),
+    }
+
+
+def normalize_sla_block(elem):
+    """sla_block：SLA 服务承诺卡（C-E2，泛微实证标准件）。
+
+    - title: 可选标题
+    - items: [{name 指标名, value 承诺值, desc 说明}]（value 必填，schema 校验）
+    """
+    return {
+        "title": _first_str(elem, ("title",)),
+        "items": _norm_dict_list(elem.get("items"), ("name", "value", "desc")),
+    }
+
+
+def normalize_profile_card(elem):
+    """profile_card：人员卡（C-E2，左照片 + 右项目经历）。
+
+    - title: 可选标题
+    - profiles: [{name 姓名, role 职务, photo 照片路径, desc 项目经历,
+      contact 联系方式}]（name 必填，schema 校验）
+    """
+    return {
+        "title": _first_str(elem, ("title",)),
+        "profiles": _norm_dict_list(
+            elem.get("profiles"), ("name", "role", "photo", "desc", "contact")),
+    }
+
+
+def normalize_logo_wall(elem):
+    """logo_wall：logo 墙（C-E2，收尾标配，网格 ≤8 由容量预算管）。
+
+    - title: 可选标题
+    - logos: [{name 客户名（必填）, src logo 图路径（可选，缺省文字牌）}]
+    """
+    return {
+        "title": _first_str(elem, ("title",)),
+        "logos": _norm_dict_list(elem.get("logos"), ("name", "src")),
+    }
+
+
 # 有字段标准化需求的元素分派表
 _NORMALIZERS = {
     "text": normalize_text,
@@ -505,6 +694,16 @@ _NORMALIZERS = {
     "risk_register": normalize_risk_register,
     "raci_matrix": normalize_raci_matrix,
     "decision_board": normalize_decision_board,
+    # Step 5 新增元素
+    "ui_mock": normalize_ui_mock,
+    "conclusion_band": normalize_conclusion_band,
+    # S8 Wave A
+    "screenshot": normalize_screenshot,
+    "raw_html": normalize_raw_html,
+    # S8 Wave B（C-E2 三件套）
+    "sla_block": normalize_sla_block,
+    "profile_card": normalize_profile_card,
+    "logo_wall": normalize_logo_wall,
 }
 
 
@@ -538,6 +737,32 @@ def degrade_text(elem_type, normalized_or_elem, target_end):
         return f"[架构图：{title}] 请见 HTML/PPT 版"
     if elem_type == "product_intro_placeholder":
         return f"[产品介绍占位：{_first_str(elem, ('title',))}]"
+    if elem_type == "ui_mock":
+        title = _first_str(elem, ("title",))
+        caption = _first_str(elem, ("caption",))
+        return f"[界面示意：{title}]" + (f" {caption}" if caption else "")
+    if elem_type == "screenshot":
+        caption = _first_str(elem, ("caption",))
+        annos = elem.get("annotations") if isinstance(elem, dict) else []
+        anno_note = ""
+        if isinstance(annos, list) and annos:
+            labels = [str(a.get("text", "")) for a in annos if a.get("text")]
+            if labels:
+                anno_note = f"（标注：{', '.join(labels)}）"
+        return f"[截图：{caption or '未命名'}]{anno_note}"
+    if elem_type == "raw_html":
+        return "[定制页 / raw_html] 请见 HTML 版"
+    if elem_type == "sla_block":
+        n = len(elem.get("items") or [])
+        return f"[服务承诺（SLA）×{n}] 请见 HTML/PPT 版"
+    if elem_type == "profile_card":
+        names = [p.get("name", "") for p in (elem.get("profiles") or [])
+                 if isinstance(p, dict) and p.get("name")]
+        who = "、".join(names) if names else "未命名"
+        return f"[项目团队：{who}] 请见 HTML/PPT 版"
+    if elem_type == "logo_wall":
+        n = len(elem.get("logos") or [])
+        return f"[客户 logo 墙 ×{n}] 请见 HTML/PPT 版"
     # v2 页面构件降级文案（§5.2 DEGRADE 端）
     _V2_DEGRADE = {
         "hero": "封面横幅",
@@ -621,6 +846,53 @@ class RenderReport:
         return "\n".join(lines)
 
 
+def dual_end_diff_lines(spec):
+    """按能力矩阵 degrade 声明汇总 html-build 双端差异提示（纯查表，零 LLM）。
+
+    只返回本 spec 确实存在的降级字段，供 CLI 打印；不落文件。
+    """
+    cards_tag_hi = 0
+    phases_actions = 0
+    diagram_count = 0
+    ui_mock_count = 0
+    arch_count = 0
+    for page in (spec or {}).get("pages", []) or []:
+        if not isinstance(page, dict):
+            continue
+        for elem in page.get("elements", []) or []:
+            if not isinstance(elem, dict):
+                continue
+            etype = elem.get("type", "")
+            if etype == "cards":
+                for card in elem.get("cards", []) or []:
+                    if isinstance(card, dict) and (card.get("tag") or card.get("highlight")):
+                        cards_tag_hi += 1
+                        break
+            elif etype == "phases":
+                for ph in elem.get("phases", []) or []:
+                    if isinstance(ph, dict) and (ph.get("actions") or ph.get("items")):
+                        phases_actions += 1
+                        break
+            elif etype == "diagram":
+                diagram_count += 1
+            elif etype == "ui_mock":
+                ui_mock_count += 1
+            elif etype == "architecture_4a":
+                arch_count += 1
+    lines = []
+    if cards_tag_hi:
+        lines.append("cards.tag / cards.highlight（PPT 端不渲染）")
+    if phases_actions:
+        lines.append("phases.actions（PPT 端不渲染）")
+    if diagram_count:
+        lines.append(f"diagram ×{diagram_count}（DOCX 端降级为文本提示）")
+    if ui_mock_count:
+        lines.append(f"ui_mock ×{ui_mock_count}（DOCX 端降级为文本提示）")
+    if arch_count:
+        lines.append(f"architecture_4a ×{arch_count}（HTML/PPT 端降级为文本提示）")
+    return lines
+
+
 def empty_payload_reason(elem_type):
     """空载荷进 report.skipped 的理由；table 缺 headers/rows 给专属说明。"""
     if elem_type == "table":
@@ -664,4 +936,19 @@ def is_empty_payload(elem_type, normalized):
         return not normalized.get("items")
     if elem_type == "topnav":
         return not normalized.get("brand")
+    if elem_type == "ui_mock":
+        return not normalized.get("title")
+    if elem_type == "conclusion_band":
+        return not normalized.get("text")
+    if elem_type == "screenshot":
+        return not normalized.get("src")
+    if elem_type == "raw_html":
+        return not normalized.get("content")
+    # S8 Wave B（C-E2 三件套）：空载荷判定与渲染层读取口径一致
+    if elem_type == "sla_block":
+        return not normalized.get("items")
+    if elem_type == "profile_card":
+        return not normalized.get("profiles")
+    if elem_type == "logo_wall":
+        return not normalized.get("logos")
     return False

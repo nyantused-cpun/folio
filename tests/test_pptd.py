@@ -1,8 +1,4 @@
 # -*- coding: utf-8 -*-
-
-import pytest
-
-pytestmark = pytest.mark.internal
 """pptd-build 命令与 _pptd 模块测试（C-2 重构后）。
 
 全部 mock：不触真实 PPT 转换、不调 PowerPoint COM、不写真实 output/。
@@ -134,11 +130,21 @@ class TestBackendCheck:
 
     def test_unknown_element_type_fail(self, tmp_path, capsys):
         import _pptd
+        # 0d 起 chart 是合法类型；未知类型换 video 样例
         page = ("elements:\n"
-                "- elementId: a\n  elementType: chart\n  bounds: [0, 0, 10, 10]\n")
+                "- elementId: a\n  elementType: video\n  bounds: [0, 0, 10, 10]\n")
         main = _write_deck(tmp_path, _OK_MAIN, {"01.page": page})
         assert _pptd.PythonPptxBackend().check(main)[0] is False
         assert "未知 elementType" in capsys.readouterr().out
+
+    def test_chart_element_type_accepted(self, tmp_path):
+        import _pptd
+        page = ("elements:\n"
+                "- elementId: a\n  elementType: chart\n  bounds: [0, 0, 10, 10]\n"
+                "  chartKind: bar\n  categories: [Q1, Q2]\n"
+                "  series:\n  - name: s1\n    values: [1, 2]\n")
+        main = _write_deck(tmp_path, _OK_MAIN, {"01.page": page})
+        assert _pptd.PythonPptxBackend().check(main)[0] is True
 
 
 # ---------------------------------------------------------------------------
@@ -160,14 +166,20 @@ class TestExportShots:
         pptx.write_bytes(b"x")
         out_dir = tmp_path / "shots"
 
-        def _fake_run(cmd, **k):
-            out = cmd[cmd.index("-OutDir") + 1]
-            os.makedirs(out, exist_ok=True)
-            for i in (1, 2):
-                with open(os.path.join(out, f"slide_{i:02d}.png"), "wb") as f:
-                    f.write(b"png")
-            return subprocess.CompletedProcess(cmd, 0, stdout="Exported 2 slides")
-        monkeypatch.setattr(subprocess, "run", _fake_run)
+        class _FakePopen:
+            # B3 后 export_shots 走 Popen（超时可杀进程树），mock 对齐新接口
+            def __init__(self, cmd, **k):
+                self.pid = 100
+                self.returncode = 0
+                out = cmd[cmd.index("-OutDir") + 1]
+                os.makedirs(out, exist_ok=True)
+                for i in (1, 2):
+                    with open(os.path.join(out, f"slide_{i:02d}.png"), "wb") as f:
+                        f.write(b"png")
+
+            def communicate(self, timeout=None):
+                return "Exported 2 slides", None
+        monkeypatch.setattr(subprocess, "Popen", _FakePopen)
 
         assert _pptd.export_shots(str(pptx), str(out_dir)) is True
         assert sorted(os.listdir(out_dir)) == ["slide_01.png", "slide_02.png"]
@@ -177,8 +189,15 @@ class TestExportShots:
         monkeypatch.setattr(_pptd, "find_pwsh", lambda: "/fake/pwsh")
         pptx = tmp_path / "a.pptx"
         pptx.write_bytes(b"x")
-        monkeypatch.setattr(subprocess, "run",
-                            lambda cmd, **k: subprocess.CompletedProcess(cmd, 1))
+
+        class _FailPopen:
+            def __init__(self, cmd, **k):
+                self.pid = 101
+                self.returncode = 1
+
+            def communicate(self, timeout=None):
+                return "", None
+        monkeypatch.setattr(subprocess, "Popen", _FailPopen)
         assert _pptd.export_shots(str(pptx), str(tmp_path / "out")) is False
         assert "导出失败" in capsys.readouterr().out
 
@@ -209,7 +228,7 @@ class _FakeBackend:
 class TestCmdPptdBuild:
     def _mock_pipeline(self, monkeypatch, check_ok=True, convert_ok=True):
         import _pptd
-        calls = {"check": 0, "convert": 0, "shots": 0}
+        calls = {"check": 0, "convert": 0, "shots": 0, "verify": []}
         backend = _FakeBackend(check_ok, convert_ok, calls)
         monkeypatch.setattr(_pptd, "get_backend", lambda: backend)
         monkeypatch.setattr(_pptd, "get_backend_or_exit", lambda: backend)
@@ -223,8 +242,11 @@ class TestCmdPptdBuild:
         monkeypatch.setattr(_cli_generate, "backup_before_generate",
                             lambda *a, **k: None)
         import _verify_hook
-        monkeypatch.setattr(_verify_hook, "run_single",
-                            lambda *a, **k: True)
+
+        def fake_run_single(*a, **kw):
+            calls["verify"].append(kw)
+            return True, []
+        monkeypatch.setattr(_verify_hook, "run_single", fake_run_single)
         return calls
 
     def test_missing_input_exits_1(self, monkeypatch):
@@ -315,6 +337,8 @@ class TestCmdPptdBuild:
             assert calls["check"] == 1
             assert calls["convert"] == 1
             assert calls["shots"] == 1
+            # F0-6：生产链必须消费 blocked_coverage（return_blocked=True）
+            assert calls["verify"] and calls["verify"][-1].get("return_blocked") is True
         finally:
             if os.path.exists(out):
                 os.remove(out)
@@ -335,3 +359,7 @@ class TestCmdPptdBuild:
         assert calls["check"] == 0
         assert calls["convert"] == 0
         assert calls["shots"] == 1
+
+
+# v2.0 同源对齐（2026-09-08）：依赖主仓工作区契约/真实数据，发布面标记 internal 不随 CI 跑
+pytestmark = pytest.mark.internal

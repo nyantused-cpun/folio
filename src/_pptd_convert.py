@@ -31,7 +31,7 @@ import yaml
 EMU_PER_PT = 12700  # python-pptx 单位：1pt = 12700 EMU；v1 方言 1px = 1pt
 
 # 转换器支持的元素类型（chart 不在生成器范围，C-3 不支持，check 已拦）
-_SUPPORTED_TYPES = ("text", "shape", "table", "image", "group")
+_SUPPORTED_TYPES = ("text", "shape", "table", "image", "group", "chart")
 
 # v1 shapeName -> python-pptx MSO_SHAPE 成员名（运行时 getattr 解析，防版本漂移）。
 # 只收录 v1 生成器实际产出的 preset + D-2 明确会引入的块箭头/语义形状；
@@ -63,6 +63,8 @@ _SHAPE_NAME_MAP = {
     "foldedCorner": "FOLDED_CORNER",
     # data_flow 数据库罐形（relationship.py）
     "can": "CAN",
+    # infra 云/网络云形（architecture.py _infra_pptd）
+    "cloud": "CLOUD",
     # D-2 语义化 preset（flow 节点：start/end/process/decision/doc）
     "flowChartTerminator": "FLOWCHART_TERMINATOR",
     "flowChartProcess": "FLOWCHART_PROCESS",
@@ -85,6 +87,10 @@ _ARROW_MAP = {
     "diamond": "diamond",
     "oval": "oval",
 }
+
+# 柔和阴影缺省色（R-3 尾单点）：deck 主题 colors 带 shadow 槽位（hex 或
+# $token）时跟随主题；槽位缺失回退此值（存量工程/默认主题渲染逐字节不变）。
+_DEFAULT_SHADOW_COLOR = "0F172A"
 
 # 水平对齐映射
 _ALIGN_H_MAP = {"left": "LEFT", "center": "CENTER", "right": "RIGHT",
@@ -201,22 +207,57 @@ def convert_pptd(pptd_path, out_path):
 
     blank_layout = prs.slide_layouts[6]  # Blank
     pages = main.get("pages") or []
+    # 元素级失败累计（fail-closed，表达模式计划书 0a）：此前单元素异常仅
+    # warning 跳过且恒返回 True，元素静默丢失可穿透 verify 直达客户
+    element_errors = []
     for idx, rel in enumerate(pages):
         page_path = os.path.join(deck_dir, rel)
         if not os.path.exists(page_path):
-            print(f"[convert warning] 页面文件不存在，跳过: {rel}")
+            print(f"[convert error] 页面文件不存在: {rel}")
+            element_errors.append((rel, "", "页面文件不存在"))
             continue
-        page = load_yaml_file(page_path)
+        # 页级 fail-closed 收口（S4 增强）：页面解析/背景渲染异常此前在
+        # try 外，裸 traceback 崩进程；收进 element_errors 统一阻断
+        try:
+            page = load_yaml_file(page_path)
+        except Exception as e:
+            print(f"[convert error] {rel} 页面解析失败: {e}")
+            element_errors.append((rel, "", f"页面解析失败: {e}"))
+            continue
         slide = prs.slides.add_slide(blank_layout)
-        _render_background(slide, page.get("background"), theme_colors, prs)
-        for el in page.get("elements") or []:
+        try:
+            _render_background(slide, page.get("background"), theme_colors, prs)
+        except Exception as e:
+            print(f"[convert error] {rel} 背景渲染失败: {e}")
+            element_errors.append((rel, "", f"背景渲染失败: {e}"))
+            continue
+        elems = page.get("elements") or []
+        zero_shape = []
+        for el in elems:
+            shapes_before = len(slide.shapes)
             try:
                 _render_element(slide, el, theme_colors, text_styles,
                                 table_styles, deck_dir)
             except Exception as e:
-                print(f"[convert warning] {rel} 元素 {el.get('elementId')} "
-                      f"渲染失败，跳过: {e}")
+                print(f"[convert error] {rel} 元素 {el.get('elementId')} "
+                      f"渲染失败: {e}")
+                element_errors.append(
+                    (rel, el.get("elementId"), str(e)))
+            # 元素级对账（S4 增强，替换原整页计数对账）：点名未产出任何
+            # 形状的元素。纯计数对账会被 group 补偿漏检——group 净产出
+            # ≥1 形状，可掩盖同页图片缺失等零产出元素
+            if len(slide.shapes) == shapes_before:
+                zero_shape.append(el.get("elementId"))
+        for eid in zero_shape:
+            print(f"[convert error] {rel} 元素 {eid} 未产出任何形状"
+                  f"（疑似渲染丢失）")
+            element_errors.append((rel, eid, "元素未产出形状"))
         print(f"[convert] 第 {idx + 1}/{len(pages)} 页已渲染: {rel}")
+
+    if element_errors:
+        print(f"[convert error] 共 {len(element_errors)} 处渲染失败"
+              f"（fail-closed，不产出可静默丢页的 PPTX）")
+        return False
 
     os.makedirs(os.path.dirname(os.path.abspath(out_path)) or ".", exist_ok=True)
     prs.save(out_path)
@@ -258,7 +299,65 @@ def _render_element(slide, el, theme_colors, text_styles, table_styles, deck_dir
         return _render_image(slide, el, deck_dir)
     elif etype == "group":
         return _render_group(slide, el, theme_colors, text_styles, table_styles, deck_dir)
+    elif etype == "chart":
+        return _render_chart(slide, el)
     return None
+
+
+def _render_chart(slide, el):
+    """chart 元素 → 原生 graphicFrame（F7 拍板执行：原生 chart 优先于形状拼，
+    双击可改数据）。bar=COLUMN_CLUSTERED；waterfall=COLUMN_STACKED 四系列
+    （base 隐形 + 增/减/total，python-pptx 1.0.2 无 WATERFALL 枚举的
+    栈式 emulate，样式收口在 _style_waterfall_chart）。"""
+    from pptx.util import Emu
+    from pptx.chart.data import CategoryChartData
+    from pptx.enum.chart import XL_CHART_TYPE
+
+    x, y, w, h = [int(v) for v in el["bounds"]]
+    chart_data = CategoryChartData()
+    chart_data.categories = el.get("categories") or []
+    if el.get("chartKind") == "waterfall":
+        wf = el.get("waterfall") or {}
+        for name in ("base", "increase", "decrease", "total"):
+            chart_data.add_series(name, wf.get(name) or [])
+        chart_type = XL_CHART_TYPE.COLUMN_STACKED
+    else:
+        for s in el.get("series") or []:
+            chart_data.add_series(str(s.get("name", "")), s.get("values") or [])
+        chart_type = XL_CHART_TYPE.COLUMN_CLUSTERED
+    gf = slide.shapes.add_chart(
+        chart_type,
+        Emu(x * EMU_PER_PT), Emu(y * EMU_PER_PT),
+        Emu(w * EMU_PER_PT), Emu(h * EMU_PER_PT), chart_data)
+    plot = gf.chart.plots[0]
+    if el.get("chartKind") == "waterfall":
+        _style_waterfall_chart(plot, el)
+    else:
+        plot.has_data_labels = True
+    return gf
+
+
+def _style_waterfall_chart(plot, el):
+    """waterfall 栈式 emulate 的样式收口（与 HTML 端视觉语义同源）：
+
+    - base 系列隐形（无填充、无数据标签）只作托底；
+    - increase/decrease/total 按元素自带 colors 着色（绿/红/蓝）；
+    - 值标签贴段顶，零值占位段经空零段 number format 隐藏
+      （'#,##0;-#,##0;'——第三段为空即不显示 0，避免四系列全打标签）。
+    """
+    colors = el.get("colors") or {}
+    for idx, name in enumerate(("base", "increase", "decrease", "total")):
+        ser = plot.series[idx]
+        if name == "base":
+            ser.format.fill.background()
+            ser.data_labels.show_value = False
+            continue
+        color = _color_value(colors.get(name), {})
+        if color is not None:
+            ser.format.fill.solid()
+            ser.format.fill.fore_color.rgb = color
+    plot.has_data_labels = True
+    plot.data_labels.number_format = "#,##0;-#,##0;"
 
 
 def _render_group(slide, el, theme_colors, text_styles, table_styles, deck_dir):
@@ -487,16 +586,21 @@ def _render_shape(slide, el, theme_colors):
     if flip:
         _apply_flip(shape, bool(flip[0]), bool(flip[1]))
 
-    # 节点框体（flowChart 系列）加柔和阴影提升层次；其余形状关闭继承阴影
+    # 节点框体（flowChart 系列）加柔和阴影提升层次；其余形状关闭继承阴影。
+    # 阴影色走主题槽位（R-3 尾）：deck theme.colors 的 shadow 键（hex 或
+    # $token）优先，缺省回退 _DEFAULT_SHADOW_COLOR
     if name.startswith("flowChart"):
-        _apply_soft_shadow(shape)
+        shadow_rgb = _color_value(theme_colors.get("shadow"), theme_colors)
+        _apply_soft_shadow(
+            shape, color=str(shadow_rgb) if shadow_rgb is not None
+            else _DEFAULT_SHADOW_COLOR)
     else:
         shape.shadow.inherit = False
     return shape
 
 
-def _apply_soft_shadow(shape, color="0F172A", opacity=32000, blur=25400,
-                       dist=25400, direction=5400000):
+def _apply_soft_shadow(shape, color=_DEFAULT_SHADOW_COLOR, opacity=32000,
+                       blur=25400, dist=25400, direction=5400000):
     """给 shape 加柔和外阴影（操作 a:effectLst/a:outerShdw XML）。
 
     python-pptx 的 ShadowFormat 仅 expose inherit，无法设颜色/偏移/模糊，

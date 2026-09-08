@@ -8,7 +8,29 @@ PDF/DOCX/PPTX 通过本脚本转换为纯文本后交 AI 理解。
 import os
 import sys
 
-SCRIPT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # 仓库根
+# SCRIPT_DIR 事实源：_paths（B4-G5 收拢，值语义不变）
+from _paths import SCRIPT_DIR
+
+# P2-5：解析资源上限——inbox 投放巨 PDF / zip-bomb xlsx 曾可经
+# classify/inbox-scan 自动链触发内存耗尽（vision 15MB 是此前全库唯一上限）
+MAX_READ_BYTES = 100 * 1024 * 1024   # 100MB，对齐 vision 上限
+MAX_PDF_PAGES = 1000                 # 单文件最多提取页数（超出截断并声明）
+
+
+def size_exceeded(path):
+    """P2-5：文件超过 MAX_READ_BYTES 时返回提示串，否则 None。
+
+    读入口（read_full / extract_document）在解析前调用，避免把
+    超限文件整个载入内存。OSError（文件恰好被删等）不算超限。
+    """
+    try:
+        size = os.path.getsize(path)
+    except OSError:
+        return None
+    if size > MAX_READ_BYTES:
+        return (f"文件过大（{size / 1048576:.0f}MB > 上限 "
+                f"{MAX_READ_BYTES // 1048576}MB），拒绝解析: {path}")
+    return None
 
 
 def read_txt(path):
@@ -37,7 +59,12 @@ def read_pdf(path):
     doc = fitz.open(path)
     try:
         lines = []
+        total = doc.page_count
         for i, page in enumerate(doc, 1):
+            if i > MAX_PDF_PAGES:
+                lines.append(f"\n(页数超上限 {MAX_PDF_PAGES}，共 {total} 页，"
+                             f"仅提取前 {MAX_PDF_PAGES} 页)")
+                break
             text = page.get_text()
             if text.strip():
                 lines.append(f"\n=== 第 {i} 页 ===")
@@ -47,13 +74,25 @@ def read_pdf(path):
         doc.close()
 
 
+def _iter_shapes(shapes):
+    """深度优先展开形状树：组合形状（GroupShape）递归下钻其子形状，
+    其余形状原样产出。P3-2026-09-06：原实现只扫顶层，组合内文本/表格
+    静默丢读。GroupShape 独有 .shapes 子集合，按属性判定免枚举依赖。"""
+    for shape in shapes:
+        children = getattr(shape, "shapes", None)
+        if children is not None:
+            yield from _iter_shapes(children)
+        else:
+            yield shape
+
+
 def read_pptx(path):
     from pptx import Presentation
     prs = Presentation(path)
     lines = []
     for i, slide in enumerate(prs.slides, 1):
         slide_text = []
-        for shape in slide.shapes:
+        for shape in _iter_shapes(slide.shapes):
             if shape.has_text_frame:
                 for para in shape.text_frame.paragraphs:
                     if para.text.strip():
@@ -102,17 +141,37 @@ def read_xlsx_structured(path):
         chunks = []
         for s_idx, sheet_name in enumerate(wb.sheetnames):
             ws = wb[sheet_name]
+            # 表头回退扫描：首行空表/合并标题行时向下找首个「≥2 非空格」的行
+            # 作表头（上限 5 个非空行；找不到退化用首个非空行并告警），
+            # 全空表无表头、行按裸文本出块
             header = None
+            header_ridx = -1
+            fallback = None
+            fallback_ridx = -1
+            seen = 0
             for r_idx, row in enumerate(ws.iter_rows(values_only=True)):
                 cells = [str(c) if c is not None else "" for c in row]
                 if not any(cells):
                     continue
-                # 第一行非空作为表头（报价单常见结构）
-                if header is None and r_idx == 0:
-                    header = cells
+                seen += 1
+                if fallback is None:
+                    fallback, fallback_ridx = cells, r_idx
+                if sum(1 for c in cells if c) >= 2:
+                    header, header_ridx = cells, r_idx
+                    break
+                if seen >= 5:
+                    break
+            if header is None and fallback is not None:
+                header, header_ridx = fallback, fallback_ridx
+                print(f"[警告] Sheet「{sheet_name}」前 5 个非空行未找到表头行，"
+                      f"退化用第 {fallback_ridx + 1} 行作表头")
+            for r_idx, row in enumerate(ws.iter_rows(values_only=True)):
+                cells = [str(c) if c is not None else "" for c in row]
+                if not any(cells) or r_idx == header_ridx:
+                    continue
                 # 拼接：Sheet名 + 表头 + 当前行，保留上下文
                 parts = [f"[Sheet: {sheet_name}]"]
-                if header and r_idx > 0:
+                if header and r_idx > header_ridx:
                     # 把表头和当前行配对，只保留非空字段
                     pairs = [(h, v) for h, v in zip(header, cells, strict=False) if v]
                     if pairs:
@@ -165,6 +224,11 @@ def read_full(path):
         supported = ", ".join(sorted(READERS.keys()))
         return f"不支持的格式: {ext}（支持: {supported}）", ""
 
+    # P2-5：超限文件拒绝解析（防 zip-bomb/巨文件经自动链触发耗尽）
+    err = size_exceeded(path)
+    if err:
+        return err, ""
+
     text = reader(path)
 
     mtime = os.path.getmtime(path)
@@ -182,6 +246,20 @@ def read_full(path):
         summary = text[:2000] + (f"\n... (共 {len(text)} 字符)" if len(text) > 2000 else "")
 
     return summary, cache_path
+
+
+def read_full_text(path):
+    """read_full 的容错壳：成功返回全文文本（缓存命中读缓存，未命中读摘要），
+    失败/异常返回 None 并告警。逐文件隔离用（对齐 read_batch），坏文件不裸崩调用链。"""
+    try:
+        summary, cache = read_full(path)
+        if cache and os.path.exists(cache):
+            with open(cache, "r", encoding="utf-8") as f:
+                return f.read()
+        return summary
+    except Exception as e:  # noqa: BLE001
+        print(f"[警告] 跳过无法读取的文件 {path}: {e}")
+        return None
 
 
 def read_batch(paths, max_workers=4):

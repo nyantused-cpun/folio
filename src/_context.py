@@ -1,4 +1,4 @@
-﻿# -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 """上下文管理模块：context.md schema、层级判定、客户目录管理。
 
 从 _session.py 拆分（候选 4 · 模块化），无内部依赖（叶子模块）。
@@ -6,6 +6,7 @@
 import os
 import json
 import re
+import sys
 from datetime import datetime
 
 from _paths import SCRIPT_DIR, CLIENTS_DIR, TASK_HISTORY
@@ -16,10 +17,10 @@ __all__ = [
     "CONTEXT_SCHEMA_H2", "WRITABLE_H2_SECTIONS", "CONTEXT_MAX_LINES",
     "LEVEL_KEYWORDS", "LEVEL_TO_MODE",
     # 函数
-    "_validate_context_schema", "_snapshot_context",
+    "_validate_context_schema", "_snapshot_context", "has_meta_version",
     "detect_level", "load_context_by_level",
     "list_clients", "get_context_path", "ensure_client_dir",
-    "load_context", "show_all_clients", "consolidate", "compact",
+    "load_context", "show_all_clients", "compact",
 ]
 
 
@@ -36,23 +37,33 @@ CONTEXT_SCHEMA_H2 = {
     "待办与下一步",      # save_session 追加
     "历史会话摘要",      # compact 生成的压缩摘要段
     # --- 客户自定义扩展段（人工维护的锁定段，向后兼容） ---
-    "项目关键背景（摘要）",   # 示例：招标基本信息+评标办法+合同条款+★号废标项+痛点+约束+业务模式
-    "参考材料（refs/）",      # 示例：refs/ 目录索引（与 _knowledge/clients/{客户}/refs/ 对应）
-    "独立报告（reports/）",   # 示例：reports/ 目录索引
-    "关键决策（高亮）",       # 示例：高亮版关键决策（与 decisions.md 对应）
-    "待澄清问题（高优先级 · 影响方案边界）",  # 示例：待客户澄清问题索引
-    "业务双核心（D-006/D-007 · 2026-07-08 修正）",  # 示例：双核心业务模式说明
-    "待办 / 下一步",          # 示例：待办事项（与"待办与下一步"语义一致，历史命名差异）
+    "项目关键背景（摘要）",   # 蓝海：招标基本信息+评标办法+合同条款+★号废标项+痛点+约束+业务模式
+    "参考材料（refs/）",      # 蓝海：refs/ 目录索引（与 _knowledge/clients/{客户}/refs/ 对应）
+    "独立报告（reports/）",   # 蓝海：reports/ 目录索引
+    "关键决策（高亮）",       # 蓝海：高亮版关键决策（与 decisions.md 对应）
+    "待澄清问题（高优先级 · 影响方案边界）",  # 蓝海：待客户澄清问题索引
+    "业务双核心（D-006/D-007 · 2026-07-08 修正）",  # 蓝海：双核心业务模式说明
+    "待办 / 下一步",          # 蓝海：待办事项（与"待办与下一步"语义一致，历史命名差异）
 }
 
 # H2 段中 save_session 可以写入的段（会话记录类）
 WRITABLE_H2_SECTIONS = {"会话历史", "待办与下一步"}
 
-# compact 生成的会话块 H2 段正则前缀（## [日期] 第N次会话 / ## 历史会话摘要 ...）
-_COMPACT_H2_PATTERN = re.compile(r"^## (?:\[\d{4}-\d{2}-\d{2}\]|历史会话摘要)", re.MULTILINE)
-
 # context.md 行数上限（超过触发 compact）
 CONTEXT_MAX_LINES = 200
+
+# #50 防再发：context.md 结构版本标记（首行 HTML 注释形态，与 H2 白名单/
+# 会话块正则/compact 切分均无冲突）。模板产物自带；存量缺标记由 save 打
+# WARN 提示回填（_scratch/backfill_meta_version.py），不阻断。
+CONTEXT_META_VERSION_LINE = "<!-- meta_version: 2 -->"
+
+
+def has_meta_version(content):
+    """context.md 文本是否带 meta_version 结构版本标记（头部 5 行内）。"""
+    for line in content.splitlines()[:5]:
+        if "meta_version" in line:
+            return True
+    return False
 
 
 def _validate_context_schema(context_path):
@@ -95,7 +106,7 @@ def _snapshot_context(context_path):
     """写 context.md 快照（.snapshot.{timestamp}）。
 
     save_session 追加前调用，保留追加前的状态用于回溯。
-    保留最近 5 个快照，超出删除最旧的。
+    保留最近 3 个快照，超出删除最旧的（#47 误诊更正后的口味调整，Wave3）。
     """
     if not os.path.exists(context_path):
         return None
@@ -111,16 +122,16 @@ def _snapshot_context(context_path):
     except OSError:
         return None
 
-    # 清理旧快照（保留最近 5 个）
+    # 清理旧快照（保留最近 3 个）
     base = os.path.dirname(context_path)
     fname = os.path.basename(context_path)
     snapshots = []
     for f in os.listdir(base):
         if f.startswith(f"{fname}.snapshot."):
             snapshots.append(os.path.join(base, f))
-    if len(snapshots) > 5:
+    if len(snapshots) > 3:
         snapshots.sort(key=lambda x: os.path.getmtime(x))
-        for old in snapshots[:-5]:
+        for old in snapshots[:-3]:
             try:
                 os.remove(old)
             except OSError:
@@ -185,10 +196,11 @@ def load_context_by_level(client_name, level):
     """按层级加载客户上下文（SAE J3016 映射）。
 
     L5 autonomous: 不提取历史（AI 全自动，无需历史关联）
-    L4 collaborative: 读 decisions.md + profile.md（决策记忆 + 个人画像）
-    L3 directed: 读 outputs_index.json + preferences.md + profile.md（产出索引 + 偏好 + 画像）
+    L4 collaborative: 读 client_index.md（世界书）+ profile.md（决策全景 + 个人画像）
+    L3 directed: 读 client_index.md（世界书）+ outputs_index.json + preferences.md + profile.md
+                  （内容生产需要客户全景，R1-4）
 
-    返回 dict，含 level/profile/decisions/outputs_index/preferences 等键（按层级加载）。
+    返回 dict，含 level/profile/client_index/decisions/outputs_index/preferences 等键（按层级加载）。
     """
     loaded = {"level": level, "mode": LEVEL_TO_MODE.get(level, "collaborative")}
 
@@ -198,7 +210,9 @@ def load_context_by_level(client_name, level):
     if level == "creative":
         return loaded  # creative 不提取历史（创意发散不需要受既有决策约束）
 
-    client_path = os.path.join(CLIENTS_DIR, client_name)
+    # #48/D2：账本目录已迁 _internal/ 时按 client_dir 回退解析
+    from _paths import client_dir
+    client_path = client_dir(client_name, clients_dir=CLIENTS_DIR)
 
     # L4 + L3 都加载 profile.md（个人画像，去 AI 化基准）
     profile_path = os.path.join(SCRIPT_DIR, "_knowledge", "me", "profile.md")
@@ -211,7 +225,7 @@ def load_context_by_level(client_name, level):
             print(f"[warn] profile.md 读取失败: {e}")
 
     if level == "L4":
-        # L4 优先加载 client_index.md（世界书索引 ≤80 行），不再塞 decisions.md 全文
+        # L4 优先加载 client_index.md（世界书，条目级取舍/不截半句），不再塞 decisions.md 全文
         # 改动6（grilling 确认）：client_index.md 含全景计数，需要细节时用 chunk-read
         from _paths import client_index_path
         ci_path = client_index_path(client_name)
@@ -231,33 +245,41 @@ def load_context_by_level(client_name, level):
                 except Exception as e:
                     print(f"[warn] {client_name}/decisions.md 读取失败: {e}")
 
-        # 加载最近 1 次 insight 摘要（spec 5.1.2）
+        # P0 决策单轨化：L4 增加「最近 task 决策摘要」（读 decisions.md 尾部 3 条 task 条目）
         try:
-            from _insight import extract_summary, INSIGHTS_DIR
-            if os.path.isdir(INSIGHTS_DIR):
-                insight_files = sorted(
-                    [f for f in os.listdir(INSIGHTS_DIR)
-                     if f.startswith(f"{client_name}_") and f.endswith(".md")],
-                    reverse=True,
-                )
-                if insight_files:
-                    latest_path = os.path.join(INSIGHTS_DIR, insight_files[0])
-                    summary = extract_summary(latest_path)
-                    if summary:
-                        loaded["insight_summary"] = summary
-                        if "偏离" in summary:
-                            loaded.setdefault("warnings", []).append(
-                                "上次 insight 标记偏离度较高，请检查方向"
-                            )
-        except Exception as e:
-            print(f"[warn] insight 摘要加载失败: {e}")
+            from _theme_guard import load_recent_task_decisions
+            recent = load_recent_task_decisions(client_name, limit=3)
+            if recent:
+                loaded["recent_task_decisions"] = recent
+        except Exception:
+            pass
+
+        # 2026-08-31 清理与下线工程（B3）：insight 摘要加载已移除——
+        # 洞察机制退役（.folio/logs/insights 永久为空，职责并入 reflect/decisions.md）
     elif level == "L3":
+        # R1-4：L3 内容生产同样注入 client_index.md 世界书（客户全景）
+        from _paths import client_index_path
+        ci_path = client_index_path(client_name)
+        if os.path.exists(ci_path):
+            try:
+                with open(ci_path, "r", encoding="utf-8") as f:
+                    loaded["client_index"] = f.read()
+            except Exception as e:
+                print(f"[warn] {client_name}/client_index.md 读取失败: {e}")
+        else:
+            print(f"[warn] {client_name}/client_index.md 不存在，L3 未注入世界书")
         # L3 加载 outputs_index.json（产出索引）+ preferences.md（客户偏好）
         outputs_index_path = os.path.join(client_path, "outputs_index.json")
         if os.path.exists(outputs_index_path):
             try:
                 with open(outputs_index_path, "r", encoding="utf-8") as f:
-                    loaded["outputs_index"] = json.load(f)
+                    loaded_idx = json.load(f)
+                # W1-5：missing（已归档/缺失）条目不注入 L3——悬空路径只占上下文
+                if isinstance(loaded_idx, dict) and isinstance(loaded_idx.get("outputs"), list):
+                    loaded_idx["outputs"] = [
+                        o for o in loaded_idx["outputs"]
+                        if not (isinstance(o, dict) and o.get("missing"))]
+                loaded["outputs_index"] = loaded_idx
             except Exception as e:
                 print(f"[warn] {client_name}/outputs_index.json 解析失败: {e}")
         preferences_path = os.path.join(client_path, "preferences.md")
@@ -272,38 +294,56 @@ def load_context_by_level(client_name, level):
 
 
 def list_clients():
-    """列出所有客户项目"""
+    """列出所有客户项目（跳过 `_` 前缀内部目录，收口 _paths.list_client_dirs）"""
     if not os.path.isdir(CLIENTS_DIR):
         print("没有客户项目目录")
         return []
-    clients = [d for d in os.listdir(CLIENTS_DIR)
-               if os.path.isdir(os.path.join(CLIENTS_DIR, d)) and not d.startswith("_")]
-    return clients
+    from _paths import list_client_dirs
+    return list_client_dirs(clients_dir=CLIENTS_DIR)
 
 
 def get_context_path(client_name):
-    from _paths import _validate_client_name
+    from _paths import _validate_client_name, client_dir
     _validate_client_name(client_name)
-    return os.path.join(CLIENTS_DIR, client_name, "context.md")
+    return os.path.join(client_dir(client_name, clients_dir=CLIENTS_DIR), "context.md")
+
+
+def _init_context_file(client_path):
+    """按模板初始化 context.md（新客户建档 / 存量目录缺文件两处共用）。
+
+    模板缺失 -> 写最小头。返回 True=写出成功；False=初始化失败（fail-soft，
+    由调用方打印中文原因决定降级路径，不抛异常）。
+    """
+    context_path = os.path.join(client_path, "context.md")
+    template_path = os.path.join(CLIENTS_DIR, "_template", "context.md")
+    try:
+        if os.path.exists(template_path):
+            with open(template_path, "r", encoding="utf-8") as src:
+                template = src.read()
+            with open(context_path, "w", encoding="utf-8") as dst:
+                dst.write(template)
+        else:
+            with open(context_path, "w", encoding="utf-8") as f:
+                f.write(CONTEXT_META_VERSION_LINE + "\n# 项目上下文记录\n\n")
+        return True
+    except OSError as e:
+        print(f"[warn] context.md 初始化失败: {e}")
+        return False
 
 
 def ensure_client_dir(client_name):
-    from _paths import _validate_client_name
+    from _paths import _validate_client_name, client_dir
     _validate_client_name(client_name)
-    template = os.path.join(CLIENTS_DIR, "_template")
-    client_path = os.path.join(CLIENTS_DIR, client_name)
+    # #48/D2：顶层优先，_internal/ 内部账本位回退（存量账本目录迁 _internal/ 后仍可按名解析）
+    client_path = client_dir(client_name, clients_dir=CLIENTS_DIR)
     if not os.path.exists(client_path):
         os.makedirs(os.path.join(client_path, "refs"), exist_ok=True)
         os.makedirs(os.path.join(client_path, "outputs"), exist_ok=True)
-        context_path = os.path.join(client_path, "context.md")
-        if os.path.exists(os.path.join(template, "context.md")):
-            with open(os.path.join(template, "context.md"), "r", encoding="utf-8") as src:
-                with open(context_path, "w", encoding="utf-8") as dst:
-                    dst.write(src.read())
-        else:
-            with open(context_path, "w", encoding="utf-8") as f:
-                f.write("# 项目上下文记录\n\n")
-        print(f"创建新客户项目: {client_name}")
+        if _init_context_file(client_path):
+            print(f"创建新客户项目: {client_name}")
+    # 注：存量目录 context.md 缺失的补齐不在本函数做——ensure 可能发生在
+    # 取锁之前，「锁被持有即零写入」是 save 的硬语义（P3 2026-09-06，
+    # 补齐挪到 save_session 锁内，见 _session.save_session）。
     return client_path
 
 
@@ -313,7 +353,7 @@ def load_context(client_name):
     if not os.path.exists(context_path):
         print(f"错误: 客户 '{client_name}' 不存在")
         print(f"可用客户: {list_clients()}")
-        return
+        sys.exit(1)  # 客户不存在是失败路径，非零退出供脚本/Hook 判断
 
     with open(context_path, "r", encoding="utf-8") as f:
         content = f.read()
@@ -375,7 +415,13 @@ def show_all_clients(json_output=False):
         data = []
         for c in clients:
             ctx_path = get_context_path(c)
-            entry = {"client": c, "last_session": "无记录", "session_count": 0, "pending": ""}
+            try:
+                from _state import get_state as _get_state
+                stage = _get_state(c).get("stage", "intake")
+            except Exception:
+                stage = "intake"
+            entry = {"client": c, "last_session": "无记录", "session_count": 0,
+                     "pending": "", "stage": stage}
             if os.path.exists(ctx_path):
                 with open(ctx_path, "r", encoding="utf-8") as f:
                     content = f.read()
@@ -407,56 +453,6 @@ def show_all_clients(json_output=False):
             print(f"{c:<20} {'无记录':<14} {0:<8}")
 
 
-def consolidate(client_name, threshold=3):
-    """自动固化：检测反复出现的模式，升级到 .folio/rules/"""
-    context_path = get_context_path(client_name)
-    if not os.path.exists(context_path):
-        print(f"客户 '{client_name}' 不存在")
-        return
-
-    with open(context_path, "r", encoding="utf-8") as f:
-        content = f.read()
-
-    rules_dir = os.path.join(CLIENTS_DIR, client_name, ".folio", "rules")
-    if not os.path.isdir(rules_dir):
-        rules_dir = os.path.join(SCRIPT_DIR, ".folio", "rules")
-
-    patterns = {
-        "主题色": r"#([0-9a-fA-F]{6})",
-        "页数结构": r"(\d+)[页Pp][结]*构",
-        "字体": r"(Microsoft YaHei|SimSun|SimHei|KaiTi|FangSong|Arial|Segoe UI|Noto Sans)",
-        "输出类型": r"\.(pptx|html|docx|pdf)",
-        "数据来源": r"([\u4e00-\u9fff]+规划|[\u4e00-\u9fff]+报告|[\u4e00-\u9fff]+文档)",
-        "优先Skill": r"(slides|frontend-design|web-artifacts-builder)",
-    }
-
-    found_rules = []
-    for label, pattern in patterns.items():
-        matches = re.findall(pattern, content)
-        if not matches:
-            continue
-        freq = {}
-        for m in matches:
-            freq[m] = freq.get(m, 0) + 1
-        for val, count in freq.items():
-            if count >= threshold:
-                found_rules.append(f"{label}: {val} (出现 {count} 次)")
-
-    if not found_rules:
-        print(f"未发现可固化的模式（阈值: {threshold} 次）")
-        return
-
-    print(f"\n检测到 {len(found_rules)} 个可固化模式:\n")
-    for r in found_rules:
-        print(f"  ✓ {r}")
-
-    # 不再自动写入，输出建议让用户确认
-    new_rules_text = "\n".join(f"- **{r}**" for r in found_rules)
-    print(f"\n[consolidate] 检测到客户 '{client_name}' 的以下模式（出现 {threshold}+ 次），建议升级为规则：")
-    print(new_rules_text)
-    print("如需确认，请说'记一下'或手动添加到 AGENTS.md")
-
-
 def compact(client_name, keep_last=1):
     """上下文压缩：将前 N-1 次会话压缩为摘要，仅保留最近 keep_last 次完整记录"""
     context_path = get_context_path(client_name)
@@ -467,16 +463,24 @@ def compact(client_name, keep_last=1):
     with open(context_path, "r", encoding="utf-8") as f:
         content = f.read()
 
-    # 捕获完整会话块（含日期和正文），返回 (date, full_block) 元组列表
-    sessions = re.findall(r'(## \[(\d{4}-\d{2}-\d{2})\][^\n]*\n.*?)(?=## \[\d{4}-\d{2}-\d{2}\]|\Z)', content, re.DOTALL)
+    # 捕获完整会话块（含日期和正文），返回 (full_block, date) 元组列表。
+    # P0-1：行首锚定 `^#{2,3}`（与 _session._upsert_session_block 同源）——
+    # 旧正则 lookahead 无锚定，H3 会话标题（### [日期]）中的 `## [` 子串会误切前一块
+    sessions = re.findall(
+        r'(?ms)(^#{2,3} \[(\d{4}-\d{2}-\d{2})\][^\n]*\n.*?)(?=^#{2,3} \[\d{4}-\d{2}-\d{2}\]|\Z)',
+        content,
+    )
 
     if len(sessions) <= keep_last:
         print(f"只有 {len(sessions)} 次会话，无需压缩")
         return
 
-    header_end = content.find("## [")
-    if header_end == -1:
-        # P1-1：--- 不存在时 find 返回 -1，+3 后是 2，导致 header 只取前 2 字符
+    # P0-1：header_end 取首个真会话标题的 match.start()——
+    # 旧 find("## [") 会命中头部模板尾注里的 `## [示例]` 字样，把模板当会话切开
+    first_session = re.search(r'(?m)^#{2,3} \[\d{4}-\d{2}-\d{2}\]', content)
+    if first_session:
+        header_end = first_session.start()
+    else:
         sep_pos = content.find("---")
         header_end = sep_pos + 3 if sep_pos != -1 else 0
     header = content[:header_end].strip()
@@ -484,8 +488,6 @@ def compact(client_name, keep_last=1):
     old_sessions = sessions[:-keep_last]
     recent_sessions = sessions[-keep_last:]
 
-    # sessions 元素是 (full_block, date)
-    " ".join(s[0] for s in old_sessions)
     date_range = f"{old_sessions[0][1]} ~ {old_sessions[-1][1]}"
 
     # 提取会话序号
@@ -496,36 +498,16 @@ def compact(client_name, keep_last=1):
     first_num = _extract_session_num(old_sessions[0][0])
     last_num = _extract_session_num(old_sessions[-1][0])
 
-    # 提取关键信息
-    all_decisions = set()
-    all_outputs = set()
-    all_pending = set()
-    for s in old_sessions:
-        body = s[0]
-        dec = re.findall(r'### 关键决策\n(.*?)(?=\n###|\Z)', body, re.DOTALL)
-        out = re.findall(r'### 产出文件\n(.*?)(?=\n###|\Z)', body, re.DOTALL)
-        pen = re.findall(r'### 待办[^\n]*\n(.*?)(?=\n###|\Z)', body, re.DOTALL)
-        for d in dec:
-            all_decisions.add(d.strip())
-        for o in out:
-            all_outputs.add(o.strip())
-        for p in pen:
-            if p.strip() and p.strip() != "(未记录)":
-                all_pending.add(p.strip())
-
+    # ADR-005（2026-09-07 复活收窄，W4/S7）：compact 产物为纯指针段——
+    # 只留日期区间与会话数，决策/产出/待办正文一律不摘录
+    # （决策单轨在 decisions.md，逐会话流水在 task_history.json）。
+    # 旧格式（三 H3 摘录段）已被 W4 手术批量清除，语料污染不再复发。
     summary = f"""
 ## 历史会话摘要 ({date_range})
 
 本摘要覆盖第 {first_num} ~ {last_num} 次会话，共 {len(old_sessions)} 次。
 
-### 历史关键决策
-{chr(10).join('- ' + d for d in sorted(all_decisions)[:10]) or '无记录'}
-
-### 历史产出文件
-{chr(10).join('- ' + o for o in sorted(all_outputs)[:10]) or '无记录'}
-
-### 已解决的待办
-{chr(10).join('- ' + p for p in sorted(all_pending)[:10]) or '无记录'}
+> 历史决策见 decisions.md（按日期 {date_range} 检索）；逐会话产出与待办见 .folio/logs/task_history.json。
 
 ---
 """

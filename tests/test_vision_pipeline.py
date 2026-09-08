@@ -11,6 +11,9 @@ from concurrent.futures import ThreadPoolExecutor
 def _mock_vision(monkeypatch, tmp_path, desc, captured=None):
     """通用 mock：注入假 key + 假网络，重定向缓存/用量日志，返回调用计数器。"""
     import _cloud_llm
+    # _post_json 真源自 #57 下沉后在 _cloud_transport，vision 按调用时属性解析——
+    # 打点必须指向真源，patch(_cloud_llm, "_post_json") 不再拦得到 vision 链路
+    import _cloud_transport
 
     monkeypatch.setattr(_cloud_llm, "VISION_CACHE", str(tmp_path / "vision_cache.json"))
     monkeypatch.setattr(_cloud_llm, "USAGE_LOG", str(tmp_path / "llm_usage.jsonl"))
@@ -31,7 +34,7 @@ def _mock_vision(monkeypatch, tmp_path, desc, captured=None):
             },
         }, 200
 
-    monkeypatch.setattr(_cloud_llm, "_post_json", fake_post)
+    monkeypatch.setattr(_cloud_transport, "_post_json", fake_post)
     return _cloud_llm, call_count
 
 
@@ -71,7 +74,12 @@ class TestVisionPipeline:
             assert f"image/{expect_mime};base64," in img_url
 
     def test_concurrent_cache_writes_no_loss(self, monkeypatch, tmp_path):
-        """并发识别多张图（模拟 read_batch 4 线程），缓存条目不丢。"""
+        """并发识别多张图（模拟 read_batch 4 线程），缓存条目不丢。
+
+        C-A9 偶发失败根因（2026-09-07 修 _cloud_llm_vision）：锁外读与 os.replace
+        在 Windows 相撞 -> 共享冲突 WinError 5（实测 6 读线程 500/500 复现
+        PermissionError(13)）；pytest 复跑 80 次 0 复现（偶发），与 B5b 在案先例同源。
+        """
         _cloud_llm, _ = _mock_vision(monkeypatch, tmp_path, "并发描述")
 
         n = 30

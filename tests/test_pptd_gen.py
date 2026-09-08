@@ -1,8 +1,4 @@
 # -*- coding: utf-8 -*-
-
-import pytest
-
-pytestmark = pytest.mark.internal
 """pptd-gen 命令与 _pptd_gen 模块测试。
 
 覆盖：守门链（未确认/出白名单/缺 spec exit 1）、主 pptd 结构
@@ -96,10 +92,21 @@ def _minimal_spec_dict():
     }
 
 
+def _write_sidecar(spec_path):
+    import hashlib, json
+    digest = hashlib.sha256(open(spec_path, "rb").read()).hexdigest()
+    sidecar = os.path.splitext(spec_path)[0] + ".confirm.json"
+    with open(sidecar, "w", encoding="utf-8") as f:
+        json.dump({"spec_sha256": digest, "confirmed_at": "test",
+                   "host": "test", "client": ""}, f)
+
+
 def _write_spec(tmp_path, spec_dict=None):
     spec = spec_dict or _minimal_spec_dict()
     p = tmp_path / "spec.yml"
     p.write_text(yaml.safe_dump(spec, allow_unicode=True), encoding="utf-8")
+    if spec.get("confirmed"):
+        _write_sidecar(str(p))
     return str(p)
 
 
@@ -108,7 +115,7 @@ def _write_spec(tmp_path, spec_dict=None):
 # ---------------------------------------------------------------------------
 
 class TestGuardrails:
-    """守门：未确认 exit 1 / 出白名单 exit 1 / 缺 spec exit 1。"""
+    """守门：未确认 exit 2 / 出白名单 exit 1 / 缺 spec exit 1。"""
 
     def test_missing_spec_exits_1(self, monkeypatch, tmp_path):
         _mock_pre_check(monkeypatch)
@@ -118,7 +125,7 @@ class TestGuardrails:
             monkeypatch)
         assert code == 1
 
-    def test_unconfirmed_spec_exits_1(self, monkeypatch, tmp_path):
+    def test_unconfirmed_spec_exits_2(self, monkeypatch, tmp_path):
         _mock_pre_check(monkeypatch)
         spec = _minimal_spec_dict()
         spec["confirmed"] = False
@@ -127,7 +134,7 @@ class TestGuardrails:
             ["_cli.py", "pptd-gen", spec_path, "--client", "测试",
              "--output", str(tmp_path / "out")],
             monkeypatch)
-        assert code == 1
+        assert code == 2
 
     def test_output_outside_whitelist_exits_1(self, monkeypatch, tmp_path):
         _mock_pre_check(monkeypatch)
@@ -207,13 +214,13 @@ class TestMainPptd:
         for style_name, style_def in main["theme"]["textStyles"].items():
             assert "bold" not in style_def, f"textStyles.{style_name} 不应有 bold"
 
-    def test_primary_from_style(self, tmp_path):
-        """primary 来自 styles.json 指定 style。"""
+    def test_primary_from_theme(self, tmp_path):
+        """primary 来自 THEMES 指定 theme（旧 style 自动映射）。"""
         main = self._build(tmp_path, "enterprise")
-        assert main["theme"]["colors"]["primary"] == "#2b6cb0"
-        # syzygit 主色 #0078FF
-        main_syzygit = self._build(tmp_path, "syzygit")
-        assert main_syzygit["theme"]["colors"]["primary"] == "#0078FF"
+        assert main["theme"]["colors"]["primary"] == "#1E3A8A"  # enterprise -> corporate_navy
+        # weaver_blue 主色 #337AB7（R-4 官网主蓝）
+        main_weaver = self._build(tmp_path, "weaver_blue")
+        assert main_weaver["theme"]["colors"]["primary"] == "#337AB7"
 
     def test_tablestyles_has_header_fill(self, tmp_path):
         """陷阱 6：表格样式走 headerFill 系列。"""
@@ -444,10 +451,10 @@ class TestCardsElement:
 
     def test_cards_title_uses_strong(self, tmp_path):
         """卡标题用 <strong>。"""
-        page = self._build_with_cards(tmp_path, [{"title": "蓝海集团实测", "body": "x"}])
+        page = self._build_with_cards(tmp_path, [{"title": "蓝海实测", "body": "x"}])
         title_elem = next(e for e in page["elements"] if e["elementId"].endswith("-1-title"))
         assert "<strong>" in title_elem["content"]["text"]
-        assert "蓝海集团实测" in title_elem["content"]["text"]
+        assert "蓝海实测" in title_elem["content"]["text"]
         assert title_elem["content"]["style"] == "$cardtitle"
 
     def test_cards_body_style(self, tmp_path):
@@ -906,8 +913,8 @@ class TestDesignGuide:
     def test_guide_has_primary_color(self, tmp_path):
         """GUIDE 含主题 primary 色值。"""
         guide = self._build_guide(tmp_path)
-        # enterprise 主色 #2b6cb0
-        assert "#2b6cb0" in guide
+        # enterprise 映射 corporate_navy
+        assert "#1E3A8A" in guide
 
     def test_guide_no_logo_pending_note(self, tmp_path):
         """无 logo 时 GUIDE 注明待补。"""
@@ -921,8 +928,8 @@ class TestDesignGuide:
 
     def test_guide_has_client_name(self, tmp_path):
         """GUIDE 自检流程含 client 名。"""
-        guide = self._build_guide(tmp_path, client="蓝海集团")
-        assert "蓝海集团" in guide
+        guide = self._build_guide(tmp_path, client="蓝海")
+        assert "蓝海" in guide
 
     def test_guide_has_no_icon_ban(self, tmp_path):
         """GUIDE 含禁用 Icon 说明。"""
@@ -1008,45 +1015,39 @@ class TestIntegrationPptxBackend:
 # ---------------------------------------------------------------------------
 
 class TestThemeSingleSource:
-    """_build_theme 消费 resolve_theme：enterprise 锚定旧 11 值（基线零 diff），
-    其余风格 9 个非锚点槽走派生；fontFamily 统一 styles.json fonts.body，
-    build_deck 全产物无 MiSans 字样。"""
-
-    LEGACY_ENTERPRISE_COLORS = {
-        "primary": "#2b6cb0", "navy": "#4299e1", "ink": "#1A1A1A",
-        "body": "#3A3A3A", "lead": "#595959", "gray": "#727171",
-        "ltgray": "#B5B5B6", "chip": "#E5F3FF", "card": "#F4F9FF",
-        "veil": "#0A1540", "hairline": "#D8E2EE",
-    }
+    """_build_theme 消费 resolve_theme：pptd colors 来自 THEMES 派生，
+    fontFamily 统一主题 font body，build_deck 全产物无 MiSans 字样。"""
 
     def _build(self, style_name):
         import _pptd_gen
         from _renderer import _resolve_style
         return _pptd_gen._build_theme(_resolve_style(style_name))
 
-    def test_enterprise_colors_equal_legacy(self):
-        """enterprise 11 槽与重构前 _build_theme 产出逐值相等（含键序）。"""
-        theme = self._build("enterprise")
-        assert theme["colors"] == self.LEGACY_ENTERPRISE_COLORS
-        assert list(theme["colors"]) == list(self.LEGACY_ENTERPRISE_COLORS)
+    def test_pptd_colors_match_resolve_theme(self):
+        theme = self._build("corporate_navy")
+        from _renderer.theme import resolve_theme
+        assert theme["colors"] == resolve_theme("corporate_navy").pptd_colors
+        assert list(theme["colors"]) == list(resolve_theme("corporate_navy").pptd_colors)
 
-    def test_syzygit_derives_non_anchor_slots(self):
-        """syzygit：锚点槽跟随基色，非锚点槽走派生（不再是旧硬编码值）。"""
-        colors = self._build("syzygit")["colors"]
-        assert colors["primary"] == "#0078FF"
-        assert colors["navy"] == "#0A238B"
-        assert colors["chip"] != self.LEGACY_ENTERPRISE_COLORS["chip"]
+    def test_weaver_derives_non_anchor_slots(self):
+        """weaver_blue：锚点槽跟随基色，非锚点槽走派生。"""
+        colors = self._build("weaver_blue")["colors"]
+        assert colors["primary"] == "#337AB7"
+        assert colors["navy"] == "#3D8AC8"   # primary_mid
+        assert colors["chip"] != "#E5F3FF"
         for value in colors.values():
             assert value.startswith("#") and len(value) == 7
 
-    def test_font_family_unified_to_styles_json_body(self):
-        """textStyles 7 套 + tableStyles 的 fontFamily 全取 fonts.body。"""
-        for style_name in ("enterprise", "bookish", "syzygit"):
+    def test_font_family_unified_to_theme_body(self):
+        """textStyles 7 套 + tableStyles 的 fontFamily 全取各主题 fonts.body。"""
+        from _renderer.theme import THEMES, resolve_theme
+        for style_name in sorted(THEMES):
             theme = self._build(style_name)
+            expected = resolve_theme(style_name).fonts["body"]
             for name, style_def in theme["textStyles"].items():
-                assert style_def["fontFamily"] == "Microsoft YaHei", \
+                assert style_def["fontFamily"] == expected, \
                     f"{style_name}.textStyles.{name}"
-            assert theme["tableStyles"]["default"]["fontFamily"] == "Microsoft YaHei"
+            assert theme["tableStyles"]["default"]["fontFamily"] == expected
 
     def test_build_deck_output_has_no_misans(self, tmp_path):
         """build_deck 全部产物（主 pptd + pages + DESIGN_GUIDE）无 MiSans 字样。
@@ -1090,7 +1091,7 @@ class TestContentPageFooterAuthor:
         return footer["content"]["text"]
 
     def test_footer_uses_spec_author(self, tmp_path):
-        assert self._footer_text(tmp_path, "蓝海集团科技集团") == "© 2026 – 蓝海集团科技集团\n"
+        assert self._footer_text(tmp_path, "蓝海科技集团") == "© 2026 – 蓝海科技集团\n"
 
     def test_footer_falls_back_without_author(self, tmp_path):
         assert self._footer_text(tmp_path, None) == "© 2026 – Syzygit Technology\n"

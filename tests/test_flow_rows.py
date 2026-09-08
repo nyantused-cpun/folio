@@ -108,10 +108,10 @@ def test_injection_safe():
 
 
 def test_exhibit_wrap():
-    """exhibit 图框包装（§5.5）：编号 + 标题 + 来源行。"""
+    """exhibit 图框包装（§5.5）：编号 + 标题 + 来源行（#56 起来源走 exhibit.source）。"""
     elem = _elem(exhibit={"num": "EXHIBIT 2",
-                          "title": "合同管理 TO-BE 主流程（含履约闭环）"},
-                 source="来源：分项功能清单 V2.0")
+                          "title": "合同管理 TO-BE 主流程（含履约闭环）",
+                          "source": "来源：分项功能清单 V2.0"})
     html = render_diagram_html(elem)
     assert 'class="exhibit"' in html
     assert 'class="exhibit-num">EXHIBIT 2<' in html
@@ -126,6 +126,8 @@ def test_exhibit_wrap():
 def test_dispatch_end_to_end(tmp_path):
     """端到端：spec flow_rows → 完整 HTML（tokens + chrome CSS + 图）。"""
     import shutil
+    # 保存/条件还原（S6 同款）：无条件 pop 会误删外层预设，造成套件级污染
+    saved = os.environ.get("_PRESALES_CLI_INVOKED")
     os.environ["_PRESALES_CLI_INVOKED"] = "1"
     try:
         from _renderer import Renderer
@@ -161,4 +163,7 @@ def test_dispatch_end_to_end(tmp_path):
         assert 'class="flow-row g-blue"' in html
         assert "可选项" in html
     finally:
-        os.environ.pop("_PRESALES_CLI_INVOKED", None)
+        if saved is None:
+            os.environ.pop("_PRESALES_CLI_INVOKED", None)
+        else:
+            os.environ["_PRESALES_CLI_INVOKED"] = saved

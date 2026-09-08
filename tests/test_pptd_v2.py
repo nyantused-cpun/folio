@@ -39,7 +39,7 @@ def test_hero_pptd():
     assert bg["elementType"] == "shape"
     assert bg["fill"]["color"] == "#00338D"  # hero_to（kpmg）
     eb = [e for e in elems if e["elementId"] == "hero-eb"][0]
-    assert eb["fill"]["color"] == "#FFE600"  # accent
+    assert eb["fill"]["color"] == "#F3C13A"  # accent（R-4 降饱和金）
     assert len(_ids(elems)) == len(set(_ids(elems)))
 
 
@@ -171,7 +171,8 @@ def test_flow_rows_pptd_native_shapes():
 
 def test_flow_rows_pptd_legacy_theme():
     """legacy 主题取 v1.2 蓝绿（F9）。"""
-    elems, _ = pe.render_flow_rows_pptd(_fr_elem(), 80, 130, 1120)
+    elems, _ = pe.render_flow_rows_pptd(_fr_elem(), 80, 130, 1120,
+                                        theme_name="legacy_bluegreen")
     bar = [e for e in elems if e["elementId"] == "fr-c0-0-top"][0]
     assert bar["fill"]["color"] == "#1B5E8A"  # legacy role_biz = BLUE
 
@@ -240,7 +241,7 @@ def test_build_deck_v2_end_to_end(tmp_path):
                                                   "label": "已点亮"}]},
             ]},
             {"id": "p3", "title": "导航页", "elements": [
-                {"type": "topnav", "brand": "瓴寓国际"},
+                {"type": "topnav", "brand": "蓝海国际"},
             ]},
         ],
     }
@@ -370,13 +371,13 @@ def test_pros_cons_one_side_empty():
     elems, h = pe.emit_chrome_pptd(
         "pros_cons", _norm({"type": "pros_cons",
                             "pros": [], "cons": ["成本"]}),
-        80, 130, 1120)
+        80, 130, 1120, theme_name="corporate_navy")
     assert elems and h > 0
     # 单侧渲染时 ID 从 0 开始（enumerate(non_empty)）
     # cons 非空 → pc-bg0 存在，标题颜色为橙色（part_text）
     assert "pc-bg0" in _ids(elems)
     by_id = {e["elementId"]: e for e in elems}
-    assert by_id["pc-h0"]["content"]["color"] == "#B7791F"  # part_text 橙
+    assert by_id["pc-h0"]["content"]["color"] == "#B04900"  # part_text 橙
 
 
 def test_pros_cons_color():

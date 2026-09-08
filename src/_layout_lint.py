@@ -8,7 +8,8 @@
 五类检查：
 - out_of_bounds（error）：bounds 越出画布（容差 2px）
 - text_overflow（error）：text 元素估算文本高度 > bounds.h × 1.15
-  （行数用 _renderer.diagram.pptd_emit.est_text_w 全角/半角估算 × fontSize × 1.3 行距）
+  （行数经 pptd_emit.estimate_text_height 统一入口：est_text_w 全角/半角
+  估算折行 × fontSize × LINE_HEIGHT 1.3 行距）
 - table_row_overflow（error）：table 行数 × 最小行高 36 > bounds.h
   （间距体系 v1 §四 2，table 内部此前零检查）
 - overlap（warning）：两元素相交面积 > 较小面积 30%；排除声明式同组配对、
@@ -34,8 +35,7 @@ from typing import NamedTuple
 
 import yaml
 
-from _pptd_gen import _CONTENT_Y_MAX as _CLAMP_LINE
-from _renderer.diagram.pptd_emit import est_text_w
+from _renderer.spacing import CONTENT_Y_MAX as _CLAMP_LINE, estimate_text_height
 
 
 class Issue(NamedTuple):
@@ -63,8 +63,9 @@ DEFAULT_FONT_SIZE = 14.0  # content 未给 fontSize 且样式查不到时的回�
 SMALL_BADGE_SIDE = 30.0   # ≤30×30 的小 shape 视为徽章特征（I-1 检查）
 TABLE_MIN_ROW_H = 36.0    # table 最小行高（14pt 字 + padding，同 _pptd_gen._emit_table）
 
-# text_overflow 豁免线（§七 2.8 裁决 a）：_CLAMP_LINE 与 _pptd_gen._CONTENT_Y_MAX
-# 同值（674）。底边恰贴此线（容差 1px）的 text 元素是溢出防线裁剪后的产物——
+# text_overflow 豁免线（§七 2.8 裁决 a）：_CLAMP_LINE 与 _renderer.spacing
+# CONTENT_Y_MAX 同值（公共单源，S6 2026-09-07 切断 lint→_pptd_gen 私有 import）。
+# 底边恰贴此线（容差 1px）的 text 元素是溢出防线裁剪后的产物——
 # 溢出已处置（裁切 + report.warn），不再算未处置溢出。豁免放宽：文本框自身
 # 底边贴线，或所属同组容器（shape）底边贴线——卡内 body 底边 = 卡底 - inset，
 # 自身口径盖不住整组裁剪产物。盲区：手写元素底边恰在 674 同样豁免，概率低
@@ -99,6 +100,17 @@ def lint_pptd_files(files):
     return issues
 
 
+def _pick_main_pptd(root):
+    """挑目录内主 .pptd（B3 修复）：DESIGN_GUIDE 指示分页代理创建的 `_check_批次.pptd`
+    副本排序在 CJK 主文件前，曾劫持检查范围致其余页面静默跳过 lint 门禁；
+    排除副本后取排序第一个；目录内只剩副本时返回 None（体面跳过，不误检副本）。"""
+    mains = sorted(f for f in os.listdir(root) if f.endswith(".pptd")
+                   and not f.startswith("_check_"))
+    if not mains:
+        return None
+    return os.path.join(root, mains[0])
+
+
 def lint_pptd_dir(pptd_dir):
     """对落盘 pptd 工程目录（或 .pptd 文件路径）跑 lint。给 pptd-build 用。"""
     if os.path.isfile(pptd_dir) and pptd_dir.lower().endswith(".pptd"):
@@ -106,10 +118,9 @@ def lint_pptd_dir(pptd_dir):
         root = os.path.dirname(os.path.abspath(main_path))
     else:
         root = pptd_dir
-        mains = sorted(f for f in os.listdir(root) if f.endswith(".pptd"))
-        if not mains:
+        main_path = _pick_main_pptd(root)
+        if main_path is None:
             return []
-        main_path = os.path.join(root, mains[0])
 
     with open(main_path, "r", encoding="utf-8") as f:
         main_doc = _as_dict(yaml.safe_load(f))
@@ -131,6 +142,71 @@ def lint_pptd_dir(pptd_dir):
         with open(full, "r", encoding="utf-8") as f:
             page = _as_dict(yaml.safe_load(f))
         issues.extend(_lint_page(rel, page, text_styles, canvas))
+    return issues
+
+
+# Step 6 bbox 机检：只判超出版心（pptd 设计画布 1280×720；版心按现有边距常量）
+CONTENT_MARGIN_LEFT = 80.0
+CONTENT_MARGIN_TOP = 40.0
+CONTENT_MARGIN_RIGHT = 1200.0
+CONTENT_MARGIN_BOTTOM = 706.0
+MARGIN_TOL = 2.0
+
+
+def check_pptd_bbox_margin(pptd_dir):
+    """遍历 .pptd 工程中 content 页的 shape bbox，仅判超出版心。
+
+    命中返回 warning 级 Issue 列表，不 exit 2（首周期观察）。
+    overlap 暂不实现；decor 标记留给后续观察数据。
+    """
+    if os.path.isfile(pptd_dir) and pptd_dir.lower().endswith(".pptd"):
+        main_path = pptd_dir
+        root = os.path.dirname(os.path.abspath(main_path))
+    else:
+        root = pptd_dir
+        main_path = _pick_main_pptd(root)
+        if main_path is None:
+            return []
+    try:
+        with open(main_path, "r", encoding="utf-8") as f:
+            main_doc = _as_dict(yaml.safe_load(f))
+    except Exception:
+        return []
+    page_paths = list(main_doc.get("pages") or [])
+    if not page_paths:
+        pages_dir = os.path.join(root, "pages")
+        if os.path.isdir(pages_dir):
+            page_paths = [f"pages/{p}" for p in sorted(os.listdir(pages_dir))
+                          if p.endswith(".page")]
+
+    issues = []
+    for rel in page_paths:
+        full = os.path.join(root, rel)
+        if not os.path.isfile(full):
+            continue
+        try:
+            with open(full, "r", encoding="utf-8") as f:
+                page = _as_dict(yaml.safe_load(f))
+        except Exception:
+            continue
+        if page.get("pageType") and page.get("pageType") != "content":
+            continue
+        for e in page.get("elements") or []:
+            if not isinstance(e, dict) or e.get("elementType") != "shape":
+                continue
+            if not _valid_bounds(e):
+                continue
+            x, y, w, h = [float(v) for v in e["bounds"]]
+            if (x < CONTENT_MARGIN_LEFT - MARGIN_TOL
+                    or y < CONTENT_MARGIN_TOP - MARGIN_TOL
+                    or x + w > CONTENT_MARGIN_RIGHT + MARGIN_TOL
+                    or y + h > CONTENT_MARGIN_BOTTOM + MARGIN_TOL):
+                issues.append(Issue(
+                    str(rel), str(e.get("elementId", "?")), "bbox_margin",
+                    f"shape 超出版心: [{_n(x)}, {_n(y)}, {_n(w)}, {_n(h)}]"
+                    f"（版心 {int(CONTENT_MARGIN_LEFT)}-{int(CONTENT_MARGIN_RIGHT)}"
+                    f" × {int(CONTENT_MARGIN_TOP)}-{int(CONTENT_MARGIN_BOTTOM)}）",
+                    WARNING))
     return issues
 
 
@@ -245,14 +321,11 @@ def _check_text_overflow(page_path, e, text_styles, elements=None):
         return None  # 同组容器底边贴线：整组裁剪产物，组内文本框连带豁免（§七 2.8 a）
     font_size = _resolve_font_size(content, text_styles)
 
-    lines = 0
-    for seg in paragraphs:
-        seg = seg.strip()
-        if not seg:
-            lines += 1  # 空段占一行（与 _pptd_gen._estimate_text_height 口径一致）
-            continue
-        lines += max(1, int(-(-est_text_w(seg, font_size) // w)))
-    est_h = lines * font_size * LINE_HEIGHT
+    # 高度估算与生成器单源（pptd_emit.estimate_text_height，行距显式参数
+    # LINE_HEIGHT=1.3）；段落先经 _plain_paragraphs 解 <p>/<br> 边界再喂入
+    est_h = estimate_text_height("\n".join(paragraphs), font_size,
+                                 LINE_HEIGHT, w)
+    lines = int(round(est_h / (font_size * LINE_HEIGHT)))
     if est_h > h * OVERFLOW_RATIO:
         return Issue(page_path, str(e.get("elementId", "?")), "text_overflow",
                      f"估算文本高 {est_h:.0f}px（{lines} 行 × {font_size:g}px × "
@@ -365,6 +438,21 @@ def _check_overlaps(page_path, elements):
             ratio = _intersection_ratio(a["bounds"], b["bounds"])
             if ratio is None or ratio <= OVERLAP_RATIO:
                 continue
+            # 精确豁免（2026-08-15 全景验收实测校准，3 类设计性/细线相交）：
+            # ① 连接线（shapeName 含 Connector）与文本相交——1px 细线穿过文本
+            #    是图表常态（§10 检查 8 已单独提示），非布局破损
+            if _is_connector(a) and b.get("elementType") == "text" or (
+                    _is_connector(b) and a.get("elementType") == "text"):
+                continue
+            # ② 两条连接线相交——同走廊错位 ±12px 的 r0/r1/r2 段必然贴邻，
+            #    包围盒相交不代表视觉穿线
+            if _is_connector(a) and _is_connector(b):
+                continue
+            # ③ 文字叠色块（等大叠加）——module_gantt 模块条内文字印在色块上
+            #    是设计行为（c0 色块 × ct0 文字 100% 重叠），非文字压 chips
+            if (_is_same_size_overlay(a, b)
+                    and {a.get("elementType"), b.get("elementType")} == {"shape", "text"}):
+                continue
             # 声明式配对豁免（间距体系 v1 §四 1，先于同组判断——chip×chipt
             # 组键不同（chip/chipt 尾段各异），同组口径盖不住这类父子配对）
             if _is_declared_pair(id_a, id_b):
@@ -426,9 +514,18 @@ def _group_key(element_id):
 
 
 def _same_group(id_a, id_b):
-    """同组配对排除：组键相等或互为「前缀-」关系（shape 与其 title/body/bar 等）。"""
+    """同组配对排除：组键相等或互为「前缀-」关系（shape 与其 title/body/bar 等）。
+
+    deployment 连线标签（dep-lnk-l）是 diagram 组的独立标注，与 zone/节点文字
+    不是「容器-子元素」关系；其组键因带数字索引会撞上 startswith 前缀判定，
+    被误判同组后把「标签压节点」升级为 text_stack_overlap error。这里显式排除。
+    """
     ka, kb = _group_key(id_a), _group_key(id_b)
-    return ka == kb or ka.startswith(kb + "-") or kb.startswith(ka + "-")
+    if ka == kb:
+        return True
+    if "-dep-lnk-l" in ka or "-dep-lnk-l" in kb:
+        return False
+    return ka.startswith(kb + "-") or kb.startswith(ka + "-")
 
 
 _INDEX_TAIL = re.compile(r"^(.*)-(\d+)$")
@@ -475,6 +572,29 @@ def _badge_text_pair(a, b):
 
 _VEIL_ID_TOKENS = ("veil", "mask", "bg")
 _ALPHA_HEX = re.compile(r"^#[0-9a-fA-F]{8}$")
+
+
+def _is_connector(e):
+    """连接线元素：shapeName 含 Connector（straight/bent/curvedConnectorN，
+    数字后缀致 endswith 不适用，用包含匹配）。"""
+    return (e.get("elementType") == "shape"
+            and "Connector" in str(e.get("shapeName", "")))
+
+
+def _is_same_size_overlay(a, b):
+    """等大叠加：两元素包围盒面积比 ≥ 0.8 且中心距 ≤ 较小短边一半。
+    识别「文字印在色块上」的设计性叠加（module_gantt 模块条 c0×ct0）。
+    """
+    ba, bb = a["bounds"], b["bounds"]
+    ax, ay, aw, ah = [float(v) for v in ba]
+    bx, by, bw, bh = [float(v) for v in bb]
+    area_a, area_b = max(aw * ah, 1e-9), max(bw * bh, 1e-9)
+    if max(area_a, area_b) / min(area_a, area_b) > 1.25:
+        return False
+    cx_a, cy_a = ax + aw / 2, ay + ah / 2
+    cx_b, cy_b = bx + bw / 2, by + bh / 2
+    short = min(min(aw, ah), min(bw, bh))
+    return abs(cx_a - cx_b) <= short / 2 and abs(cy_a - cy_b) <= short / 2
 
 
 def _is_veil_like(e):

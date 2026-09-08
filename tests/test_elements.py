@@ -27,9 +27,9 @@ class TestCapabilities:
     """能力矩阵：覆盖全部已知元素，取值合法，降级格与设计一致。"""
 
     def test_covers_all_known_types(self):
-        """CAPABILITIES 覆盖 KNOWN_ELEMENT_TYPES 全部 31 种，不多不少。"""
+        """CAPABILITIES 覆盖 KNOWN_ELEMENT_TYPES 全部，不多不少。"""
         assert set(CAPABILITIES) == set(KNOWN_ELEMENT_TYPES)
-        assert len(CAPABILITIES) == 31  # 27 + B-3/B-4/B-5/B-6 四个批次 B 组件
+        assert len(CAPABILITIES) == 39  # 36 + sla_block/profile_card/logo_wall（S8 Wave B）
 
     def test_values_are_legal(self):
         """每种元素恰好声明三端，取值只能是 render/degrade。"""
@@ -276,6 +276,56 @@ class TestDegradeText:
     def test_unknown_type(self):
         assert degrade_text("tree", {}, "docx") == "[不支持的元素类型：tree]"
 
+    def test_screenshot(self):
+        assert "截图" in degrade_text("screenshot", {"caption": "审批流"}, "docx")
+        assert "标注" in degrade_text(
+            "screenshot",
+            {"caption": "x", "annotations": [{"text": "入口"}]},
+            "docx")
+
+    def test_raw_html(self):
+        assert "定制页" in degrade_text("raw_html", {}, "docx")
+
+
+class TestNormalizeScreenshot:
+    def test_fields(self):
+        from _renderer.elements import normalize_screenshot
+        n = normalize_screenshot({
+            "src": "refs/x.png",
+            "caption": "图题",
+            "width": 0.8,
+            "alignment": "left",
+            "annotations": [{"x": 10, "y": 20, "text": "A"}],
+        })
+        assert n["src"] == "refs/x.png"
+        assert n["caption"] == "图题"
+        assert n["width"] == 0.8
+        assert n["alignment"] == "left"
+        assert n["annotations"] == [{"x": 10, "y": 20, "text": "A"}]
+
+    def test_defaults_and_clamping(self):
+        from _renderer.elements import normalize_screenshot
+        n = normalize_screenshot({"src": "a.png"})
+        assert n["caption"] == ""
+        assert n["width"] == 0.9
+        assert n["alignment"] == "center"
+        assert n["annotations"] == []
+        assert normalize_screenshot({"width": 2.0})["width"] == 1.0
+        assert normalize_screenshot({"width": -0.1})["width"] == 0.1
+
+    def test_label_alias(self):
+        from _renderer.elements import normalize_screenshot
+        n = normalize_screenshot({"annotations": [{"label": "B"}]})
+        assert n["annotations"][0]["text"] == "B"
+
+
+class TestNormalizeRawHtml:
+    def test_basic(self):
+        from _renderer.elements import normalize_raw_html
+        assert normalize_raw_html({"content": "<div>x</div>"}) == {
+            "content": "<div>x</div>"}
+        assert normalize_raw_html({}) == {"content": ""}
+
 
 class TestRenderReport:
     def test_empty_report_has_no_issues(self):
@@ -350,6 +400,20 @@ class TestEmptyPayloadReason:
     def test_generic_reason(self):
         assert empty_payload_reason("text") == \
             "内容为空（可能字段名错误或空元素）"
+
+
+class TestNewElementEmptyPayload:
+    def test_screenshot(self):
+        from _renderer.elements import normalize_screenshot, is_empty_payload
+        assert is_empty_payload("screenshot", normalize_screenshot({}))
+        assert not is_empty_payload(
+            "screenshot", normalize_screenshot({"src": "a.png"}))
+
+    def test_raw_html(self):
+        from _renderer.elements import normalize_raw_html, is_empty_payload
+        assert is_empty_payload("raw_html", normalize_raw_html({}))
+        assert not is_empty_payload(
+            "raw_html", normalize_raw_html({"content": "<div/>"}))
 
 
 class TestNl2br:

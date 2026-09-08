@@ -1,16 +1,16 @@
 # -*- coding: utf-8 -*-
 """页面构件渲染（视觉规范 v2.0 §7）：10 种构件 HTML + CSS，主题变量驱动。
 
-视觉基准 = 用户确认的验收 mock 版式样板
+视觉基准 = 用户确认的验收 mock output/蓝海集团/蓝海集团_版式样板_v0.html
 （dev_plan_visual_v2_2026-07-25 §7）：CSS 直接提炼自该文件，主题色一律换
---t- 变量（_renderer.diagram.theme.theme_tokens_css 注入），禁 hex 硬编码
+--t- 变量（_renderer.theme.theme_tokens_css 注入），禁 hex 硬编码
 （§9.3 机械防线）。全部文字节点标 data-editable="true"（D-091 可编辑）。
 
 行内强调 hl-* 只允许经 action_title/text 的 segments 写法产出，渲染器不接
 受用户 HTML 标签（防注入铁律，§7）。
 """
 
-from _renderer.diagram.theme import _esc  # 单一源（§七 2.6），禁重复定义
+from _renderer.theme import _esc  # 单一源（§七 2.6），禁重复定义
 from _renderer.elements import _nl2br
 
 
@@ -30,9 +30,17 @@ def chrome_css():
   word-break: normal; overflow-wrap: normal; line-height: 1.6;
 }
 /* ===== v2 页面构件（visual v2.0 §7，mock 版式样板_v0 提炼） ===== */
-/* P 系版式页骨架（§6）：锚点 + 节距 + 分隔线 */
-.v2-page { padding: 24px 0 20px; border-bottom: 1px solid var(--t-border); }
-.v2-page:last-child { border-bottom: none; }
+/* 页骨架（§6）：v2 版式页 + 自由流页统一成“页面卡片”，滚动时有明显页边界 */
+.v2-page, .page-shell {
+  background: var(--t-card);
+  border: 1px solid var(--t-border);
+  border-radius: 14px;
+  box-shadow: 0 2px 10px rgba(15,23,42,0.06);
+  margin: 28px 0;
+  padding: 32px 36px;
+}
+.v2-page:last-child, .page-shell:last-child { margin-bottom: 0; }
+.page-shell > h2 { margin-top: 0; }
 .topnav { position: sticky; top: 0; z-index: 100; background: var(--t-card); border-bottom: 1px solid var(--t-border); box-shadow: 0 1px 3px rgba(0,0,0,0.04); }
 .topnav-inner { max-width: 1280px; margin: 0 auto; padding: 0 24px; display: flex; align-items: center; gap: 24px; height: 54px; }
 .topnav .brand { font-weight: 800; font-size: 15px; color: var(--t-primary); }
@@ -44,6 +52,8 @@ def chrome_css():
 /* v3.0 logo 槽位（spec 顶层 brand 注入） */
 .brand-logo { height: 28px; width: auto; display: inline-block; margin-right: 10px; vertical-align: middle; }
 .brand-logo-placeholder { height: 28px; width: 96px; display: inline-flex; align-items: center; justify-content: center; border: 1px dashed var(--t-border); border-radius: 4px; color: var(--t-text-tertiary); font-size: 11px; margin-right: 10px; }
+/* logo_position=topnav_right：槽位移到导航右端，margin 翻到左边（B4 P1-6 消费） */
+.brand-logo.pos-right, .brand-logo-placeholder.pos-right { margin-right: 0; margin-left: 10px; }
 
 .hero { background: linear-gradient(135deg, var(--t-hero-from) 0%, var(--t-hero-to) 100%); color: white; padding: 44px 32px 36px; border-radius: 12px; margin: 20px 0; }
 .hero-inner { max-width: 1280px; margin: 0 auto; }
@@ -115,8 +125,9 @@ def chrome_css():
 .sw-role-ext { background: var(--t-role-ext); }
 
 .qa-block { margin: 18px 0 6px; }
-.qa-item { border-left: 3px solid var(--t-primary); background: var(--t-bg-soft); border-radius: 0 6px 6px 0; padding: 10px 14px; margin-bottom: 10px; }
-.qa-q { font-size: 13px; font-weight: 800; color: var(--t-text-primary); }
+/* C-E4 官方绿语义槽（--t-qa-*，theme.py DEFAULT_QA_SLOTS 单一事实源，gov_red 金系覆写防红绿撞色） */
+.qa-item { border-left: 3px solid var(--t-qa-text, var(--t-primary)); background: var(--t-qa-bg, var(--t-bg-soft)); border-radius: 0 6px 6px 0; padding: 10px 14px; margin-bottom: 10px; }
+.qa-q { font-size: 13px; font-weight: 800; color: var(--t-qa-text, var(--t-text-primary)); }
 .qa-a { font-size: 12px; color: var(--t-text-secondary); margin-top: 4px; line-height: 1.55; }
 
 /* ===== D-093 view_cards（4 列视角卡 + 顶部半圆顶） + callout_block（底部说服区）===== */
@@ -155,6 +166,19 @@ def chrome_css():
 .duo-title { font-size: 16px; font-weight: 800; color: var(--t-text-primary); margin-bottom: 10px; }
 .duo-points { margin: 0; padding-left: 18px; }
 .duo-points li { font-size: 13px; color: var(--t-text-secondary); margin: 6px 0; }
+/* C-E3 语义强化：before 灰（现状）/ after 主色（未来），未写 tone 走上方中性样式 */
+.duo-panel.duo-before .duo-title { color: var(--t-text-tertiary); }
+.duo-panel.duo-before .duo-points li { color: var(--t-text-tertiary); }
+.duo-panel.duo-after { border-left: 3px solid var(--t-primary); padding-left: 13px; }
+.duo-panel.duo-after .duo-title { color: var(--t-primary); }
+.duo-panel.duo-after .duo-points li { color: var(--t-text-primary); }
+/* C-E3 量化对比行：双栏下方对照表，after 列主色 */
+.duo-metrics { width: 100%; border-collapse: collapse; margin: 0 0 6px; }
+.duo-metrics th { font-size: 12px; font-weight: 800; text-align: left; padding: 6px 10px; border-bottom: 1.5px solid var(--t-border); color: var(--t-text-secondary); }
+.duo-metrics th.duo-m-after { color: var(--t-primary); }
+.duo-metrics td { font-size: 13px; padding: 6px 10px; border-bottom: 1px solid var(--t-border); font-variant-numeric: tabular-nums; }
+.duo-metrics td.duo-m-label { font-weight: 700; color: var(--t-text-primary); width: 34%; }
+.duo-metrics td.duo-m-right { color: var(--t-primary); font-weight: 700; }
 .pros-cons { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 18px 0 6px; }
 .pc-col { border: 1px solid var(--t-border); border-radius: 8px; padding: 14px 16px; background: var(--t-card); }
 .pc-col .pros { color: var(--t-lit-text); }
@@ -166,6 +190,54 @@ def chrome_css():
 .cta-title { font-size: 24px; font-weight: 800; color: white; margin-bottom: 16px; }
 .cta-btn { display: inline-block; background: var(--t-accent); color: var(--t-hero-from); font-weight: 800; padding: 10px 28px; border-radius: 100px; font-size: 14px; }
 .cta-contact { margin-top: 12px; font-size: 12px; color: rgba(255,255,255,0.7); }
+
+/* ===== Step 5 新增元素：ui_mock 界面示意卡 + conclusion_band 结论色带 ===== */
+.ui-mock { border: 1px solid var(--t-border); border-radius: 10px; overflow: hidden; margin: 18px 0 8px; background: var(--t-card); box-shadow: 0 1px 2px rgba(15,23,42,0.05), 0 3px 10px rgba(15,23,42,0.05); }
+.ui-mock-browser { display: flex; align-items: center; gap: 6px; padding: 8px 12px; background: var(--t-bg-muted); border-bottom: 1px solid var(--t-border); }
+.ui-mock-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--t-text-tertiary); opacity: 0.55; }
+.ui-mock-address { flex: 1; margin-left: 8px; height: 14px; border-radius: 999px; background: var(--t-card); border: 1px solid var(--t-border); font-size: 10px; color: var(--t-text-tertiary); padding: 0 8px; line-height: 14px; }
+.ui-mock-body { padding: 16px 18px; }
+.ui-mock-tabs { display: flex; gap: 10px; margin-bottom: 12px; border-bottom: 1px solid var(--t-border); }
+.ui-mock-tab { font-size: 12px; font-weight: 600; color: var(--t-text-secondary); padding: 5px 2px 7px; border-bottom: 2px solid transparent; }
+.ui-mock-tab.active { color: var(--t-primary); border-bottom-color: var(--t-primary); font-weight: 800; }
+.ui-mock-title { font-size: 16px; font-weight: 800; color: var(--t-primary); margin: 0 0 12px; }
+.ui-mock-section { margin-bottom: 14px; }
+.ui-mock-subtitle { font-size: 12px; font-weight: 700; color: var(--t-text-secondary); margin-bottom: 6px; }
+.ui-mock-bars { display: flex; flex-direction: column; gap: 6px; }
+.ui-mock-bar { height: 10px; border-radius: 4px; background: var(--t-border); }
+.ui-mock-seal { width: 84px; height: 84px; border-radius: 50%; border: 2px solid var(--t-role-legal); color: var(--t-role-legal); display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; font-weight: 800; margin: 10px auto 4px; transform: rotate(-8deg); }
+.ui-mock-seal-text { font-size: 13px; line-height: 1.25; }
+.ui-mock-seal-company { font-size: 8px; opacity: 0.85; margin-top: 3px; line-height: 1.2; }
+.ui-mock-caption { font-size: 11px; color: var(--t-text-tertiary); text-align: center; padding: 6px 12px 12px; }
+
+.conclusion-band { margin: 18px 0 6px; border-radius: 8px; padding: 14px 18px; font-size: 14px; line-height: 1.6; }
+
+/* ===== S8 Wave B：C-E2 三件套（sla_block / profile_card / logo_wall） ===== */
+.sla-block { margin: 18px 0 6px; }
+.sla-heading, .pcard-heading, .lwall-heading { font-size: 15px; font-weight: 800; color: var(--t-text-primary); margin: 0 0 10px; }
+.sla-grid { display: grid; gap: 12px; }
+.sla-card { border: 1px solid var(--t-border); border-top: 3px solid var(--t-primary); border-radius: 8px; padding: 14px 16px; background: var(--t-card); }
+.sla-name { font-size: 12px; font-weight: 700; color: var(--t-text-secondary); }
+.sla-value { font-size: 22px; font-weight: 800; color: var(--t-primary); font-variant-numeric: tabular-nums; margin-top: 4px; line-height: 1.2; }
+.sla-desc { font-size: 11px; color: var(--t-text-tertiary); margin-top: 6px; line-height: 1.5; }
+.profile-card { margin: 18px 0 6px; }
+.pcard { display: flex; gap: 14px; border: 1px solid var(--t-border); border-radius: 8px; padding: 14px 16px; background: var(--t-card); margin-bottom: 12px; }
+.pcard-photo { width: 72px; height: 96px; object-fit: cover; border-radius: 6px; flex: 0 0 auto; }
+.pcard-avatar { width: 48px; height: 48px; border-radius: 50%; background: var(--t-bg-soft); color: var(--t-primary); font-size: 20px; font-weight: 800; display: flex; align-items: center; justify-content: center; flex: 0 0 auto; margin-top: 4px; }
+.pcard-body { flex: 1 1 auto; min-width: 0; }
+.pcard-name { font-size: 14px; font-weight: 800; color: var(--t-text-primary); }
+.pcard-role { font-size: 12px; font-weight: 700; color: var(--t-primary); margin-left: 8px; }
+.pcard-desc { font-size: 12px; color: var(--t-text-secondary); line-height: 1.6; margin-top: 6px; }
+.pcard-contact { font-size: 11px; color: var(--t-text-tertiary); margin-top: 6px; }
+.logo-wall { margin: 18px 0 6px; }
+.lwall-grid { display: grid; gap: 12px; }
+.lwall-cell { border: 1px solid var(--t-border); border-radius: 8px; background: var(--t-card); min-height: 64px; display: flex; align-items: center; justify-content: center; padding: 10px 12px; }
+.lwall-img { max-width: 100%; max-height: 48px; object-fit: contain; }
+.lwall-name { font-size: 13px; font-weight: 700; color: var(--t-text-tertiary); letter-spacing: 1px; }
+.conclusion-band.tone-primary { background: var(--t-primary-a15); border-left: 4px solid var(--t-primary); color: var(--t-text-primary); }
+.conclusion-band.tone-accent { background: var(--t-accent-a55); border-left: 4px solid var(--t-accent); color: var(--t-text-primary); }
+.conclusion-band.tone-muted { background: var(--t-bg-muted); border-left: 4px solid var(--t-text-tertiary); color: var(--t-text-secondary); }
+.conclusion-band .cb-red { color: var(--t-role-legal); font-weight: 800; }
 
 /* exhibit 图框（§5.5：既有 diagram 的编号+标题+来源包装） */
 .exhibit { border: 1px solid var(--t-border); border-radius: 8px; overflow: hidden; margin-top: 18px; }
@@ -185,11 +257,13 @@ def chrome_css():
 .chip-gap { background: var(--t-gap-bg); border-color: var(--t-gap-border); border-style: dashed; color: var(--t-gap-text); }
 .chip-keep { background: var(--t-bg-muted); border-color: var(--t-text-tertiary); color: var(--t-text-secondary); }
 
-/* flow_rows（§8.1，第 28 种子类型；渲染在 diagram/flow.py，样式集中于此） */
+/* flow_rows（§8.1；渲染在 diagram/flow.py，样式集中于此） */
 .flow-canvas { display: flex; flex-direction: column; gap: 0; }
 .flow-row { display: flex; align-items: stretch; gap: 10px; padding: 12px 14px; border-radius: 6px; }
 .flow-row.g-blue { background: var(--t-group-blue); }
 .flow-row.g-teal { background: var(--t-group-teal); }
+.flow-row.g-red { background: var(--t-group-red); }
+.flow-row.g-gray { background: var(--t-group-gray); }
 .flow-row.dashed-opt { background: var(--t-part-bg); border: 1.5px dashed var(--t-part-border); }
 .flow-row.dashed-opt .fc-label { color: var(--t-part-border); }
 .flow-row-label { flex: 0 0 86px; display: flex; flex-direction: column; justify-content: center; font-size: 12px; font-weight: 800; color: var(--t-primary); border-right: 2px solid var(--t-primary-a15); padding-right: 10px; }
@@ -210,9 +284,9 @@ def chrome_css():
 .opt-tag { font-size: 11px; font-weight: 800; color: var(--t-part-border); writing-mode: vertical-lr; letter-spacing: 2px; display: flex; align-items: center; }
 
 /* ===== 审美升级 v2.1（2026-07-31）：阴影层次 / hero 装饰 / 深色导航 / 表格升级 ===== */
-/* 页面背景：浅灰渐变，摆脱纯白公文体 */
-body { background: linear-gradient(180deg, var(--t-bg-muted) 0%, var(--t-card) 420px); }
-.v2-page { padding: 30px 0 28px; }
+/* 页面背景：浅灰画布，让每页白卡片独立可见 */
+body { background: var(--t-bg-muted); }
+.v2-page, .page-shell { padding: 36px 40px; }
 
 /* topnav：深蓝渐变导航（对照 v5 渐变页眉，汇报 PPT 质感） */
 .topnav { background: linear-gradient(90deg, var(--t-hero-from) 0%, var(--t-hero-to) 100%); border-bottom: none; box-shadow: 0 2px 10px rgba(15,23,42,0.14); }
@@ -579,15 +653,37 @@ def render_toc_cards(n):
 
 
 def render_duo_compare(n):
-    """duo_compare：双栏对比（P14，v3.0）。左/右面板 + 1px 中隔线。"""
+    """duo_compare：双栏对比（P14，v3.0）。左/右面板 + 1px 中隔线。
+
+    S8 Wave B 语义强化（C-E3，向后兼容）：
+    - side.tone=before 灰（现状）/after 主色（未来），未写 tone 走原中性样式
+    - metrics 量化对比行：双栏下方对照表（指标名 | 左值 | 右值），after 列主色
+    """
     def _side(k):
         s = n[k]
+        tone_cls = f" duo-{_esc(s['tone'])}" if s.get("tone") else ""
         pts = "".join(f'<li>{_esc(p)}</li>' for p in s["points"])
-        return (f'<div class="duo-panel"><div class="duo-title" '
+        return (f'<div class="duo-panel{tone_cls}"><div class="duo-title" '
                 f'data-editable="true">{_esc(s["title"])}</div>'
                 f'<ul class="duo-points">{pts}</ul></div>')
-    return (f'<div class="duo-compare">{_side("left")}'
+    html = (f'<div class="duo-compare">{_side("left")}'
             f'<div class="duo-vrule"></div>{_side("right")}</div>')
+    metrics = n.get("metrics") or []
+    if metrics:
+        left_title = _esc(n["left"]["title"])
+        right_title = _esc(n["right"]["title"])
+        rows = []
+        for m in metrics:
+            rows.append(
+                f'<tr><td class="duo-m-label" data-editable="true">'
+                f'{_esc(m["label"])}</td>'
+                f'<td class="duo-m-left" data-editable="true">{_esc(m["left"])}</td>'
+                f'<td class="duo-m-right" data-editable="true">{_esc(m["right"])}</td></tr>')
+        html += (
+            f'<table class="duo-metrics"><thead><tr><th></th>'
+            f'<th>{left_title}</th><th class="duo-m-after">{right_title}</th>'
+            f'</tr></thead><tbody>{"".join(rows)}</tbody></table>')
+    return html
 
 
 def render_pros_cons(n):
@@ -609,6 +705,75 @@ def render_cta_block(n):
                f'{_esc(n["contact"])}</div>' if n["contact"] else "")
     return (f'<div class="cta-block"><div class="cta-title" data-editable="true">'
             f'{_esc(n["title"])}</div>{btn}{contact}</div>')
+
+
+def render_sla_block(n):
+    """sla_block：SLA 服务承诺卡（C-E2，泛微实证标准件）。
+
+    可选标题 + 承诺卡网格（指标名 / 承诺值大字主色 / 说明），≤4 张一行。
+    """
+    title = (f'<h3 class="sla-heading" data-editable="true">{_esc(n["title"])}</h3>'
+             if n["title"] else "")
+    cards = []
+    for it in n["items"]:
+        desc = (f'<div class="sla-desc" data-editable="true">{_esc(it["desc"])}</div>'
+                if it["desc"] else "")
+        cards.append(
+            f'<div class="sla-card"><div class="sla-name" data-editable="true">'
+            f'{_esc(it["name"])}</div>'
+            f'<div class="sla-value" data-editable="true">{_esc(it["value"])}</div>'
+            f'{desc}</div>')
+    return (f'<div class="sla-block">{title}'
+            f'<div class="sla-grid"{_grid_cols(len(n["items"]))}>{"".join(cards)}</div></div>')
+
+
+def render_profile_card(n):
+    """profile_card：人员卡（C-E2，左照片/头像 + 右项目经历）。
+
+    可选标题 + 人员卡列表；photo 缺失用姓名首字圆形头像兜底。
+    """
+    title = (f'<h3 class="pcard-heading" data-editable="true">{_esc(n["title"])}</h3>'
+             if n["title"] else "")
+    cards = []
+    for p in n["profiles"]:
+        if p["photo"]:
+            avatar = (f'<img class="pcard-photo" src="{_esc(p["photo"])}" '
+                      f'alt="{_esc(p["name"])}">')
+        else:
+            initial = _esc(p["name"][:1]) if p["name"] else "◆"
+            avatar = f'<div class="pcard-avatar">{initial}</div>'
+        role = (f'<span class="pcard-role" data-editable="true">'
+                f'{_esc(p["role"])}</span>' if p["role"] else "")
+        contact = (f'<div class="pcard-contact" data-editable="true">'
+                   f'{_esc(p["contact"])}</div>' if p["contact"] else "")
+        desc = (f'<div class="pcard-desc" data-editable="true">{_nl2br(p["desc"])}</div>'
+                if p["desc"] else "")
+        cards.append(
+            f'<div class="pcard">{avatar}'
+            f'<div class="pcard-body"><div class="pcard-name" data-editable="true">'
+            f'{_esc(p["name"])}</div>{role}{desc}{contact}</div></div>')
+    return (f'<div class="profile-card">{title}{"".join(cards)}</div>')
+
+
+def render_logo_wall(n):
+    """logo_wall：logo 墙（C-E2，收尾标配，网格 ≤8 由容量预算管）。
+
+    可选标题 + logo 网格；src 缺失用客户名文字牌兜底。
+    """
+    title = (f'<h3 class="lwall-heading" data-editable="true">{_esc(n["title"])}</h3>'
+             if n["title"] else "")
+    cells = []
+    for lg in n["logos"]:
+        if lg["src"]:
+            body = (f'<img class="lwall-img" src="{_esc(lg["src"])}" '
+                    f'alt="{_esc(lg["name"])}">')
+        else:
+            body = (f'<span class="lwall-name" data-editable="true">'
+                    f'{_esc(lg["name"])}</span>')
+        cells.append(f'<div class="lwall-cell">{body}</div>')
+    return (f'<div class="logo-wall">{title}'
+            f'<div class="lwall-grid"{_grid_cols(len(n["logos"]), 4)}>'
+            f'{"".join(cells)}</div></div>')
 
 
 def render_evidence_ledger(n):
@@ -697,6 +862,72 @@ def render_decision_board(n):
             f'{rec}{nxt}</div>')
 
 
+def _render_red_strong(text):
+    """把 `**红字**` 关键词转为主色加粗（泛微体系强调红），其余转义。"""
+    parts = []
+    idx = 0
+    while True:
+        start = text.find("**", idx)
+        if start < 0:
+            parts.append(_esc(text[idx:]))
+            break
+        parts.append(_esc(text[idx:start]))
+        end = text.find("**", start + 2)
+        if end < 0:
+            parts.append(_esc(text[start:]))
+            break
+        parts.append(f'<strong class="cb-red">{_esc(text[start + 2:end])}</strong>')
+        idx = end + 2
+    return "".join(parts)
+
+
+def render_ui_mock(n):
+    """ui_mock：DOM 绘制的界面示意卡（禁 SVG，转 PPT 后可编辑）。"""
+    parts = ['<div class="ui-mock">']
+    if n["frame"] == "browser":
+        dots = "".join('<span class="ui-mock-dot"></span>' for _ in range(3))
+        parts.append(f'<div class="ui-mock-browser">{dots}'
+                     f'<span class="ui-mock-address">app.example.com</span></div>')
+    parts.append('<div class="ui-mock-body">')
+    if n["tabs"]:
+        tabs = "".join(
+            f'<span class="ui-mock-tab{" active" if i == 0 else ""}" '
+            f'data-editable="true">{_esc(t)}</span>'
+            for i, t in enumerate(n["tabs"]))
+        parts.append(f'<div class="ui-mock-tabs">{tabs}</div>')
+    parts.append(f'<div class="ui-mock-title" data-editable="true">{_esc(n["title"])}</div>')
+    for sec in n["sections"]:
+        parts.append('<div class="ui-mock-section">')
+        if sec["subtitle"]:
+            parts.append(f'<div class="ui-mock-subtitle" data-editable="true">'
+                         f'{_esc(sec["subtitle"])}</div>')
+        bars = "".join(
+            f'<div class="ui-mock-bar" style="width:{max(10, min(100, int(b)))}%"'
+            f' data-editable="true"></div>'
+            for b in sec["bars"])
+        parts.append(f'<div class="ui-mock-bars">{bars}</div></div>')
+    seal = n.get("seal") or {}
+    if seal and n["variant"] == "document":
+        parts.append(
+            '<div class="ui-mock-seal" data-editable="true">'
+            f'<span class="ui-mock-seal-text">{_esc(seal.get("text", ""))}</span>'
+            f'<span class="ui-mock-seal-company">{_esc(seal.get("company", ""))}</span>'
+            '</div>')
+    parts.append('</div>')
+    if n["caption"]:
+        parts.append(f'<div class="ui-mock-caption" data-editable="true">'
+                     f'{_esc(n["caption"])}</div>')
+    parts.append('</div>')
+    return "\n".join(parts)
+
+
+def render_conclusion_band(n):
+    """conclusion_band：页底结论色带，支持 `**红字**` 强调。"""
+    body = _render_red_strong(n["text"])
+    return (f'<div class="conclusion-band tone-{_esc(n["tone"])}" '
+            f'data-editable="true">{body}</div>')
+
+
 def _nav_label(title, max_len=12):
     """导航短标签：先截冒号后副标题，仍超长再截括号，最后省略——防长标题撑爆 54px 导航条。"""
     import re as _re
@@ -707,12 +938,23 @@ def _nav_label(title, max_len=12):
 
 
 def render_topnav(n, pages=None):
-    """topnav 长 HTML 导航：logo（可选）+ brand + 章节锚点。"""
+    """topnav 长 HTML 导航：logo（可选）+ brand + 章节锚点。
+
+    logo_position 摆位（B4 P1-6 收尾消费，枚举见 schema._validate_doc_brand）：
+    topnav_left（缺省）logo 槽在 brand 左侧；topnav_right 槽移到导航链接
+    右端（pos-right 类翻转 margin），缺省/未知值输出与 B4 前逐字节一致。
+    hero_corner 为封面（hero）场景声明值——topnav 不承担封面渲染，按缺省
+    左位落（B4 未消费，接入封面 logo 需求时再扩展）。
+    """
     links = []
     for page in pages or []:
         if not isinstance(page, dict):
             continue
         pid, title = page.get("id", ""), page.get("title", "")
+        # P3：YAML 数字标题（如 title: 2024）在 _nav_label 的正则切分处裸崩
+        # TypeError，渲染前归一为字符串（str/None 原样，正常路径零 diff）
+        if title is not None and not isinstance(title, str):
+            title = str(title)
         if pid and title:
             label = _nav_label(title)
             links.append(
@@ -720,7 +962,16 @@ def render_topnav(n, pages=None):
                 f'{_esc(label)}</a>')
     sub = (f'<span class="brand-sub" data-editable="true">{_esc(n["brand_sub"])}</span>'
            if n["brand_sub"] else "")
-    logo = _brand_logo_html(n)
+    logo_pos = n.get("logo_position") or "topnav_left"
+    logo = _brand_logo_html(n, right=(logo_pos == "topnav_right"))
+    if logo_pos == "topnav_right":
+        # 右位：brand 先行，logo 槽排 nav-links 之后（flex 尾部 = 导航右端）
+        return (
+            '<div class="topnav"><div class="topnav-inner">'
+            f'<span class="brand" data-editable="true">{_esc(n["brand"])}</span>{sub}'
+            f'<div class="nav-links">{"".join(links)}</div>'
+            f'{logo}'
+            '</div></div>')
     return (
         '<div class="topnav"><div class="topnav-inner">'
         f'{logo}'
@@ -729,13 +980,19 @@ def render_topnav(n, pages=None):
         '</div></div>')
 
 
-def _brand_logo_html(n):
-    """logo 槽位：有 logo 注入 <img>，无则占位虚线框（可编辑替换）。"""
+def _brand_logo_html(n, right=False):
+    """logo 槽位：有 logo 注入 <img>，无则占位虚线框（可编辑替换）。
+
+    right=True（logo_position=topnav_right）：追加 pos-right 类（CSS 翻转
+    margin），槽位落 topnav 右端；缺省 False 输出与 B4 前逐字节一致。
+    """
+    pos_cls = " pos-right" if right else ""
     logo = n.get("logo", "")
     if logo:
-        return (f'<img class="brand-logo" src="{_esc(logo)}" '
+        return (f'<img class="brand-logo{pos_cls}" src="{_esc(logo)}" '
                 f'alt="logo" data-editable="false">')
-    return '<span class="brand-logo-placeholder" data-editable="true">LOGO</span>'
+    return (f'<span class="brand-logo-placeholder{pos_cls}" '
+            f'data-editable="true">LOGO</span>')
 
 
 # 构件 type -> 渲染函数（topnav 特殊：需要 pages 生成锚点，单独分派）
@@ -763,6 +1020,13 @@ CHROME_RENDERERS = {
     "risk_register": render_risk_register,
     "raci_matrix": render_raci_matrix,
     "decision_board": render_decision_board,
+    # Step 5 新增元素
+    "ui_mock": render_ui_mock,
+    "conclusion_band": render_conclusion_band,
+    # S8 Wave B（C-E2 三件套）
+    "sla_block": render_sla_block,
+    "profile_card": render_profile_card,
+    "logo_wall": render_logo_wall,
 }
 
 

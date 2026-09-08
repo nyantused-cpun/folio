@@ -6,8 +6,10 @@
 """
 import os
 import yaml
+from decimal import Decimal, ROUND_HALF_UP
 
-SCRIPT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # 仓库根
+from _paths import SCRIPT_DIR
+
 LIBRARY_DIR = os.path.join(SCRIPT_DIR, "_knowledge", "quote_library")
 TEMPLATE_DIR = os.path.join(SCRIPT_DIR, "_knowledge", "templates", "报价版式")
 
@@ -63,7 +65,7 @@ class Section:
             elif it.discount == 1:
                 discounts.add("不参与折扣")
             else:
-                discounts.add(f"{int(it.discount * 100)}%")
+                discounts.add(_discount_pct_label(it.discount))
         if len(discounts) == 1:
             return discounts.pop()
         return "部分折扣"
@@ -90,6 +92,17 @@ class Item:
 # 折扣标准化
 # ============================================================
 
+def _discount_pct_label(ratio):
+    """折扣比例 → 整数百分比标签（B3）。
+    int(ratio*100) 在 IEEE754 下截断（0.29→"28%"、0.57→"56%"）；
+    经 str() 转 Decimal 四舍五入：0.285 这类 .5 边界不受浮点噪声与
+    银行家舍入影响（0.285*100=28.499...，round 得 28，此处正确得 29）。"""
+    if isinstance(ratio, bool):   # YAML true/false 兜底，保持原 100%/0% 行为
+        ratio = int(ratio)
+    pct = (Decimal(str(ratio)) * 100).quantize(Decimal("1"), rounding=ROUND_HALF_UP)
+    return f"{int(pct)}%"
+
+
 def normalize_discount(discount_value, global_discount=1.0):
     """标准化折扣值。
     返回 (numeric_discount, is_gift, display_text)
@@ -99,9 +112,9 @@ def normalize_discount(discount_value, global_discount=1.0):
     """
     if discount_value is None or discount_value == "":
         d = global_discount if global_discount is not None else 1
-        return d, False, f"{int(d * 100)}%" if isinstance(d, (int, float)) else str(d)
+        return d, False, _discount_pct_label(d) if isinstance(d, (int, float)) else str(d)
     if isinstance(discount_value, (int, float)):
-        return discount_value, False, f"{int(discount_value * 100)}%"
+        return discount_value, False, _discount_pct_label(discount_value)
     # 字符串
     # P1-6：先尝试解析百分号字符串（"50%" → 0.5），再回退到赠送
     if isinstance(discount_value, str):
@@ -110,12 +123,12 @@ def normalize_discount(discount_value, global_discount=1.0):
             try:
                 pct = float(stripped[:-1])
                 ratio = pct / 100.0
-                return ratio, False, f"{int(ratio * 100)}%"
+                return ratio, False, _discount_pct_label(ratio)
             except (ValueError, TypeError):
                 pass  # 解析失败则走赠送逻辑
     try:
         d = float(discount_value)
-        return d, False, f"{int(d * 100)}%"
+        return d, False, _discount_pct_label(d)
     except (ValueError, TypeError):
         return 0, True, str(discount_value)
 
@@ -326,6 +339,7 @@ class QuoteBuilder:
                 "time": p_spec.get("time", ""),
                 "type": p_spec.get("type", ""),
                 "ratio": ratio_str,
+                "ratio_value": ratio,   # B3：数值比例，渲染层溢出截断后重算金额用
                 "amount": round(total * ratio, 2),
             })
 
@@ -341,7 +355,8 @@ class QuoteBuilder:
         lib = lib or {}
 
         name = item_spec.get("name") or lib.get("name", "")
-        desc = item_spec.get("description") or lib.get("description", "")
+        # P3：库条目 description 显式为 null 时 .get 兜底不生效，链尾 or "" 降级空串
+        desc = item_spec.get("description") or lib.get("description") or ""
 
         # 价格解析（P0-6：条件定价许可 pricing_mode=conditional 时选择 register/concurrent）
         price = item_spec.get("unit_price")

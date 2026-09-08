@@ -248,12 +248,85 @@ class TestConvert:
         lnB = cell._tc.get_or_add_tcPr().find(qn("a:lnB"))
         assert lnB is not None
 
-    def test_missing_page_skipped_with_warning(self, tmp_path, capsys):
+    def test_missing_page_fails_closed(self, tmp_path, capsys):
+        # 0a：页面文件缺失从「warning 跳过恒 True」改为 fail-closed——
+        # 静默丢页不再产出 PPTX
         main = _write_deck(tmp_path, "size: [1280, 720]\npages:\n- pages/不存在.page\n", {})
         out = str(tmp_path / "out.pptx")
         from _pptd_convert import convert_pptd
-        assert convert_pptd(main, out) is True
+        assert convert_pptd(main, out) is False
         assert "页面文件不存在" in capsys.readouterr().out
+        assert not os.path.exists(out)
+
+    def test_page_parse_error_fails_closed(self, tmp_path, capsys):
+        """S4 增强：页面 YAML 解析失败此前在 try 外裸 traceback 崩进程，
+        现收进 element_errors 统一 fail-closed（不产出 PPTX）。"""
+        main = _write_deck(tmp_path, _OK_MAIN, {"01.page": "elements: [unclosed\n"})
+        out = str(tmp_path / "out.pptx")
+        from _pptd_convert import convert_pptd
+        assert convert_pptd(main, out) is False
+        assert "页面解析失败" in capsys.readouterr().out
+        assert not os.path.exists(out)
+
+    def test_zero_shape_element_named_even_when_count_matches(self, tmp_path, capsys):
+        """S4 增强：元素级对账点名零产出元素。图片缺失产 0 形状，同页
+        group（子形状+组合净产出 ≥2）可让整页形状数 ≥ 元素数——旧计数
+        对账漏检，元素级对账必须点名 img1 并阻断。"""
+        page = (
+            "elements:\n"
+            "- elementId: img1\n  elementType: image\n"
+            "  bounds: [0, 0, 100, 100]\n  src: /nonexistent/path.png\n"
+            "- elementId: g1\n  elementType: group\n"
+            "  bounds: [200, 200, 100, 100]\n"
+            "  children:\n"
+            "  - elementId: g1c1\n    elementType: shape\n"
+            "    bounds: [200, 200, 50, 50]\n    shapeName: rect\n")
+        main = _write_deck(tmp_path, _OK_MAIN, {"01.page": page})
+        out = str(tmp_path / "out.pptx")
+        from _pptd_convert import convert_pptd
+        assert convert_pptd(main, out) is False
+        captured = capsys.readouterr().out
+        assert "img1" in captured
+        assert "未产出任何形状" in captured
+        assert not os.path.exists(out)
+
+    def _flow_page(self):
+        return (
+            "elements:\n"
+            "- elementId: n1\n  elementType: shape\n"
+            "  bounds: [50, 50, 200, 80]\n  shapeName: flowChartProcess\n")
+
+    def _shadow_val(self, tmp_path, main_text):
+        main = _write_deck(tmp_path, main_text, {"01.page": self._flow_page()})
+        out = str(tmp_path / "out.pptx")
+        from _pptd_convert import convert_pptd
+        assert convert_pptd(main, out) is True
+        from pptx import Presentation
+        from pptx.oxml.ns import qn
+        prs = Presentation(out)
+        sp = list(prs.slides[0].shapes)[0]
+        outer = sp._element.spPr.find(qn("a:effectLst")).find(qn("a:outerShdw"))
+        return outer.find(qn("a:srgbClr")).get("val")
+
+    def test_shadow_color_theme_slot(self, tmp_path):
+        """R-3 尾：deck theme.colors.shadow 槽位生效（hex）。"""
+        main = (
+            "size: [1280, 720]\n"
+            "theme:\n  colors:\n    shadow: '#FF0000'\n"
+            "pages:\n- pages/01.page\n")
+        assert self._shadow_val(tmp_path, main) == "FF0000"
+
+    def test_shadow_color_theme_token(self, tmp_path):
+        """R-3 尾：shadow 槽位支持 $token 复用现有 11 槽。"""
+        main = (
+            "size: [1280, 720]\n"
+            "theme:\n  colors:\n    primary: '#112233'\n    shadow: '$primary'\n"
+            "pages:\n- pages/01.page\n")
+        assert self._shadow_val(tmp_path, main) == "112233"
+
+    def test_shadow_color_default_backward_compat(self, tmp_path):
+        """R-3 尾：无 shadow 槽位的存量工程回退缺省 0F172A（逐字节不变）。"""
+        assert self._shadow_val(tmp_path, _OK_MAIN) == "0F172A"
 
 
 # ---------------------------------------------------------------------------

@@ -16,6 +16,7 @@ __all__ = [
     "DEFAULT_EVAL_SET_PATH",
     "DEFAULT_BASELINE_PATH",
     "FALLBACK_MARKER",
+    "FALLBACK_MARKERS",
     "DEFAULT_TOLERANCES",
     "load_eval_set",
     "normalize_path",
@@ -31,8 +32,13 @@ __all__ = [
 DEFAULT_EVAL_SET_PATH = os.path.join("_knowledge", "eval", "golden_queries.yml")
 DEFAULT_BASELINE_PATH = os.path.join("_knowledge", "eval", "baseline.json")
 
-# recall 在 RRF 最高分 < 阈值时打印此标志（_recall.py:136）
-FALLBACK_MARKER = "降级到关键词模式"
+# recall 落到关键词模式的降级路径有三条，stdout 标志文案各不相同（_recall.py）：
+#   1. RRF 最高分 < 阈值            → "降级到关键词模式"
+#   2. BM25 索引缺失且 Embedding 不可用 → "使用关键词模式"
+#   3. 缺少依赖（ImportError）       → "[降级] 缺少依赖 ...，使用关键词模式"
+# P3：旧版只匹配第 1 条，负样本经 2/3 路径降级时漏检，误判 neg_fail。
+FALLBACK_MARKER = "降级到关键词模式"  # 兼容既有引用（路径 1 标志）
+FALLBACK_MARKERS = (FALLBACK_MARKER, "使用关键词模式")
 
 # 回归门禁默认容差（首次 baseline 跑完后可校准写回 baseline.json）
 # Hit@3 容差 -5pp（0.05），MRR 容差 -0.05
@@ -46,7 +52,7 @@ def normalize_path(p):
     """路径规范化：统一分隔符 -> /、去工作目录前缀、去 ./ 前缀、去 #anchor 后缀、strip、小写。
 
     大小写不敏感比较（Windows 文件系统不敏感 + 评估集 expect 手填可能不一致）。
-    recall() 返回的 path 可能是绝对路径（<工作目录>\\_knowledge\\...），
+    recall() 返回的 path 可能是绝对路径（D:\\knowledge base\\_knowledge\\...），
     expect 是相对路径（_knowledge/...），去工作目录前缀后才能匹配。
     """
     if not p:
@@ -65,11 +71,16 @@ def normalize_path(p):
 
 
 def load_eval_set(path):
-    """读 YAML 评估集，返回 list[dict]。
+    """读评估集（YAML 或 JSONL），返回 list[dict]。
 
     每条字段：id / query / client(可选) / expect(list[str]，可为空=负样本) / note(可选)。
+    - `.jsonl`：逐行 JSON，跳过 `#` 注释行与空行。
+    - 其余按 YAML 解析。
     缺 id/query/expect 报 ValueError；文件不存在报 FileNotFoundError。
     """
+    if os.path.splitext(str(path))[1].lower() == ".jsonl":
+        return _load_eval_set_jsonl(path)
+
     import yaml  # venv 已有 PyYAML
 
     if not os.path.exists(path):
@@ -83,28 +94,54 @@ def load_eval_set(path):
 
     out = []
     for i, item in enumerate(data):
-        if not isinstance(item, dict):
-            raise ValueError(f"第 {i+1} 条不是 dict: {item!r}")
-        for k in ("id", "query", "expect"):
-            if k not in item:
-                raise ValueError(f"第 {i+1} 条缺字段 '{k}': {item!r}")
-        expect = item["expect"]
-        if expect is None:
-            expect = []
-        if not isinstance(expect, list):
-            raise ValueError(
-                f"第 {i+1} 条 expect 必须是 list，实际 {type(expect).__name__}"
-            )
-        out.append(
-            {
-                "id": str(item["id"]),
-                "query": str(item["query"]),
-                "client": item.get("client"),
-                "expect": [str(p) for p in expect],
-                "note": item.get("note", ""),
-            }
-        )
+        if isinstance(item, dict) and item.get("retired"):
+            # retired 条目保留在评估集里作审计轨迹，但不再参与计分
+            # （语料有意变更后，断言旧语料可召回的查询随之退役，如 #48 裕力富内化）
+            continue
+        out.append(_normalize_eval_item(item, i + 1))
     return out
+
+
+def _load_eval_set_jsonl(path):
+    """读取 JSONL 评估集：跳过 `#` 注释行和空行，字段与 YAML 相同。"""
+    if not os.path.exists(path):
+        raise FileNotFoundError(f"评估集不存在: {path}")
+
+    out = []
+    with open(path, "r", encoding="utf-8") as f:
+        for line_no, line in enumerate(f, start=1):
+            text = line.strip()
+            if not text or text.startswith("#"):
+                continue
+            try:
+                item = json.loads(text)
+            except json.JSONDecodeError as e:
+                raise ValueError(f"第 {line_no} 行 JSON 解析失败: {e}") from e
+            out.append(_normalize_eval_item(item, line_no))
+    return out
+
+
+def _normalize_eval_item(item, index):
+    """校验并规范化一条评估集记录（YAML/JSONL 共用）。"""
+    if not isinstance(item, dict):
+        raise ValueError(f"第 {index} 条不是 dict: {item!r}")
+    for k in ("id", "query", "expect"):
+        if k not in item:
+            raise ValueError(f"第 {index} 条缺字段 '{k}': {item!r}")
+    expect = item["expect"]
+    if expect is None:
+        expect = []
+    if not isinstance(expect, list):
+        raise ValueError(
+            f"第 {index} 条 expect 必须是 list，实际 {type(expect).__name__}"
+        )
+    return {
+        "id": str(item["id"]),
+        "query": str(item["query"]),
+        "client": item.get("client"),
+        "expect": [str(p) for p in expect],
+        "note": item.get("note", ""),
+    }
 
 
 def is_hit(result_paths, expect):
@@ -124,10 +161,10 @@ def is_hit(result_paths, expect):
 
 
 def detect_fallback(stdout_buf):
-    """检测 stdout 缓冲里是否出现 fallback 降级标志。"""
+    """检测 stdout 缓冲里是否出现任一 fallback 降级标志（覆盖全部降级路径）。"""
     if not stdout_buf:
         return False
-    return FALLBACK_MARKER in stdout_buf
+    return any(m in stdout_buf for m in FALLBACK_MARKERS)
 
 
 def compute_metrics(per_query):
@@ -223,12 +260,16 @@ def compute_metrics(per_query):
 # ===== Issue 2：run_eval 执行器 =====
 
 
-def run_eval(eval_set, *, rerank=False, use_embedding=True, limit=None):
+def run_eval(eval_set, *, rerank=False, use_embedding=True,
+             limit=None, use_aliases=True,
+             use_query_rewrite=True):
     """对评估集每条 query 静默调 recall()，返回结构化结果。
 
     参数：
         eval_set: list[dict]，来自 load_eval_set
-        rerank / use_embedding: 透传给 recall（三链路由调用方分三次调）
+        rerank / use_embedding: 透传给 recall（调用方控制链路）
+        use_aliases: 透传给 recall；False 时关闭别名展开
+        use_query_rewrite: 透传给 recall；False 时关闭查询改写（A0 基线，I-2）
         limit: 只跑前 N 条（调试用）
 
     返回：
@@ -279,6 +320,8 @@ def run_eval(eval_set, *, rerank=False, use_embedding=True, limit=None):
                     use_embedding=use_embedding,
                     return_results=True,
                     client_filter=None,  # 让 recall 自动决策
+                    use_aliases=use_aliases,
+                    use_query_rewrite=use_query_rewrite,
                 )
             entry["results"] = results or []
             entry["fallback"] = detect_fallback(buf.getvalue())
@@ -294,6 +337,7 @@ def run_eval(eval_set, *, rerank=False, use_embedding=True, limit=None):
     return {
         "chain": chain,
         "config": config,
+        "use_aliases": use_aliases,
         "per_query": per_query,
         "metrics": compute_metrics(per_query),
     }

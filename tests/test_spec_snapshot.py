@@ -1,8 +1,4 @@
 # -*- coding: utf-8 -*-
-
-import pytest
-
-pytestmark = pytest.mark.internal
 """§八 3.1 spec 版本快照：confirmed spec 渲染前快照到 spec 同目录 .versions/。
 
 挂接点在 CLI 生成命令（html-build / docx-build / pptd-gen）、Renderer 构造之前；
@@ -17,6 +13,16 @@ import sys
 import yaml
 
 
+def _write_sidecar(spec_path):
+    import hashlib
+    import json
+    digest = hashlib.sha256(open(spec_path, "rb").read()).hexdigest()
+    sidecar = os.path.splitext(spec_path)[0] + ".confirm.json"
+    with open(sidecar, "w", encoding="utf-8") as f:
+        json.dump({"spec_sha256": digest, "confirmed_at": "test",
+                   "host": "test", "client": ""}, f)
+
+
 def _write_spec(tmp_path, confirmed=True):
     spec = {
         "confirmed": confirmed,
@@ -29,6 +35,8 @@ def _write_spec(tmp_path, confirmed=True):
     }
     p = tmp_path / "spec.yml"
     p.write_text(yaml.safe_dump(spec, allow_unicode=True), encoding="utf-8")
+    if confirmed:
+        _write_sidecar(str(p))
     return str(p)
 
 
@@ -56,9 +64,10 @@ def _mock_generate_pipeline(monkeypatch):
     monkeypatch.setattr(_cli_generate, "_run_pre_check",
                         lambda client_name=None: {"ok": True})
     monkeypatch.setattr(_cli_generate, "_run_post_check", lambda *a, **k: None)
-    monkeypatch.setattr(_cli_generate, "_auto_review", lambda *a, **k: None)
+    monkeypatch.setattr(_cli_generate, "_auto_review", lambda *a, **k: {"verdict": "PASS", "issues": [], "summary": "ok"})
     monkeypatch.setattr("_renderer.html_editor_injector.inject", lambda *a, **k: None)
-    monkeypatch.setattr("_verify_hook.run_single", lambda *a, **k: True)
+    # F3-2 起 html-build 以 return_blocked=True 消费 blocked_coverage
+    monkeypatch.setattr("_verify_hook.run_single", lambda *a, **k: (True, []))
 
 
 class TestSnapshotHelper:
@@ -155,13 +164,13 @@ class TestHtmlBuildSnapshot:
         assert len(snapshots) == 1
 
     def test_unconfirmed_spec_no_snapshot_and_blocked(self, monkeypatch, tmp_path):
-        """unconfirmed spec 过不了 confirmed 门：无快照、无产出、exit 1。"""
+        """unconfirmed spec 过不了 confirmed 门：无快照、无产出、守卫 exit 2。"""
         _mock_generate_pipeline(monkeypatch)
         spec = _write_spec(tmp_path, confirmed=False)
         out_html = os.path.join(self.OUT_DIR, "方案.html")
         code = _run_main_allow_success(
             ["_cli.py", "html-build", spec, out_html, "--html-only"], monkeypatch)
-        assert code == 1
+        assert code == 2
         assert not (tmp_path / ".versions").exists()
         assert not os.path.exists(out_html)
 

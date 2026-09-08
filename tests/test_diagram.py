@@ -158,7 +158,7 @@ def _deploy():
 
 
 def _phub():
-    """platform_hub（第 29 种，D-094）：中心 CRM + 周边专项 + 右 ERP 面板。"""
+    """platform_hub（D-094）：中心 CRM + 周边专项 + 右 ERP 面板。"""
     return {"type": "diagram", "diagram_type": "architecture",
             "subtype": "platform_hub", "title": "企业整体信息化平台规划",
             "center": {"name": "CRM 核心", "desc": "业务中枢",
@@ -171,7 +171,7 @@ def _phub():
 
 
 def _mgantt():
-    """module_gantt（第 30 种，D-095）：域标签 + 季度网格 + 编号模块落格。"""
+    """module_gantt（D-095）：域标签 + 季度网格 + 编号模块落格。"""
     return {"type": "diagram", "diagram_type": "timeline",
             "subtype": "module_gantt", "title": "实施总体规划",
             "columns": ["2026 Q3", "2026 Q4", "2027 Q1"],
@@ -331,7 +331,7 @@ class TestSchema:
 
     def test_unknown_diagram_type(self):
         e = _seq()
-        e["diagram_type"] = "chart"
+        e["diagram_type"] = "hologram"  # chart 已成合法类型（v1.5），换未注册值
         errors = schema.validate_element(e)
         assert any("未知 diagram_type" in err for err in errors)
 
@@ -344,7 +344,10 @@ class TestSchema:
         # 27 种 v1.2 + flow_rows（第 28 种）+ platform_hub（第 29 种）
         # + module_gantt（第 30 种）+ milestone_gantt（第 31 种，B-7）
         # + pyramid（第 32 种）+ quadrant（第 33 种，D-5）
-        assert len(schema.all_subtypes()) == 33
+        # + infra（第 34 种，v1.4 IT 基础设施标准图形）
+        # + harvey_balls（第 35 种，v1.5 哈维球对比表）
+        # + chart/bar + chart/waterfall（第 36/37 种，v1.5 数据图表族，HTML 先行）
+        assert len(schema.all_subtypes()) == 37
 
     def test_pyramid_levels_range(self):
         e = _pyramid()
@@ -480,7 +483,7 @@ class TestRenderHtml:
         assert "总监" in html and "架构师" in html
 
     def test_all_schema_subtypes_implemented(self):
-        """阶段 2 完成标志：schema 27 种子类型全部有渲染器（无"暂未实现"降级）。"""
+        """schema 全部子类型均有渲染器（无"暂未实现"降级）。"""
         from _renderer.diagram import _register, _MODULES
         _register()
         missing = [(dt, st) for dt, st in schema.all_subtypes()
@@ -503,8 +506,8 @@ class TestRenderHtml:
             assert "暂未实现" not in html and "渲染异常" not in html, \
                 f"{e['subtype']} 被降级"
 
-    def test_all_27_subtypes_render(self):
-        """27 种子类型全量：html + pptd 双渲染成功。"""
+    def test_all_subtypes_render(self):
+        """全部子类型：html + pptd 双渲染成功。"""
         for make in ALL_P0 + ALL_P1:
             e = make()
             html = render_diagram_html(e)
@@ -536,32 +539,30 @@ class TestRenderHtml:
              ]}
         html = render_diagram_html(e)
         elems, h = render_diagram_pptd(e, 192, 130, 1048)
-        # 连线数一致：HTML path 数（defs 里 3 个 marker path 不算）== pptd connector 数
+        # 连线数一致：HTML 带 marker-end 的 path 数 == pptd connector 数
         # （分发器会给 elementId 加 dgNNN- 前缀，按后缀匹配）
-        html_links = html.count('<path d="') - 3
+        html_links = html.count('marker-end="url(')
         pptd_links = [el for el in elems
-                      if "dep-lnk-" in el.get("elementId", "")
-                      and "-dep-lnk-l-" not in el.get("elementId", "")]
+                      if re.search(r"-dep-lnk-\d+$", el.get("elementId", ""))]
         assert html_links == len(pptd_links) == 3
         # async（第 3 条）：HTML 虚线 + pptd dash + 紫色
         assert 'stroke-dasharray="6,4"' in html
         async_conn = next(el for el in pptd_links if el["elementId"].endswith("dep-lnk-2"))
         assert async_conn["border"]["style"] == "dash"
         assert async_conn["border"]["color"] == dg_theme.PURPLE
-        # sync（第 1 条）：pptd 实线 + 深蓝（与 HTML 端 marker 同义）
+        # sync（第 1 条）：pptd 实线 + 品牌锚点蓝（R-3 主题化：跟随 theme.BLUE，与 HTML 端 marker 同源）
         sync_conn = next(el for el in pptd_links if el["elementId"].endswith("dep-lnk-0"))
         assert sync_conn["border"]["style"] == "solid"
-        assert sync_conn["border"]["color"] == "#1E3A8A"
+        assert sync_conn["border"]["color"] == dg_theme.BLUE
 
     def test_deploy_zone_fallback_and_miss(self):
         """deployment zone 级退化 link（无 '.'）与未命中引用：双端一致、静默跳过不崩。"""
         e_zone = _deploy()
         html = render_diagram_html(e_zone)
         elems, h = render_diagram_pptd(e_zone, 192, 130, 1048)
-        assert html.count('<path d="') - 3 == 1
+        assert html.count('marker-end="url(') == 1
         pptd_links = [el for el in elems
-                      if "dep-lnk-" in el.get("elementId", "")
-                      and "-dep-lnk-l-" not in el.get("elementId", "")]
+                      if re.search(r"-dep-lnk-\d+$", el.get("elementId", ""))]
         assert len(pptd_links) == 1
         assert pptd_links[0]["border"]["style"] == "solid"
         e_miss = {"type": "diagram", "diagram_type": "architecture", "subtype": "deployment",
@@ -570,10 +571,9 @@ class TestRenderHtml:
                   "links": [{"from": "A.a1", "to": "不存在.x"}]}
         html2 = render_diagram_html(e_miss)
         elems2, h2 = render_diagram_pptd(e_miss, 192, 130, 1048)
-        assert html2.count('<path d="') - 3 == 0
+        assert html2.count('marker-end="url(') == 0
         assert not [el for el in elems2
-                    if "dep-lnk-" in el.get("elementId", "")
-                    and "-dep-lnk-l-" not in el.get("elementId", "")]
+                    if re.search(r"-dep-lnk-\d+$", el.get("elementId", ""))]
 
     def test_placeholder_html(self):
         html = render_placeholder_html(
@@ -646,10 +646,14 @@ class TestRenderPptd:
 
     def test_swimlane_lanes_and_dash(self):
         elems, h = render_diagram_pptd(_swim(), 192, 130, 1048)
-        lane_rects = [e for e in elems if "ln-" in e["elementId"]
-                      and not e["elementId"].endswith("-name")
-                      and e["elementType"] == "shape"]
-        assert len(lane_rects) == 2
+        # v1.4 道头色条：每道 = 底框 + strip + strip-sq（道名是 text）
+        lane_bgs = [e for e in elems if "ln-" in e["elementId"]
+                    and "-strip" not in e["elementId"]
+                    and not e["elementId"].endswith("-name")
+                    and e["elementType"] == "shape"]
+        lane_strips = [e for e in elems if "-strip" in e["elementId"]]
+        assert len(lane_bgs) == 2
+        assert len(lane_strips) == 4  # 2 道 × (strip + strip-sq)
         # doc 挂接为虚线 connector
         doc_links = [e for e in elems if e.get("shapeName") in CONNECTOR_KINDS
                      and e.get("border", {}).get("style") == "dash"]
@@ -684,6 +688,55 @@ class TestRenderPptd:
         # stats 卡 + section 标题 + L1 卡 + 系统清单
         ids = [e["elementId"] for e in elems]
         assert any("sysinv" in i for i in ids)
+
+    def test_capability_map_cols_ge3(self):
+        """B6 #54 回归：>3 卡 section 升 3 列（原固定压 2 列加行，多 section
+        叠加超 950 版心预算——蓝海集团需求分析 v2 真实越界案）。"""
+        def _sec(name, n):
+            return {"name": name,
+                    "capabilities": [{"code": f"{name}{i}", "name": f"能力{i}",
+                                      "status": "lit", "system": "CRM",
+                                      "items": [{"name": "子项", "status": "lit"}]}
+                                     for i in range(n)]}
+
+        def _elem(sections):
+            return {"type": "diagram", "diagram_type": "matrix",
+                    "subtype": "capability_map", "title": "点亮图",
+                    "sections": sections}
+
+        def _cards(elems):
+            # L1 卡 roundRect：id 恰为 dg<N>-cap<si>-<ci>（name/st/sys/chips 均带后缀）
+            return [e for e in elems if re.fullmatch(r"dg\d+-cap0-\d+", e["elementId"])]
+
+        scale = 1048 / 1200.0
+        # 4 卡：3+1 两行，section 高度不变（32+108+112=252 视框），卡宽 590->386
+        elems, h4 = render_diagram_pptd(_elem([_sec("A", 4)]), 192, 130, 1048)
+        cards = _cards(elems)
+        assert len(cards) == 4
+        ys = sorted({e["bounds"][1] for e in cards})
+        assert len(ys) == 2  # 两行
+        assert len([e for e in cards if e["bounds"][1] == ys[0]]) == 3  # 3+1
+        w3 = (1200 - 20 * 2) / 3 * scale
+        for e in cards:
+            assert abs(e["bounds"][2] - w3) <= 4.0  # 发射出口 4px 网格吸附
+        assert abs(h4 - 252 * scale) < 1e-6  # 高度口径与旧 2 列两行一致
+        # 2 卡：行为不变（单行 2 列，卡宽 590）
+        elems2, h2 = render_diagram_pptd(_elem([_sec("B", 2)]), 192, 130, 1048)
+        cards2 = _cards(elems2)
+        assert len(cards2) == 2
+        assert len({e["bounds"][1] for e in cards2}) == 1  # 单行
+        w2 = (1200 - 20) / 2 * scale
+        for e in cards2:
+            assert abs(e["bounds"][2] - w2) <= 4.0
+        assert abs(h2 - (32 + 96 + 16) * scale) < 1e-6
+        # 7 卡：2 列口径 4 行压成 3 行
+        _, h7 = render_diagram_pptd(_elem([_sec("C", 7)]), 192, 130, 1048)
+        assert abs(h7 - (32 + 2 * (96 + 12) + 96 + 16) * scale) < 1e-6
+        # 蓝海形态（多 section × 大卡数）：旧口径 1188 视框（缩放后 1037>950
+        # 越界），新口径 864 视框，回 950 版心预算内
+        _, hb = render_diagram_pptd(
+            _elem([_sec("A", 7), _sec("B", 5), _sec("C", 5)]), 192, 130, 1048)
+        assert hb <= 950
 
     def test_timeline_chevron(self):
         elems, h = render_diagram_pptd(_tl(), 192, 130, 1048)
@@ -978,24 +1031,24 @@ class TestLayeredStack:
         assert _inter_area(desc, chip0) == 0
 
     def test_chips_inset_without_desc(self):
-        from _renderer.spacing import INSET_Y
         elems, _ = self._render()
         body = _by_id(elems, "ly1-body")["bounds"]
         chip0 = _by_id(elems, "ly1-chip-0")["bounds"]
-        # 无 desc：chips 顶 = 行顶 + INSET_Y（snap ±2）
-        assert INSET_Y - 2 <= chip0[1] - body[1] <= INSET_Y + 2
+        # v1.4：内容块垂直居中——chip 上下留白对称（容差 ±4 snap）
+        top_pad = chip0[1] - body[1]
+        bot_pad = (body[1] + body[3]) - (chip0[1] + chip0[3])
+        assert abs(top_pad - bot_pad) <= 4
 
     def test_row_height_is_stack_real(self):
-        from _renderer.spacing import INSET_Y
         elems, _ = self._render()
         body = _by_id(elems, "ly1-body")["bounds"]
         chip0 = _by_id(elems, "ly1-chip-0")["bounds"]
-        # 行高 = INSET_Y + chip_h(24) + INSET_Y = 36（hug 实高，非 max(56, ...)
-        # 拍脑袋；snap 半格点取偶，容差 ±GRID）
-        assert abs(body[3] - (INSET_Y + 24 + INSET_Y)) <= 4
-        # body 底 = chip 底 + INSET_Y（snap ±2）
-        slack = (body[1] + body[3]) - (chip0[1] + chip0[3])
-        assert INSET_Y - 2 <= slack <= INSET_Y + 2
+        # v1.4：行高 = max(64 最小行高, 内容实高 + 2*INSET_Y)——单行 chip 行
+        # 即最小行高；64 为 viewbox 值，scaler 0.873（1048/1200）→ ≈56（snap ±4）
+        assert abs(body[3] - 56) <= 4
+        top_pad = chip0[1] - body[1]
+        bot_pad = (body[1] + body[3]) - (chip0[1] + chip0[3])
+        assert top_pad >= 4 and abs(top_pad - bot_pad) <= 4
 
     def test_rows_advance_by_real_height(self):
         from _renderer.spacing import GAP_MD
@@ -1121,7 +1174,7 @@ class TestFlowHtmlStack:
                        {"label": "回写状态", "system": "门户"}]})
         rects = set(re.findall(
             r'<rect x="(-?[\d.]+)" y="(-?[\d.]+)" width="[\d.]+" '
-            r'height="[\d.]+" rx="8"', html))
+            r'height="[\d.]+" rx="10"', html))
         circles = re.findall(
             r'<circle cx="(-?[\d.]+)" cy="(-?[\d.]+)" r="10"', html)
         assert len(circles) == 5  # 5 个序号节点
@@ -1225,22 +1278,23 @@ class TestRendererIntegration:
 # ---------------------------------------------------------------------------
 
 class TestDiagramStylePassthrough:
-    """syzygit 风格的 diagram 主色（#0078FF）与 enterprise（#1B5E8A）不同，
-    验证 style 参数真正透传到色板；渲染后模块色板恢复原风格。"""
+    """weaver_blue 的 diagram 主色（#337AB7，R-4 官网主蓝）与 default
+    consulting（#00338D）不同，验证 style 参数真正透传到色板；
+    渲染后模块色板恢复默认主题。"""
 
     def test_html_uses_style_primary(self):
         from _renderer.diagram import render_diagram_html
         html_default = render_diagram_html(_seq())
-        html_syzygit = render_diagram_html(_seq(), style="syzygit")
-        assert "#1B5E8A" in html_default        # enterprise BLUE
-        assert "#0078FF" in html_syzygit        # syzygit primary
-        assert "#1B5E8A" not in html_syzygit
+        html_weaver = render_diagram_html(_seq(), style="weaver_blue")
+        assert "#00338D" in html_default        # consulting BLUE
+        assert "#337AB7" in html_weaver         # weaver_blue primary
+        assert "#00338D" not in html_weaver
 
     def test_pptd_uses_style_primary(self):
         from _renderer.diagram import render_diagram_pptd
         elems_default, _ = render_diagram_pptd(_seq(), 192, 130, 1048)
-        elems_syzygit, _ = render_diagram_pptd(_seq(), 192, 130, 1048,
-                                               style="syzygit")
+        elems_weaver, _ = render_diagram_pptd(_seq(), 192, 130, 1048,
+                                              style="weaver_blue")
 
         def _colors(elems):
             out = set()
@@ -1250,28 +1304,407 @@ class TestDiagramStylePassthrough:
                         out.add(e[key]["color"])
             return out
 
-        assert "#1B5E8A" in _colors(elems_default)
-        assert "#0078FF" in _colors(elems_syzygit)
-        assert "#1B5E8A" not in _colors(elems_syzygit)
+        assert "#00338D" in _colors(elems_default)
+        assert "#337AB7" in _colors(elems_weaver)
+        assert "#00338D" not in _colors(elems_weaver)
 
     def test_theme_restored_after_styled_render(self):
-        """styled 渲染后模块色板恢复 enterprise，不污染同进程后续渲染。"""
+        """styled 渲染后模块色板恢复 consulting_kpmg，不污染后续渲染。"""
         from _renderer.diagram import render_diagram_html, theme
-        assert theme.BLUE == "#1B5E8A"
-        render_diagram_html(_seq(), style="syzygit")
-        assert theme.BLUE == "#1B5E8A"
-        assert theme.current_style_name() == "enterprise"
+        assert theme.BLUE == "#00338D"
+        render_diagram_html(_seq(), style="weaver_blue")
+        assert theme.BLUE == "#00338D"
+        assert theme.current_style_name() == "consulting_kpmg"
 
     def test_css_variables_styled(self):
         """css_variables 透传风格：:root --blue 跟随风格主色。"""
         from _renderer.diagram import theme
-        assert "--blue:#1B5E8A" in theme.css_variables()
-        assert "--blue:#0078FF" in theme.css_variables("syzygit")
-        assert "--blue:#1B5E8A" in theme.css_variables()  # 已恢复
+        assert "--blue:#00338D" in theme.css_variables()
+        assert "--blue:#337AB7" in theme.css_variables("weaver_blue")
+        assert "--blue:#00338D" in theme.css_variables()  # 已恢复
 
     def test_placeholder_uses_style_primary(self):
         """占位卡同属 diagram 管线，同样透传。"""
         from _renderer.diagram import render_placeholder_html
         html = render_placeholder_html({"type": "product_intro_placeholder",
-                                        "title": "t"}, style="syzygit")
-        assert "#0078FF" in html
+                                        "title": "t"}, style="weaver_blue")
+        assert "#337AB7" in html
+
+
+# ---------------------------------------------------------------------------
+# v1.5 实战修复回归（审计报告 §7.2，示例项目 v4 暴露）
+# ---------------------------------------------------------------------------
+
+def _layered_rails_cjk():
+    e = _layered()
+    e["rails"] = ["安全体系", "标准规范"]
+    return e
+
+
+def _layered_rails_ascii():
+    e = _layered()
+    e["rails"] = ["DA/T 94-2022"]
+    return e
+
+
+def _seq_loopback():
+    return {"type": "diagram", "diagram_type": "flow", "subtype": "sequence",
+            "title": "回环",
+            "steps": [{"label": "提交"},
+                      {"label": "审核", "type": "decision",
+                       "alt_next": "提交", "alt_label": "未通过"},
+                      {"label": "归档", "type": "end"}]}
+
+
+class TestV15FieldFixes:
+    """§7.2 五项实战修复回归。"""
+
+    def test_rails_cjk_keep_vertical(self):
+        """中文 rails 保持竖排（§7.2-1 不影响正常形态）。"""
+        html = render_diagram_html(_layered_rails_cjk())
+        assert "writing-mode:vertical-rl" in html
+        assert "安全体系" in html
+
+    def test_rails_ascii_horizontal_html(self):
+        """ASCII 比例高的 rails 改横排小字，不再逐字竖排散列。"""
+        html = render_diagram_html(_layered_rails_ascii())
+        assert "DA/T 94-2022" in html
+        assert "writing-mode" not in html
+
+    def test_rails_ascii_pptd_no_perchar_join(self):
+        """PPT 端 ASCII rails 不做逐字 \\n 竖排。"""
+        elems, h = render_diagram_pptd(_layered_rails_ascii(), 192, 130, 1048)
+        texts = [e for e in elems if e["elementType"] == "text"]
+        assert any("DA/T 94-2022" in t["content"]["text"] for t in texts)
+
+    def test_sequence_loopback_html(self):
+        """sequence 的 decision alt_next 指向前序节点：画回游直角虚线。"""
+        html = render_diagram_html(_seq_loopback())
+        assert "未通过" in html
+        assert 'stroke-dasharray="6,4"' in html
+        assert re.search(r'M[\d.]+,[\d.]+ L[\d.]+,[\d.]+ L[\d.]+,[\d.]+ L', html)
+
+    def test_sequence_loopback_pptd(self):
+        """PPT 端回游：三段 straightConnector1 虚线 + 是/否标注。"""
+        elems, h = render_diagram_pptd(_seq_loopback(), 192, 130, 1048)
+        conn = [e for e in elems if e.get("shapeName") in CONNECTOR_KINDS
+                and e.get("border", {}).get("style") == "dash"]
+        ids = {e["elementId"] for e in conn}
+        assert any("-alt-" in i or i.startswith("alt-") for i in ids), "回游虚线缺失"
+        texts = [e for e in elems if e["elementType"] == "text"]
+        blob = "\n".join(t["content"]["text"] for t in texts)
+        assert "未通过" in blob and "是" in blob
+
+    def test_infra_cross_zone_label_warns(self, capsys):
+        """infra 跨 zone link 写 label → 渲染器告警（§7.2-2）。"""
+        e = {"type": "diagram", "diagram_type": "architecture",
+             "subtype": "infra", "title": "拓扑",
+             "zones": [{"name": "DMZ", "nodes": [{"name": "防火墙"}]},
+                       {"name": "内网", "nodes": [{"name": "ERP"}]}],
+             "links": [{"from": "DMZ.防火墙", "to": "内网.ERP",
+                        "label": "回单回传"}]}
+        html = render_diagram_html(e)
+        assert "回单回传" in html
+        assert "跨 zone link 不建议写 label" in capsys.readouterr().out
+
+    def test_infra_link_label_avoids_node_text(self):
+        """跨 zone 长斜线 label 落点避开节点盒与名称/desc 文本带（§7.4 图标总览目检：
+        HTTPS 药丸 100% 压办公终端名——占用区改精确矩形 + 全命中退最小重叠）。"""
+        from _renderer.diagram.architecture import (
+            _infra_zones_geometry, _infra_occupancy, _infra_link_label_pos)
+        e = {"type": "diagram", "diagram_type": "architecture",
+             "subtype": "infra", "title": "拓扑",
+             "zones": [
+                 {"name": "计算与存储", "nodes": [
+                     {"name": "应用服务器", "icon": "server", "desc": "server"},
+                     {"name": "数据库", "icon": "db", "desc": "db"},
+                     {"name": "容器平台", "icon": "container", "desc": "container"},
+                     {"name": "应用系统", "icon": "app", "desc": "app"}]},
+                 {"name": "网络与安全", "nodes": [
+                     {"name": "防火墙", "icon": "firewall", "desc": "firewall"},
+                     {"name": "核心交换机", "icon": "switch", "desc": "switch"},
+                     {"name": "边界路由器", "icon": "router", "desc": "router"},
+                     {"name": "负载均衡", "icon": "lb", "desc": "lb"}]},
+                 {"name": "端侧与外部", "nodes": [
+                     {"name": "办公终端", "icon": "terminal", "desc": "terminal"},
+                     {"name": "业务用户", "icon": "user", "desc": "user"},
+                     {"name": "安全认证", "icon": "shield", "desc": "shield"},
+                     {"name": "运维监控", "icon": "monitor", "desc": "monitor"},
+                     {"name": "公有云", "icon": "cloud", "desc": "cloud"}]}]}
+        zone_rects, node_rects, _ = _infra_zones_geometry(e)
+        occ = _infra_occupancy(e["zones"], node_rects)
+
+        def _center(zn, nn):
+            r = node_rects[zn][nn]
+            return r[0] + r[2] / 2, r[1] + r[3] / 2
+
+        ax, ay = _center("端侧与外部", "业务用户")
+        bx, by = _center("网络与安全", "负载均衡")
+        sx1, sy1, sx2, sy2 = ax + 30, ay, bx - 30, by
+        c1x, c1y = ax + 30 + (bx - ax) * 0.4, ay
+        c2x, c2y = bx - 30 - (bx - ax) * 0.4, by
+        lx, ly = _infra_link_label_pos(sx1, sy1, c1x, c1y, c2x, c2y, sx2, sy2,
+                                       "HTTPS", occ)
+        tw = len("HTTPS") * 9.5 + 18
+        px0, py0, px1, py1 = lx - tw / 2, ly - 10, lx + tw / 2, ly + 8
+        for ox0, oy0, ox1, oy1 in occ:
+            assert px1 <= ox0 or px0 >= ox1 or py1 <= oy0 or py0 >= oy1, \
+                f"label 药丸压占用区 ({ox0},{oy0},{ox1},{oy1})"
+
+    def test_infra_glyphs_switch_router_lb_distinct(self):
+        """switch/router/lb 三 glyph 形态区分（§7.4：router 四向交叉、lb 一分三 hub）。"""
+        from _renderer.diagram.architecture import _infra_glyph
+        sw = _infra_glyph("switch", 100, 100, 30, "#1B5E8A")
+        ro = _infra_glyph("router", 100, 100, 30, "#1B5E8A")
+        lb = _infra_glyph("lb", 100, 100, 30, "#1B5E8A")
+        assert len({sw, ro, lb}) == 3
+        assert "V" in ro          # router 有纵向交叉箭头
+        assert "<circle" in lb    # lb 有中心分发点
+        assert "V" not in sw and "<circle" not in sw
+
+    def test_flow_rows_label_sub_shrink(self):
+        """flow_rows 行标签 label_sub 过长 → 窄栏自动缩字号（§7.2-5）。"""
+        from _renderer.diagram import pptd_emit as pe_mod
+        row = {"label": "线上", "label_sub": "混合签（电章+鲜章）",
+               "cards": [{"label": "发起"}]}
+        elems, h = pe_mod.render_flow_rows_pptd({"rows": [row]}, 192, 130, 1048)
+        lb = [e for e in elems if e["elementId"].startswith("fr-lb")]
+        assert lb, "行标签文本缺失"
+        assert lb[0]["content"]["fontSize"] < 12
+
+    def test_cards_v2_page_maps_info_cards(self, tmp_path):
+        """v2 页面内老式 cards 元素映射为 info_cards 卡片样式（§7.2-4）。"""
+        import shutil
+        # S6 修复：保存/条件还原 _PRESALES_CLI_INVOKED。曾无条件 pop，
+        # 子集测试序下（外部已设该变量，如 baseline_kit import 时）会误删
+        # 别人的预设，致后续 test_baseline 6 例抛 NotInvokedViaCLIError。
+        saved = os.environ.get("_PRESALES_CLI_INVOKED")
+        os.environ["_PRESALES_CLI_INVOKED"] = "1"
+        try:
+            from _renderer import Renderer
+            import yaml
+            spec = tmp_path / "spec.yml"
+            spec.write_text(yaml.safe_dump({
+                "confirmed": True, "theme": "consulting_kpmg",
+                "pages": [{"id": "p1", "title": "对比", "layout": "P07",
+                           "elements": [
+                               {"type": "section_tag", "label": "对比"},
+                               {"type": "action_title",
+                                "segments": [{"t": "双方案对比"}]},
+                               {"type": "cards", "cards": [
+                                   {"title": "方案甲", "body": "覆盖全流程",
+                                    "tag": "推荐", "highlight": "ROI 高"}]},
+                               {"type": "table", "headers": ["项"],
+                                "rows": [["甲"]]},
+                           ]}],
+            }, allow_unicode=True), encoding="utf-8")
+            r = Renderer(str(spec))
+            out_dir = os.path.join("output", "通用", "cards_v2_test")
+            if os.path.exists(out_dir):
+                shutil.rmtree(out_dir)
+            try:
+                out = os.path.join(out_dir, "out.html")
+                r.render_html(out)
+                with open(out, encoding="utf-8") as f:
+                    html = f.read()
+            finally:
+                if os.path.exists(out_dir):
+                    shutil.rmtree(out_dir)
+            assert 'class="info-card"' in html, "cards 未映射 info_cards 样式"
+            assert "方案甲" in html and "覆盖全流程" in html
+            assert "推荐" in html and "ROI 高" in html  # tag/highlight 不丢
+        finally:
+            if saved is None:
+                os.environ.pop("_PRESALES_CLI_INVOKED", None)
+            else:
+                os.environ["_PRESALES_CLI_INVOKED"] = saved
+
+
+def _harvey():
+    return {"type": "diagram", "diagram_type": "matrix",
+            "subtype": "harvey_balls", "title": "供应商比选",
+            "rows": ["功能覆盖", "集成能力", "本地服务"],
+            "columns": ["我方方案", "厂商A"],
+            "cells": [{"row": "功能覆盖", "col": "我方方案", "value": 4},
+                      {"row": "功能覆盖", "col": "厂商A", "value": 2},
+                      {"row": "集成能力", "col": "我方方案", "value": 3},
+                      {"row": "集成能力", "col": "厂商A", "value": 2},
+                      {"row": "本地服务", "col": "厂商A", "value": 1}]}
+
+
+class TestHarveyBalls:
+    """matrix/harvey_balls（第 35 种）：五档哈维球对比表。"""
+
+    def test_schema_ok(self):
+        assert schema.validate_element(_harvey()) == []
+
+    def test_schema_value_range(self):
+        e = _harvey()
+        e["cells"][0]["value"] = 7
+        errs = schema.validate_element(e)
+        assert any("0-4" in m for m in errs)
+
+    def test_schema_row_ref(self):
+        e = _harvey()
+        e["cells"][0]["row"] = "不存在"
+        errs = schema.validate_element(e)
+        assert any("不在 rows 内" in m for m in errs)
+
+    def test_html_balls(self):
+        html = render_diagram_html(_harvey())
+        assert "功能覆盖" in html and "厂商A" in html
+        assert html.count("<svg") >= 5  # 5 个值球 + 图例球
+        assert "完全满足" in html  # 图例
+        assert "—" in html  # 本地服务×我方方案 缺 cell = 未评估
+
+    def test_pptd_pie_shapes(self):
+        elems, h = render_diagram_pptd(_harvey(), 192, 130, 1048)
+        shapes = [e for e in elems if e["elementType"] == "shape"]
+        pies = [e for e in shapes if e.get("shapeName") == "pie"]
+        ellipses = [e for e in shapes if e.get("shapeName") == "ellipse"]
+        assert len(pies) == 4  # value 1/2/2/3 部分填充
+        assert len(ellipses) == 1  # value 4 实心球
+        for p in pies:
+            assert p["adjustments"][0] == 16200000  # 起点恒 270°（12 点）
+        texts = [e for e in elems if e["elementType"] == "text"]
+        blob = "\n".join(t["content"]["text"] for t in texts)
+        assert "功能覆盖" in blob and "我方方案" in blob
+
+
+def _bar():
+    return {"type": "diagram", "diagram_type": "chart", "subtype": "bar",
+            "title": "近三年收入",
+            "categories": ["2023", "2024", "2025"],
+            "series": [{"name": "收入", "values": [12, 15, 19]}],
+            "unit": "亿元", "exhibit": {"source": "公司年报"}}
+
+
+def _waterfall():
+    return {"type": "diagram", "diagram_type": "chart", "subtype": "waterfall",
+            "title": "收益桥",
+            "steps": [{"label": "现状成本", "value": 100, "kind": "total"},
+                      {"label": "减人", "value": -30},
+                      {"label": "减纸", "value": -12},
+                      {"label": "目标成本", "value": 58, "kind": "total"}],
+            "unit": "万元", "exhibit": {"source": "测算口径见附录"}}
+
+
+class TestChart:
+    """chart 数据图表族（第 36/37 种，v1.5，HTML 先行）。"""
+
+    def test_bar_schema_ok(self):
+        assert schema.validate_element(_bar()) == []
+
+    def test_bar_schema_mismatch(self):
+        e = _bar()
+        e["series"][0]["values"] = [12, 15]
+        errs = schema.validate_element(e)
+        assert any("长度" in m for m in errs)
+
+    def test_bar_schema_negative_rejected(self):
+        e = _bar()
+        e["series"][0]["values"][1] = -5
+        errs = schema.validate_element(e)
+        assert any("负值" in m for m in errs)
+
+    def test_waterfall_schema_kind(self):
+        e = _waterfall()
+        e["steps"][1]["kind"] = "bogus"
+        errs = schema.validate_element(e)
+        assert any("delta/total" in m for m in errs)
+
+    def test_bar_html(self):
+        html = render_diagram_html(_bar())
+        assert "2025" in html and "收入" in html
+        assert "单位：亿元" in html and "公司年报" in html  # 来源行走 exhibit 槽位
+        assert "<rect" in html  # 柱体
+        assert "暂未实现" not in html and "渲染异常" not in html
+
+    def test_waterfall_html(self):
+        html = render_diagram_html(_waterfall())
+        assert "现状成本" in html and "目标成本" in html
+        assert "-30" in html  # 负 delta 带符号标签
+        assert 'stroke-dasharray="3,3"' in html  # 桥接虚线
+        assert "测算口径见附录" in html  # 来源行走 exhibit 槽位
+
+    def test_chart_pptd_native_bar_waterfall_degrade(self):
+        """0d：bar 走原生 chart 元素（F7 拍板执行）；waterfall 批二已接原生。"""
+        elems, h = render_diagram_pptd(_bar(), 192, 130, 1048)
+        charts = [e for e in elems if e["elementType"] == "chart"]
+        assert charts and h > 0
+        assert charts[0]["chartKind"] == "bar"
+        assert charts[0]["categories"] == _bar().get("categories")
+        # waterfall 批二已接原生 chart（栈式 emulate，chart.py render_pptd）
+        elems2, h2 = render_diagram_pptd(_waterfall(), 192, 130, 1048)
+        charts2 = [e for e in elems2 if e["elementType"] == "chart"]
+        assert charts2 and h2 > 0
+        assert charts2[0]["chartKind"] == "waterfall"
+
+
+# ---------------------------------------------------------------------------
+# B2#23：exhibit repr 泄漏（P0-V1，蓝海 v7 实害）——integration 图 source
+# 是端点 mapping dict，_wrap_exhibit 曾 str() 进 _esc 产出 {'name'… repr
+# #56（B6 Wave3）：溯源字符串契约收编至 exhibit.source，顶层读取退役
+# ---------------------------------------------------------------------------
+class TestExhibitSourceLeak:
+    def test_integration_dict_source_no_leak(self):
+        """integration p2p 夹具渲染：无 exhibit-source div，{'name' 不在 HTML。"""
+        elem = _intg()
+        elem["exhibit"] = {"num": "图 3", "title": "集成关系"}
+        html = render_diagram_html(elem)
+        assert "exhibit-source" not in html
+        assert "{'name'" not in html
+        assert "exhibit-body" in html  # 图框本体仍在（exhibit 头不误伤）
+
+    def test_nested_exhibit_source_rendered(self):
+        """#56：溯源字符串写 exhibit.source，来源行照常渲染。"""
+        elem = {"type": "diagram", "diagram_type": "flow", "subtype": "cross_system",
+                "title": "OA-SAP",
+                "exhibit": {"source": "来源：客户 2026-08 会议纪要"},
+                "systems": [{"name": "OA"}, {"name": "SAP"}],
+                "steps": [{"label": "提交", "system": "OA"}]}
+        html = render_diagram_html(elem)
+        assert "exhibit-source" in html
+        assert "客户 2026-08 会议纪要" in html
+
+    def test_top_level_string_source_rejected_by_schema(self):
+        """#56：非 integration 子类型顶层 source 报迁移错误（杜绝再挂顶层）。"""
+        elem = {"type": "diagram", "diagram_type": "flow", "subtype": "cross_system",
+                "title": "OA-SAP", "source": "来源：旧写法",
+                "systems": [{"name": "OA"}, {"name": "SAP"}],
+                "steps": [{"label": "提交", "system": "OA"}]}
+        errs = schema.validate_element(elem)
+        assert any("exhibit.source" in m for m in errs)
+
+    def test_integration_string_source_type_rejected(self):
+        """#56：integration 顶层 source 收 dict（端点 mapping）或 str（点对点
+        简式，outline_to_spec M1 生成器契约）；非此两者（如列表）报错。"""
+        elem = _intg()
+        elem["source"] = ["来源：误挂"]
+        errs = schema.validate_element(elem)
+        assert any("端点 mapping" in m for m in errs)
+        # p2p 简式（渲染端缺口登记 B6 #58，schema 放行生成器现状）
+        ok_p2p = dict(_intg(), source="OA", target="ERP")
+        assert schema.validate_element(ok_p2p) == []
+
+    def test_exhibit_field_type_guard(self):
+        """#56：exhibit 非 dict / exhibit.source 非字符串均报 schema 错误。"""
+        base = {"type": "diagram", "diagram_type": "flow", "subtype": "cross_system",
+                "title": "OA-SAP",
+                "systems": [{"name": "OA"}, {"name": "SAP"}],
+                "steps": [{"label": "提交", "system": "OA"}]}
+        e1 = dict(base, exhibit="来源：字符串不该挂这")
+        assert any("exhibit 必须是对象" in m for m in schema.validate_element(e1))
+        e2 = dict(base, exhibit={"num": ["图 1"], "source": {"bad": 1}})
+        errs2 = schema.validate_element(e2)
+        assert any("exhibit.num" in m and "字符串" in m for m in errs2)
+        assert any("exhibit.source" in m and "字符串" in m for m in errs2)
+
+    def test_esc_non_string_returns_repr_no_crash(self):
+        """_esc 非字符串行为固化：dict 产 repr 显式可见（不抛异常）——
+        泄漏防线在 _wrap_exhibit 的 isinstance 守卫，_esc 不二次设防。"""
+        from _renderer.elements import _esc
+        out = _esc({"name": "OA"})
+        assert "{" in out and "OA" in out  # repr 形态
+        assert _esc(0) == "0"
+        assert _esc(None) == "None"

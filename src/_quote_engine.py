@@ -28,6 +28,45 @@ A_CENTER = Alignment(horizontal='center', vertical='center', wrap_text=True)
 A_RIGHT = Alignment(horizontal='right', vertical='center', wrap_text=False)
 
 
+def apply_section_capacity(qd, slots):
+    """区块数据行容量前置截断（B3 引入于渲染层，B4 抽出模块级供构建层复用）。
+
+    模板行容量只有拿到 slots 才可知（sections 按 section_id / sheets 按
+    sheet_ref 匹配区块）：超出行在此统一丢弃并回写 QuoteData
+    （items/total_amount/summary/summary_total/付款金额），口径 = 丢弃行
+    不计入区块合计、汇总区与 HTML，杜绝隐形收费项。
+    幂等：截断后行数不超容量，重复调用不再触发告警或改写。"""
+    matched = []
+    for sec_id, cfg in slots.get("sections", {}).items():
+        matched.append((next((s for s in qd.sections
+                              if s.section_id == sec_id), None), cfg))
+    for sheet_name, cfg in slots.get("sheets", {}).items():
+        matched.append((next((s for s in qd.sections
+                              if s.sheet_ref == sheet_name), None), cfg))
+    truncated = False
+    for section, cfg in matched:
+        if not section or not cfg.get("data_start"):
+            continue
+        data_end = cfg.get("data_end", cfg.get("total_row", 0) - 1)
+        capacity = data_end - cfg["data_start"] + 1
+        if capacity <= 0 or len(section.items) <= capacity:
+            continue
+        n = len(section.items)
+        print(f"[警告] 区块 '{section.title}' 第 {capacity + 1}~{n} 行超出模板上限"
+              f"（预留 {capacity} 行），丢弃 {n - capacity} 行，不计入合计/汇总")
+        section.items = section.items[:capacity]
+        section.total_amount = section.total_amount_computed
+        truncated = True
+    if truncated:
+        qd.summary = [(s.title, s.total_amount) for s in qd.sections]
+        qd.summary_total = qd.total_amount()
+        for p in qd.payments:
+            if "ratio_value" in p:
+                p["amount"] = round(qd.summary_total * p["ratio_value"], 2)
+
+    return qd
+
+
 class ExcelRenderer:
     """从 QuoteData 渲染 Excel"""
 
@@ -49,6 +88,9 @@ class ExcelRenderer:
         shutil.copy2(src, output_path)
         wb = openpyxl.load_workbook(output_path)
         slots = load_slots(template_name)
+
+        # B3：区块容量前置截断——超出行不计入合计/汇总区/HTML，先改数据再填充
+        self._apply_section_capacity(quote_data, slots)
 
         # 填全局槽位
         self._fill_globals(wb, slots, quote_data.metadata)
@@ -123,6 +165,11 @@ class ExcelRenderer:
                 c, value=str(val), font=self._f_data, alignment=A_LEFT_WRAP
             )
 
+    def _apply_section_capacity(self, qd, slots):
+        """B4：委托模块级 apply_section_capacity——构建层（CLI）与渲染层同一
+        实现；直呼渲染器（绕过 CLI 构建层）时此处兜底，幂等不重复告警。"""
+        apply_section_capacity(qd, slots)
+
     def _render_onepage(self, wb, qd, slots):
         ws = wb[wb.sheetnames[0]]
         sec_by_id = {s.section_id: s for s in qd.sections}
@@ -180,6 +227,7 @@ class ExcelRenderer:
         total_row = sec_cfg["total_row"]
         use_formula = sec_cfg.get("use_formula", False)
         data_end = sec_cfg.get("data_end", total_row - 1)
+        capacity = data_end - data_start + 1   # 模板预留数据行数
 
         # 清空数据区域（B-H），防止模板残留导致重复
         self._clear_range(ws, data_start, data_end, COL_INDEX, COL_AMOUNT)
@@ -206,9 +254,14 @@ class ExcelRenderer:
             )
 
             if item.unit_price:
+                # P1-1：F 列写折后单价（原价×折扣），金额公式 =F*G 才与
+                # 汇总区/HTML 的 item.amount 同口径；赠送项保持原价展示
+                # （数量列为 0，金额仍为 0），折扣率在汇总区说明
+                discounted = item.unit_price if item.is_gift \
+                    else round(item.unit_price * item.discount, 2)
                 self._set_cell(
                     self._get_real_cell(ws, row, COL_PRICE),
-                    value=item.unit_price, font=self._f_data,
+                    value=discounted, font=self._f_data,
                     alignment=A_RIGHT, number_format=FMT_MONEY
                 )
 
@@ -252,7 +305,8 @@ class ExcelRenderer:
                 alignment=A_RIGHT, number_format=FMT_MONEY
             )
         else:
-            total = sum(item.amount for item in section.items)
+            # B3：丢弃行不计入合计（与公式模式 SUM 区间同口径）
+            total = sum(item.amount for item in section.items[:capacity])
             self._set_cell(
                 self._get_real_cell(ws, total_row, COL_AMOUNT),
                 value=total, font=self._f_bold,
@@ -260,8 +314,7 @@ class ExcelRenderer:
             )
 
         if overflow > 0:
-            capacity = data_end - data_start + 1
-            print(f"[警告] 区块 '{section.title}' 数据行溢出：{len(section.items)} 项，模板预留 {capacity} 行，丢弃 {overflow} 项")
+            print(f"[警告] 区块 '{section.title}' 数据行溢出：{len(section.items)} 项，模板预留 {capacity} 行，丢弃 {overflow} 项（不计入合计）")
 
     def _fill_summary_area(self, ws, qd, slots):
         """填充项目总价区域（原价/折扣/折后价）"""

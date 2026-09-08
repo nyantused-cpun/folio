@@ -10,7 +10,7 @@ class TestCurrentEmbedProvider:
         monkeypatch.setenv("ZHIPU_API_KEY", "zk")
         monkeypatch.setenv("SILICONFLOW_API_KEY", "sk")
         from _cloud_llm import current_embed_provider
-        assert current_embed_provider() == ("zhipu", "embedding-3")
+        assert current_embed_provider() == ("zhipu", "embedding-3-pro")
 
     def test_siliconflow_fallback(self, monkeypatch):
         monkeypatch.setenv("ZHIPU_API_KEY", "")
@@ -109,7 +109,7 @@ class TestEmbeddingModelMismatch:
         import _recall
         cache_dir = tmp_path / "_knowledge" / ".cache"
         cache_dir.mkdir(parents=True)
-        self._write_npy_index(cache_dir, {"clients/测试/doc.md#1": [1.0, 0.0, 0.0]}, "embedding-3")
+        self._write_npy_index(cache_dir, {"clients/测试/doc.md#1": [1.0, 0.0, 0.0]}, "embedding-3-pro")
         monkeypatch.setattr(_recall, "SCRIPT_DIR", str(tmp_path))
         monkeypatch.setenv("ZHIPU_API_KEY", "zk")
         import _cloud_llm

@@ -6,7 +6,9 @@ from _cloud_llm import chat, _parse_json, LLM_MODE
 from _pipeline import read_batch
 from _outline_to_spec import _recall_evidence
 
-SCRIPT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # 仓库根
+# SCRIPT_DIR 事实源：_paths（B4-G5 收拢）。本模块内未直接使用，
+# 保留模块属性仅为兼容历史导出面
+from _paths import SCRIPT_DIR  # noqa: F401
 
 QUOTE_EXTRACT_SYSTEM = """你是报价需求提取助手。从客户材料中提取报价相关需求，输出 JSON。
 规则：
@@ -69,12 +71,16 @@ def gen_quote_spec(materials_dir, client_name="", output_path="quote_spec.yml"):
   "client": "{client_name}",
   "payment_terms": "材料中提及的付款条件，未提及则留空",
   "valid_until": "材料中提及的有效期，未提及则留空",
+  "tax_rate": "税率，未提及留空",
+  "margin": "目标毛利率（小数），未提及留空",
+  "cost_basis": "成本依据说明，未提及则留空",
+  "discount": "整体折扣（小数，1.0=无折扣），未提及留空",
   "sheets": [{{
     "ref": "主报价",
     "sections": [
-      {{"id": "modules", "items": [{{"id": "", "name": "材料提及的模块名", "quantity": 1, "discount": ""}}]}},
-      {{"id": "implementation", "items": [{{"name": "材料提及的实施服务", "quantity": 1}}]}},
-      {{"id": "user_license", "items": [{{"name": "材料提及的许可需求", "quantity": 1}}]}}
+      {{"id": "modules", "items": [{{"id": "", "name": "材料提及的模块名", "quantity": 1, "unit": "套", "discount": ""}}]}},
+      {{"id": "implementation", "items": [{{"name": "材料提及的实施服务", "quantity": 1, "unit": "人天"}}]}},
+      {{"id": "user_license", "items": [{{"name": "材料提及的许可需求", "quantity": 1, "unit": "个"}}]}}
     ]
   }}]
 }}"""

@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
 """save_session 按客户文件锁（P1 健壮性 · T7）。
 
-纯函数、零第三方依赖、Windows+POSIX 通用。
+纯函数、零第三方依赖。Windows 语义红利主场（见「设计依据」）；POSIX 可用，
+但有陈旧锁强夺双持 / release 误删他人锁的竞态，不承诺跨平台强一致。
 
 锁文件：<client_dir>/.save_lock（点开头，索引/归档 walk 按扩展名或点文件规则
 天然跳过：_embed_index 只读 context.md/outputs/*.md/refs/*；BM25 按扩展名匹配，
@@ -31,8 +32,8 @@ import time
 LOCK_FILENAME = ".save_lock"
 
 
-def acquire_save_lock(client_dir, timeout=30.0, stale_after=300.0):
-    """原子创建 <client_dir>/.save_lock 获取按客户写锁。
+def acquire_save_lock(client_dir, timeout=30.0, stale_after=300.0, lock_name=LOCK_FILENAME):
+    """原子创建 <client_dir>/<lock_name> 获取写锁（默认按客户 .save_lock）。
 
     成功：返回打开的 fd（持锁期间必须保持打开，Windows 上即活性证据），
           锁文件内容为 "{pid}|{int(time.time())}"。
@@ -46,8 +47,14 @@ def acquire_save_lock(client_dir, timeout=30.0, stale_after=300.0):
           remove 成功 = 死进程残留（fd 已随进程关闭），立即重试获取；
       - 其余情况 sleep 0.5 循环，直到 timeout 到期返回 None。
     """
-    lock_path = os.path.join(client_dir, LOCK_FILENAME)
+    lock_path = os.path.join(client_dir, lock_name)
     deadline = time.time() + timeout
+    # 锁目录不存在时 os.open 会一直 OSError 空转到超时（P1-15 全局锁实测：
+    # LOGS_DIR 未建的首次写点被静默跳过），先确保目录存在
+    try:
+        os.makedirs(client_dir, exist_ok=True)
+    except OSError:
+        pass
     while True:
         try:
             fd = os.open(lock_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
@@ -88,12 +95,12 @@ def acquire_save_lock(client_dir, timeout=30.0, stale_after=300.0):
         return fd
 
 
-def release_save_lock(client_dir, fd):
+def release_save_lock(client_dir, fd, lock_name=LOCK_FILENAME):
     """释放锁：close(fd) + remove(lock)。自己持有的锁 remove 必成功。
 
     先 close 再 remove：Windows 上 fd 关闭后共享冲突解除，remove 才可能成功。
     """
-    lock_path = os.path.join(client_dir, LOCK_FILENAME)
+    lock_path = os.path.join(client_dir, lock_name)
     try:
         os.close(fd)
     except OSError:

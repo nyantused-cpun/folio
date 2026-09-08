@@ -1,8 +1,5 @@
 # -*- coding: utf-8 -*-
-
 import pytest
-
-pytestmark = pytest.mark.internal
 """D-118：skip 目录三处一致快照测试。
 
 单一数据源链条：_paths.OUTPUT_SKIP_DIRS（CLI）== .folio/hooks/_output_skip_dirs.json
@@ -58,3 +55,7 @@ def test_stop_verify_fallback_matches_json():
         cfg = json.load(f)
     for d in cfg["skip_dirs"]:
         assert f'"{d}"' in src, f"stop_verify fallback 缺目录 {d}"
+
+
+# v2.0 同源对齐（2026-09-08）：依赖主仓工作区契约/真实数据，发布面标记 internal 不随 CI 跑
+pytestmark = pytest.mark.internal

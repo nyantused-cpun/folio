@@ -1,8 +1,5 @@
 # -*- coding: utf-8 -*-
-
 import pytest
-
-pytestmark = pytest.mark.internal
 """_style_guard 回归测试：正向必命中 + 负向防误报（2026-08-14 去AI化调研落地）。
 
 范式来源：human-copywrite tests/eval（require/forbid 正则 + self-test）、
@@ -99,3 +96,82 @@ def test_dynamic_loader_skips_non_dictionary_files():
         for w in cfg["pattern"].split("|"):
             assert len(w) <= 40, f"{fname} 含超长散文行: {w[:20]}..."
             assert not w.startswith(">"), f"{fname} 含引用行: {w[:20]}..."
+
+
+# ===========================================================================
+# C-C1（2026-09-07）：词库 8→5 + 语境层 warn（severity 字段贯通）
+# ===========================================================================
+
+def test_hard_banned_words_reduced_to_five():
+    """拍板终版 5 词：抓手/生态/全方位 已移出硬禁。"""
+    from _paths import BANNED_WORDS
+    assert BANNED_WORDS == ["赋能", "闭环", "打通", "一站式", "卓越"]
+    for removed in ("抓手", "生态", "全方位"):
+        assert removed not in BANNED_WORDS
+
+
+def test_hard_banned_words_still_block():
+    """硬 5 词 block 断言不变：命中 severity=block。"""
+    text = "本方案赋能业务，形成闭环，打通数据"
+    issues = check(text)
+    hard = [i for i in issues if i["name"] == "黑话"]
+    assert hard, "硬禁词未命中黑话"
+    assert hard[0]["severity"] == "block"
+    assert set(hard[0]["matches"]) == {"赋能", "闭环", "打通"}
+
+
+def test_ea_ecosystem_term_not_blocked():
+    """EA 术语「生态合作」不再误杀：硬禁零命中、warn 零命中。"""
+    issues = check("围绕企业架构生态合作，绘制中心生态拓扑图。")
+    assert [i for i in issues if i["severity"] == "block"] == [], \
+        f"生态语境被误杀: {issues}"
+    assert "黑话" not in _names(issues)
+
+
+def test_removed_word_gongshou_not_blocked():
+    """「抓手」已移出词库，不再命中黑话。"""
+    assert "黑话" not in _names(check("以这个项目为抓手推进落地"))
+
+
+def test_context_word_omnidirectional_warns_not_blocks():
+    """「全方位的」形容词性用法：warn 不阻断；华丽形容词不再命中。"""
+    issues = check("提供全方位的数据视图")
+    ctx = [i for i in issues if i["name"] == "语境词"]
+    assert ctx and ctx[0]["severity"] == "warn"
+    assert "全方位的" in ctx[0]["matches"]
+    assert "华丽形容词" not in _names(issues)
+
+
+def test_context_words_constant_matches_three():
+    """语境层常量 = 3 词（卓越的/一站式的/全方位的），warn 级。"""
+    from _paths import CONTEXT_WORDS
+    assert CONTEXT_WORDS == ["卓越的", "一站式的", "全方位的"]
+    issues = check("卓越的团队，一站式的服务")
+    ctx = [i for i in issues if i["name"] == "语境词"]
+    assert ctx and ctx[0]["severity"] == "warn"
+
+
+def test_yizhanshi_still_hard_blocked():
+    """「一站式」词根仍在硬禁 5 词内：词根命中 block 不变（精确到词）。"""
+    hard = [i for i in check("一站式平台") if i["name"] == "黑话"]
+    assert hard and hard[0]["severity"] == "block"
+
+
+def test_check_issues_all_carry_severity():
+    """check() 返回结构每条 issue 必带 severity 字段（消费方分级处置前提）。"""
+    issues = check("综上所述，我们要赋能，提供全方位的服务")
+    assert issues
+    for i in issues:
+        assert i["severity"] in ("block", "warn")
+
+
+def test_pre_check_exposes_context_layer():
+    """pre_check 返回结构区分硬禁层与语境层（供阻断/返修分级）。"""
+    from _style_guard import pre_check
+    guard = pre_check()
+    assert "语境词" in guard["antipatterns_to_avoid"]
+    assert guard["context_words"] == ["卓越的", "一站式的", "全方位的"]
+
+
+# v2.0 同源对齐（2026-09-08）：依赖主仓工作区契约/真实数据，发布面标记 internal 不随 CI 跑
+pytestmark = pytest.mark.internal

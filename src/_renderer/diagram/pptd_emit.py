@@ -14,9 +14,9 @@ PPT 映射契约，源码审验 kimi_ppt_dsl renderer/pptx_builder.py）：
 
 import math
 
-from . import theme
+from .. import theme
 from ..elements import _esc  # 单一源（§七 2.6），删除本地重复定义
-from ..spacing import GAP_SM, GAP_XS, GRID, INSET_X, INSET_Y, snap
+from ..spacing import GAP_SM, GAP_XS, GRID, INSET_X, INSET_Y, snap, est_text_w
 
 
 def _snap_bounds(x, y, w, h):
@@ -50,8 +50,11 @@ class PptdScaler:
 
 
 def shape(eid, bounds, shape_name, fill=None, border=None, adjustments=None,
-          flip=None):
-    """preset shape 元素。border: {"style": solid|dash, "width": px, "color": hex}"""
+          flip=None, decor=None):
+    """preset shape 元素。border: {"style": solid|dash, "width": px, "color": hex}
+
+    decor: 预留装饰标记（ui_mock 公章/装饰条等），供 bbox 观察数据消费。
+    """
     el = {
         "elementId": eid,
         "elementType": "shape",
@@ -66,6 +69,8 @@ def shape(eid, bounds, shape_name, fill=None, border=None, adjustments=None,
         el["border"] = border
     if flip:
         el["flip"] = list(flip)
+    if decor:
+        el["decor"] = True
     return el
 
 
@@ -171,7 +176,8 @@ def node(eid, sc, vx, vy, vw, vh, title, desc="", kind="task", num=None):
     colors = {
         "task": (theme.CARD, theme.BLUE, theme.BLUE, theme.TEXT),
         "system": (theme.GREEN_LIGHT, theme.GREEN, theme.GREEN, theme.GREEN),
-        "trigger": (theme.ORANGE_LIGHT, "#C05621", "#C05621", "#7B341E"),
+        "trigger": (theme.ORANGE_LIGHT, theme.ORANGE, theme.ORANGE,
+                    theme.mix(theme.ORANGE, theme.TEXT, 0.45)),
         "start_end": (theme.BLUE, theme.BLUE, theme.BLUE, theme.WHITE),
     }
     fill_c, border_c, bar_c, title_c = colors.get(kind, colors["task"])
@@ -229,17 +235,38 @@ def diamond(eid, sc, cx_v, cy_v, vw, vh, title):
         shape(eid, [x, y, w, h], "flowChartDecision", fill=theme.ORANGE_LIGHT,
               border={"style": "solid", "width": 1.5, "color": theme.ORANGE}),
         text(eid + "-t", [x + w * 0.15, y + h * 0.25, w * 0.7, h * 0.5], title,
-             font_size=max(10, sc.len(12)), color="#7B341E", bold=True),
+             font_size=max(10, sc.len(12)), color=theme.mix(theme.ORANGE, theme.TEXT, 0.45), bold=True),
     ]
 
 
-def lane(eid, sc, vx, vy, vw, vh, name, tint="gray"):
-    """泳道底框 + 左上带名。"""
-    fills = {"gray": (theme.BG, theme.BORDER_STRONG), "green": (theme.GREEN_LIGHT, "#CFDED6")}
+def lane(eid, sc, vx, vy, vw, vh, name, tint="gray", strip=None):
+    """泳道底框 + 道名。
+
+    v1.4：strip=道头色条色（实色左条 + 竖排白字，CJK 窄框逐字折行），
+    不传时保留旧版左上横排带名（cross_system 列容器仍走旧版）。
+    tint: gray=BG 底 / white=白底（泳道交替底色）/ green=green_light。
+    """
+    fills = {"gray": (theme.BG, theme.BORDER_STRONG),
+             "white": (theme.WHITE, theme.BORDER_STRONG),
+             "green": (theme.GREEN_LIGHT, "#CFDED6")}
     fill_c, border_c = fills.get(tint, fills["gray"])
     x, y = sc.px(vx), sc.py(vy)
     w, h = sc.len(vw), sc.len(vh)
     name_fs = max(10, sc.len(13))
+    if strip is not None:
+        sw = sc.len(38)
+        return [
+            shape(eid, [x, y, w, h], "roundRect", fill=fill_c,
+                  border={"style": "solid", "width": 1.0, "color": border_c},
+                  adjustments=[4000]),
+            shape(eid + "-strip", [x, y, sw, h], "roundRect", fill=strip,
+                  adjustments=[12000]),
+            # 右半补方角：条左圆右方，贴合道框左缘
+            shape(eid + "-strip-sq", [x + sw / 2, y, sw / 2, h], "rect", fill=strip),
+            text(eid + "-name", [x, y, sw, h],
+                 name, font_size=name_fs, color=theme.WHITE, bold=True,
+                 align=("center", "middle")),
+        ]
     # 泳道名框宽按文字实际宽度估算（原固定 320px 覆盖跨泳道连接线垂段，
     # 触发 text_stack_overlap/badge_overlap）
     name_w = min(vw - 24, est_text_w(name, name_fs) + 2 * INSET_X + 8)
@@ -251,14 +278,6 @@ def lane(eid, sc, vx, vy, vw, vh, name, tint="gray"):
              name, font_size=name_fs, color=theme.TEXT_STRONG, bold=True,
              align=("left", "middle")),
     ]
-
-
-def est_text_w(s, font_size):
-    """估算文本宽度（px）：全角≈font_size，半角≈0.55*font_size。"""
-    w = 0.0
-    for ch in str(s):
-        w += font_size if ord(ch) > 0x2E7F else font_size * 0.55
-    return w
 
 
 # 文本行高系数：与 text() 默认 line_height、_layout_lint.LINE_HEIGHT 同值（1.3）
@@ -370,7 +389,7 @@ def table_hug_geometry(rows_plain, col_fracs, total_w, const_h, header_frac,
 
 
 def emit_chips(prefix, items, x, y, max_w, font_size=12, fill=None,
-               color=None, gap=8, pad=14, chip_h=24):
+               color=None, gap=8, pad=14, chip_h=24, border=None):
     """chip 流式排版（自动换行）。返回 (元素列表, 消耗高度)。
 
     每 chip = roundRect 底 + 居中文字，宽按文本估算。
@@ -378,7 +397,7 @@ def emit_chips(prefix, items, x, y, max_w, font_size=12, fill=None,
 
     宽度含 2×INSET_X 余量（间距体系 v1 一层配套）：text() 内边距折算会把
     文本框收窄 2×INSET_X，OOXML 另有默认 insets（约 19px）——不补这 20px，
-    双重收窄后短 label 也必折行（v7 前无折算，chip 文案均单行）。
+    双重收窄后短 label 也必折行（蓝海集团 v7 前无折算，chip 文案均单行）。
     """
     if fill is None:
         fill = theme.BLUE_LIGHT
@@ -390,11 +409,24 @@ def emit_chips(prefix, items, x, y, max_w, font_size=12, fill=None,
         if cx + w > x + max_w and cx > x:
             cx, cy = x, cy + chip_h + gap
         elems.append(shape(f"{prefix}-chip-{i}", [cx, cy, w, chip_h],
-                           "roundRect", fill=fill, adjustments=[50000]))
+                           "roundRect", fill=fill, adjustments=[50000],
+                           border=border))
         elems.append(text(f"{prefix}-chipt-{i}", [cx, cy, w, chip_h], it,
                           font_size=font_size, color=color, bold=True))
         cx += w + gap
     return elems, (cy - y) + chip_h
+
+
+def chips_height(items, max_w, font_size=12, gap=8, pad=14, chip_h=24):
+    """chip 流高度预估（与 emit_chips 同参数同结果）：容器先定高再排 chip 时用。"""
+    cx, lines = 0.0, 1
+    for it in items:
+        w = est_text_w(it, font_size) + pad * 2 + 2 * INSET_X
+        if cx > 0 and cx + w > max_w:
+            lines += 1
+            cx = 0.0
+        cx += w + gap
+    return lines * chip_h + (lines - 1) * gap
 
 
 # ---------------------------------------------------------------------------
@@ -419,848 +451,44 @@ def _line(eid, bounds, content, **kw):
     return text(eid, bounds, content, **kw)
 
 
-def emit_hero_pptd(n, x, y, w, c):
-    """hero：实底矩形（hero_to）+ eyebrow 胶囊 + 大标题 + 副标题 + meta + 统计卡。"""
-    elems = []
-    pad = 24.0
-    inner_x, inner_w = x + pad, w - 2 * pad
-    blocks = []  # 先算高度
-    if n["eyebrow"]:
-        blocks.append(("eyebrow", 20.0))
-    blocks.append(("title", 42.0))
-    if n["subtitle"]:
-        blocks.append(("subtitle", 24.0))
-    if n["meta"]:
-        blocks.append(("meta", 20.0))
-    if n["stats"]:
-        blocks.append(("stats", 64.0))
-    total_h = pad + sum(hh for _, hh in blocks) + 8 * (len(blocks) - 1) + pad
-    elems.append(shape("hero-bg", [x, y, w, total_h], "roundRect",
-                       fill=c["hero_to"], adjustments=[6000]))
-    cur = y + pad
-    for kind, hh in blocks:
-        if kind == "eyebrow":
-            cap_w = est_text_w(n["eyebrow"], 11) + 48
-            elems.append(shape("hero-eb", [inner_x, cur, cap_w, hh], "roundRect",
-                               fill=c["accent"], adjustments=[30000]))
-            elems.append(text("hero-ebt", [inner_x, cur, cap_w, hh], n["eyebrow"],
-                              font_size=11, color=c["hero_from"], bold=True))
-        elif kind == "title":
-            elems.append(text("hero-t", [inner_x, cur, inner_w, hh], n["title"],
-                              font_size=28, color=theme.WHITE, bold=True,
-                              align=("left", "middle")))
-        elif kind == "subtitle":
-            elems.append(text("hero-st", [inner_x, cur, inner_w, hh], n["subtitle"],
-                              font_size=14, color=theme.WHITE,
-                              align=("left", "middle")))
-        elif kind == "meta":
-            elems.append(_line("hero-m", [inner_x, cur, inner_w, hh],
-                              "  ·  ".join(n["meta"]), font_size=12,
-                              color=theme.WHITE, align=("left", "middle")))
-        elif kind == "stats":
-            n_cards = len(n["stats"])
-            gap = 12.0
-            cw = (inner_w - gap * (n_cards - 1)) / n_cards
-            for i, s in enumerate(n["stats"]):
-                cx = inner_x + i * (cw + gap)
-                elems.append(shape(f"hero-sc{i}", [cx, cur, cw, hh], "roundRect",
-                                   border={"style": "solid", "width": 1.0,
-                                           "color": theme.WHITE},
-                                   adjustments=[8000]))
-                val = s["value"] + (f' {s["unit"]}' if s["unit"] else "")
-                elems.append(_line(f"hero-scv{i}", [cx, cur + 6, cw, 30], val,
-                                  font_size=22, color=theme.WHITE, bold=True))
-                elems.append(_line(f"hero-scl{i}", [cx, cur + 38, cw, 20],
-                                  s["label"], font_size=11, color=theme.WHITE))
-        cur += hh + 8
-    return elems, total_h
-
-
-def emit_section_tag_pptd(n, x, y, w, c):
-    """section_tag：浅底胶囊 + 主色字 11px/700。"""
-    label = f'{n["index"]} · {n["label"]}' if n["index"] else n["label"]
-    cap_w = est_text_w(label, 11) + 52
-    elems = [
-        shape("stag-bg", [x, y, cap_w, 22], "roundRect", fill=c["bg_soft"],
-              border={"style": "solid", "width": 1.0, "color": c["border"]},
-              adjustments=[30000]),
-        _line("stag-t", [x, y, cap_w, 22], label, font_size=11,
-             color=c["primary"], bold=True),
-    ]
-    return elems, 22
-
-
-def emit_action_title_pptd(n, x, y, w, c):
-    """action_title：21px/800 结论标题 + 可选副标题。
-
-    PPT 侧 hl 降格为整段加粗（荧光笔/行内 run 颜色无原生对应，进不了
-    pptd 方言保守集）；强调语义由 HTML 端 hl-* 承载。
-    """
-    parts_t = []
-    for seg in n["segments"]:
-        t = seg["t"]
-        if parts_t and not parts_t[-1].endswith(" "):
-            t = " " + t
-        parts_t.append(t)
-    full = "".join(parts_t)
-    lines = len(wrap_lines(full, 21, w - 2 * INSET_X))
-    title_h = stack_text_h(lines, 21)
-    elems = [text("at-t", [x, y, w, title_h], full, font_size=21,
-                  color=c["text_primary"], bold=True, align=("left", "middle"))]
-    h = title_h
-    if n["sub"]:
-        sub_h = stack_text_h(len(wrap_lines(n["sub"], 13, w - 2 * INSET_X)), 13)
-        elems.append(text("at-sub", [x, y + h + 4, w, sub_h], n["sub"],
-                          font_size=13, color=c["text_secondary"],
-                          align=("left", "middle")))
-        h += 4 + sub_h
-    return elems, h
-
-
-def _tone_color(tone, c):
-    return {"lit": c["lit_border"], "part": c["part_border"],
-            "gap": c["gap_border"]}.get(tone, c["primary"])
-
-
-def emit_stat_cards_pptd(n, x, y, w, c):
-    """stat_cards：左 4px 色条 + 大数字 24px/800 + 标签（形状行）。"""
-    n_cards = len(n["cards"])
-    gap = 12.0
-    cw = (w - gap * (n_cards - 1)) / n_cards
-    card_h = 64.0
-    elems = []
-    for i, card in enumerate(n["cards"]):
-        cx = x + i * (cw + gap)
-        elems.append(shape(f"stc-{i}", [cx, y, cw, card_h], "roundRect",
-                           fill=c["card"],
-                           border={"style": "solid", "width": 1.0,
-                                   "color": c["border"]}, adjustments=[8000]))
-        elems.append(shape(f"stc-bar{i}", [cx, y, 4, card_h], "rect",
-                           fill=_tone_color(card["tone"], c)))
-        val = card["value"] + (f' {card["unit"]}' if card["unit"] else "")
-        elems.append(_line(f"stc-v{i}", [cx + 8, y + 8, cw - 8, 30], val,
-                          font_size=24, color=c["text_primary"], bold=True,
-                          align=("left", "middle")))
-        elems.append(_line(f"stc-l{i}", [cx + 8, y + 40, cw - 8, 18],
-                          card["label"], font_size=12,
-                          color=c["text_secondary"], align=("left", "middle")))
-    return elems, card_h
-
-
-def emit_kpi_cards_pptd(n, x, y, w, c):
-    """kpi_cards：from → to 大数字对比 + 指标名 + 注（形状组合）。"""
-    n_cards = len(n["cards"])
-    gap = 12.0
-    cw = (w - gap * (n_cards - 1)) / n_cards
-    card_h = 76.0
-    elems = []
-    for i, card in enumerate(n["cards"]):
-        cx = x + i * (cw + gap)
-        elems.append(shape(f"kpi-{i}", [cx, y, cw, card_h], "roundRect",
-                           fill=c["card"],
-                           border={"style": "solid", "width": 1.0,
-                                   "color": c["border"]}, adjustments=[8000]))
-        elems.append(shape(f"kpi-bar{i}", [cx, y, 4, card_h], "rect",
-                           fill=c["primary"]))
-        elems.append(_line(f"kpi-l{i}", [cx + 8, y + 6, cw - 8, 18],
-                          card["label"], font_size=12,
-                          color=c["text_secondary"], align=("left", "middle")))
-        # from（灰）→ to（主色大数字）三段文本框横排（数字行 y+24..y+56，
-        # 与 note(y+58) 保持 2px 间隙，避免 TextDrift/Occlusion 误报）
-        nx = cx + 8
-        if card["from"]:
-            from_w = est_text_w(card["from"], 16) + 16
-            elems.append(_line(f"kpi-f{i}", [nx, y + 24, from_w, 32],
-                              card["from"], font_size=16,
-                              color=c["text_tertiary"], align=("left", "middle")))
-            nx += from_w
-            elems.append(_line(f"kpi-a{i}", [nx, y + 24, 24, 32], "→",
-                              font_size=16, color=c["primary_mid"],
-                              align=("center", "middle")))
-            nx += 24
-        elems.append(_line(f"kpi-t{i}", [nx, y + 24, cx + cw - nx - 8, 32],
-                          card["to"], font_size=24, color=c["primary"],
-                          bold=True, align=("left", "middle")))
-        if card["note"]:
-            elems.append(_line(f"kpi-n{i}", [cx + 8, y + 58, cw - 8, 14],
-                              card["note"], font_size=10,
-                              color=c["text_tertiary"], align=("left", "middle")))
-    return elems, card_h
-
-
-def emit_pain_cards_pptd(n, x, y, w, c):
-    """pain_cards：标题 + level 徽章（P0 红/P1 朱橙/P2 灰）+ 量化影响。"""
-    cards = n["cards"]
-    n_cols = min(3, len(cards))
-    gap = 12.0
-    cw = (w - gap * (n_cols - 1)) / n_cols
-    badge_fill = {"P0": c["role_legal"], "P1": c["part_border"],
-                  "P2": c["text_tertiary"]}
-    elems = []
-    cur_y = float(y)
-    for row_i in range(0, len(cards), n_cols):
-        row = cards[row_i:row_i + n_cols]
-        row_h = 0.0
-        for card in row:
-            body_lines = len(wrap_lines(card["body"], 12, cw - 2 * INSET_X - 16))
-            hh = 14 + 20 + (18 if card["impact"] else 0) + \
-                (stack_text_h(body_lines, 12) if card["body"] else 0) + 12
-            row_h = max(row_h, hh)
-        for ci, card in enumerate(row):
-            cx = x + ci * (cw + gap)
-            i = row_i + ci
-            elems.append(shape(f"pain-{i}", [cx, cur_y, cw, row_h], "roundRect",
-                               fill=c["card"],
-                               border={"style": "solid", "width": 1.0,
-                                       "color": c["border"]}, adjustments=[8000]))
-            title_w = cw - 16
-            if card["level"] in badge_fill:
-                bw_ = 30.0
-                elems.append(shape(f"pain-b{i}",
-                                   [cx + cw - bw_ - 10, cur_y + 10, bw_, 18],
-                                   "roundRect", fill=badge_fill[card["level"]],
-                                   adjustments=[50000]))
-                elems.append(_line(f"pain-b{i}t",
-                                  [cx + cw - bw_ - 10, cur_y + 10, bw_, 18],
-                                  card["level"], font_size=11,
-                                  color=theme.WHITE, bold=True))
-                title_w -= bw_ + 8
-            elems.append(text(f"pain-t{i}", [cx + 8, cur_y + 10, title_w, 20],
-                              card["title"], font_size=14,
-                              color=c["text_primary"], bold=True,
-                              align=("left", "middle")))
-            cy = cur_y + 14 + 20
-            if card["impact"]:
-                elems.append(_line(f"pain-im{i}", [cx + 8, cy, cw - 16, 18],
-                                  card["impact"], font_size=12,
-                                  color=c["primary"], bold=True,
-                                  align=("left", "middle")))
-                cy += 18
-            if card["body"]:
-                elems.append(text(f"pain-bd{i}",
-                                  [cx + 8, cy, cw - 16,
-                                   cur_y + row_h - cy - 6],
-                                  card["body"], font_size=12,
-                                  color=c["text_secondary"],
-                                  align=("left", "top")))
-        cur_y += row_h + gap
-    return elems, cur_y - y - gap
-
-
-def emit_info_cards_pptd(n, x, y, w, c):
-    """info_cards：菱形符标题 + items 文本行（卡片网格）。"""
-    cards = n["cards"]
-    n_cols = min(4, len(cards))
-    gap = 12.0
-    cw = (w - gap * (n_cols - 1)) / n_cols
-    elems = []
-    cur_y = float(y)
-    for row_i in range(0, len(cards), n_cols):
-        row = cards[row_i:row_i + n_cols]
-        row_h = 0.0
-        for card in row:
-            n_lines = sum(len(wrap_lines(it, 12, cw - 2 * INSET_X - 24))
-                          for it in card["items"])
-            hh = 12 + 20 + (stack_text_h(n_lines, 12) if card["items"] else 0) + 10
-            row_h = max(row_h, hh)
-        for ci, card in enumerate(row):
-            cx = x + ci * (cw + gap)
-            i = row_i + ci
-            elems.append(shape(f"info-{i}", [cx, cur_y, cw, row_h], "roundRect",
-                               fill=c["card"],
-                               border={"style": "solid", "width": 1.0,
-                                       "color": c["border"]}, adjustments=[8000]))
-            elems.append(shape(f"info-d{i}", [cx + 12, cur_y + 16, 9, 9],
-                               "diamond", fill=c["primary"]))
-            elems.append(_line(f"info-t{i}", [cx + 26, cur_y + 10, cw - 34, 20],
-                              card["title"], font_size=13,
-                              color=c["text_primary"], bold=True,
-                              align=("left", "middle")))
-            if card["items"]:
-                body = "\n".join("• " + it for it in card["items"])
-                elems.append(text(f"info-bd{i}",
-                                  [cx + 12, cur_y + 36, cw - 20,
-                                   row_h - 42],
-                                  body, font_size=12,
-                                  color=c["text_secondary"], align=("left", "top")))
-        cur_y += row_h + gap
-    return elems, cur_y - y - gap
-
-
-def emit_legend_bar_pptd(n, x, y, w, c):
-    """legend_bar：底条 + 小矩形色块 + label 文本行（流式横排）。"""
-    bar_h = 30.0
-    elems = [shape("lgb-bg", [x, y, w, bar_h], "roundRect", fill=c["bg_soft"],
-                   border={"style": "solid", "width": 1.0, "color": c["border"]},
-                   adjustments=[16000])]
-    cx = x + 14
-    cy = y + (bar_h - 14) / 2
-    for i, it in enumerate(n["items"]):
-        sw = it["swatch"] or "keep"
-        if sw.startswith("role_"):
-            fill = c.get(f"role_{sw[5:]}", c["text_tertiary"])
-            border = None
-        elif sw == "keep":
-            fill = c["bg_muted"]
-            border = {"style": "solid", "width": 1.5,
-                      "color": c["text_tertiary"]}
-        else:
-            fill = c.get(f"{sw}_bg", c["bg_muted"])
-            border = {"style": "dash" if sw == "gap" else "solid",
-                      "width": 1.5,
-                      "color": c.get(f"{sw}_border", c["text_tertiary"])}
-        elems.append(shape(f"lgb-sw{i}", [cx, cy, 14, 14], "roundRect",
-                           fill=fill, border=border, adjustments=[20000]))
-        label_w = est_text_w(it["label"], 12) + 22
-        elems.append(_line(f"lgb-t{i}", [cx + 18, y, label_w, bar_h], it["label"],
-                          font_size=12, color=c["text_secondary"],
-                          align=("left", "middle")))
-        cx += 18 + label_w + 10
-    return elems, bar_h
-
-
-def emit_qa_block_pptd(n, x, y, w, c):
-    """qa_block：左竖条 + Q 粗体 + A 段落。"""
-    elems = []
-    cur_y = float(y)
-    for i, it in enumerate(n["items"]):
-        q_h = stack_text_h(len(wrap_lines(it["q"], 13, w - 2 * INSET_X - 20)), 13)
-        a_h = stack_text_h(len(wrap_lines(it["a"], 12, w - 2 * INSET_X - 20)),
-                           12) if it["a"] else 0
-        item_h = 10 + q_h + (4 + a_h if it["a"] else 0) + 10
-        elems.append(shape(f"qa-bg{i}", [x, cur_y, w, item_h], "roundRect",
-                           fill=c["bg_soft"], adjustments=[6000]))
-        elems.append(shape(f"qa-bar{i}", [x, cur_y, 3, item_h], "rect",
-                           fill=c["primary"]))
-        elems.append(text(f"qa-q{i}", [x + 10, cur_y + 8, w - 20, q_h],
-                          it["q"], font_size=13, color=c["text_primary"],
-                          bold=True, align=("left", "middle")))
-        if it["a"]:
-            elems.append(text(f"qa-a{i}",
-                              [x + 10, cur_y + 8 + q_h + 4, w - 20, a_h],
-                              it["a"], font_size=12, color=c["text_secondary"],
-                              align=("left", "top")))
-        cur_y += item_h + 8
-    return elems, cur_y - y - 8
-
-
-def emit_view_cards_pptd(n, x, y, w, c):
-    """view_cards：4 列视角卡 + 顶部半圆顶居中标题（D-093 麦肯锡式）。
-
-    PPT 侧简化：半圆顶用 rect 顶部加半圆 chord 近似；4 列卡同 kpi_cards
-    套路（卡片 + icon 圆 + 视角名 + 关键数字 headline + 单行 detail）。
-    整体高度 = 顶条 28 + 卡体（约 96，行 hug）。
-    """
-    cards = n["cards"]
-    n_cols = max(1, min(len(cards), 4))
-    gap = 14.0
-    cw = (w - gap * (n_cols - 1)) / n_cols
-    cap_h = 28.0
-    cap_w = min(360.0, w * 0.55)
-    cx_cap = x + (w - cap_w) / 2
-    elems = []
-    # 顶部半圆顶：capsule 圆角矩形 + 蓝底白字（PPTD 原生 chord 半圆用
-    # roundRect 100% adjustments 近似，4 列叙事 4 张图同款气质即可）
-    elems.append(shape("vc-cap", [cx_cap, y, cap_w, cap_h], "roundRect",
-                       fill=c["primary"], adjustments=[100000]))
-    title = n.get("title", "")
-    if title:
-        elems.append(_line("vc-cap-t", [cx_cap, y, cap_w, cap_h], title,
-                          font_size=14, color=theme.WHITE, bold=True,
-                          align=("center", "middle")))
-    # 4 列卡片：y 从 cap_h 下方留 12px 间隙放
-    card_top = y + cap_h + 12
-    card_h = 132.0
-    for i, card in enumerate(cards):
-        cx = x + i * (cw + gap)
-        # 卡底
-        elems.append(shape(f"vc-{i}", [cx, card_top, cw, card_h], "roundRect",
-                           fill=c["card"],
-                           border={"style": "solid", "width": 1.0,
-                                   "color": c["border"]}, adjustments=[8000]))
-        # icon 圆（48x48 居中）
-        ic = str(card.get("icon", "◆")) or "◆"
-        elems.append(shape(f"vc-{i}-icon", [cx + (cw - 36) / 2, card_top + 12,
-                                            36, 36], "ellipse",
-                           fill=c["bg_soft"]))
-        elems.append(_line(f"vc-{i}-it", [cx + (cw - 36) / 2, card_top + 12,
-                                          36, 36], ic, font_size=16,
-                          color=c["primary"], bold=True,
-                          align=("center", "middle")))
-        # 视角名
-        elems.append(_line(f"vc-{i}-p", [cx + 8, card_top + 52, cw - 16, 18],
-                          card["perspective"], font_size=14,
-                          color=c["text_primary"], bold=True,
-                          align=("center", "middle")))
-        # 关键数字 headline
-        hl = card.get("headline", "")
-        if hl:
-            elems.append(_line(f"vc-{i}-hl", [cx + 8, card_top + 70, cw - 16, 18],
-                              hl, font_size=16, color=c["accent"],
-                              bold=True, align=("center", "middle")))
-        # detail 说明（卡高 132 后底部留 40px 两行区，对齐 HTML 端信息密度；
-        # 多行必须 text(wrap=True)，_line 单行会横向溢出邻卡）
-        detail = card.get("detail", "")
-        if detail:
-            elems.append(text(f"vc-{i}-d", [cx + 12, card_top + 92, cw - 24, 34],
-                              detail, font_size=10,
-                              color=c["text_secondary"],
-                              align=("center", "top")))
-    total_h = cap_h + 12 + card_h
-    return elems, total_h
-
-
-def emit_callout_block_pptd(n, x, y, w, c):
-    """callout_block：底部双编号说服区（D-093）。
-
-    淡蓝底 + 圆角容器 + 双编号（01/02）说服句。每点：编号 + 标题 + desc。
-    """
-    points = n["points"]
-    # 单行最多 3 列（视觉平衡 2-3 个点）
-    n_cols = max(1, min(len(points), 3))
-    gap = 18.0
-    cw = (w - gap * (n_cols - 1)) / n_cols
-    cont_h = 80.0
-    elems = [shape("cb-bg", [x, y, w, cont_h], "roundRect",
-                   fill=c["bg_soft"],
-                   border={"style": "solid", "width": 1.0,
-                           "color": c["border"]}, adjustments=[8000])]
-    for i, pt in enumerate(points):
-        cx = x + i * (cw + gap)
-        # 编号（Georgia serif 大字）
-        elems.append(_line(f"cb-n{i}", [cx + 14, y + 10, 50, 32],
-                          str(pt["num"]), font_size=22,
-                          color=c["primary"], bold=True,
-                          align=("left", "top")))
-        # 标题（含 highlight 红色，可选附 16px 文本——PPTD 单段不支持
-        # 行内变色，简化为标题全段 primary + highlight 单独追加）
-        # 高度 20 单行收尾，与下方 hl（y+32）留出 2px 间隙——此前 h=28
-        # 与 hl 纵向相交 6px 触发 text_stack_overlap（I-2）
-        elems.append(_line(f"cb-t{i}", [cx + 64, y + 10, cw - 78, 20],
-                          str(pt["title"]), font_size=13,
-                          color=c["text_primary"], bold=True,
-                          align=("left", "top")))
-        hl = pt.get("highlight", "")
-        if hl:
-            # highlight 置标题下方左侧小字（红色强调）
-            elems.append(_line(f"cb-hl{i}", [cx + 64, y + 32, cw - 78, 16],
-                              hl, font_size=12, color=c["accent"],
-                              bold=True, align=("left", "middle")))
-        # desc
-        desc = pt.get("desc", "")
-        if desc:
-            elems.append(_line(f"cb-d{i}", [cx + 64, y + 50, cw - 78, 24],
-                              desc, font_size=11,
-                              color=c["text_secondary"], align=("left", "top")))
-    return elems, cont_h
-
-
-def emit_page_header_pptd(n, x, y, w, c):
-    """page_header 页眉横幅（D-092）：渐变矩形 + EX 编号徽章 + 标题 + 章节胶囊 + meta。"""
-    elems = []
-    h = 64.0
-    elems.append(shape("ph-bg", [x, y, w, h], "roundRect",
-                       fill=c["hero_to"], adjustments=[8000]))
-    idx = n.get("index", "")
-    ix = x + 16
-    if idx:
-        # 宽度余量：est_text_w 对粗体 Latin 混排低估约 15-20%（目检发现
-        # "EXHIBIT 13" 在 PowerPoint 实际渲染折行），乘 1.2 安全系数 +
-        # 26px padding；_line 强制单行兜底
-        bw = 26 + est_text_w(idx, 12) * 1.2
-        elems.append(shape("ph-idx", [ix, y + 20, bw, 24], "roundRect",
-                           fill=c["accent"], adjustments=[50000]))
-        elems.append(_line("ph-idxt", [ix, y + 20, bw, 24], idx,
-                          font_size=12, color=c["hero_from"], bold=True))
-        ix += bw + 12
-    title = n.get("title", "")
-    tag = n.get("tag", "")
-    # 章节胶囊宽度按文本估算动态放（24 padding + 文本宽，上限 300）——固定
-    # 130px 装不下「第三章 · 方案架构与能力」级长 tag，估算 2 行触发 overflow
-    tag_w = min(24.0 + est_text_w(tag, 12) * 1.2, 320.0) if tag else 0.0
-    right_w = tag_w + 24 if tag else 24.0
-    metas = n.get("meta") or []
-    # 有 meta 行时标题框压到上部 40px（y+2..y+42），与 meta（y+42 起）相邻
-    # 不交——此前标题框占满 64px 与 meta 纵向相交 71% 触发 text_stack_overlap
-    t_h = 40.0 if metas else h
-    t_y = y + 2 if metas else y
-    elems.append(text("ph-title", [ix, t_y, max(w - ix - right_w, 200), t_h], title,
-                      font_size=20, color=theme.WHITE, bold=True,
-                      align=("left", "middle")))
-    if tag:
-        tx = x + w - tag_w - 24
-        elems.append(shape("ph-tag", [tx, y + 20, tag_w, 24], "roundRect",
-                           fill=c["bg_soft"], adjustments=[50000]))
-        elems.append(_line("ph-tagt", [tx, y + 20, tag_w, 24], tag,
-                          font_size=12, color=c["hero_from"], bold=True))
-    if metas:
-        mtext = "  ·  ".join(str(m) for m in metas)
-        # y+46（原 y+42）：与 idx/tag 胶囊行（y+20..44）留 2px 净距——此前
-        # 纵向相交 2px 触发 TextOcclusion/TextDrift 连锁警告
-        elems.append(_line("ph-meta", [x + 16, y + 46, w - 32, 16], mtext,
-                           font_size=10, color=theme.WHITE,
-                           align=("left", "middle")))
-    return elems, h
-
-
-def emit_toc_cards_pptd(n, x, y, w, c):
-    """toc_cards：2 列目录卡（编号 + 标题 + 可选描述），P12。"""
-    cards = n["cards"]
-    if not cards:
-        return [], 0
-    n_cols = min(2, len(cards))  # 单卡占满宽度
-    gap = 12.0
-    cw = (w - gap * (n_cols - 1)) / n_cols
-    elems = []
-    cur_y = float(y)
-    for row_i in range(0, len(cards), n_cols):
-        row = cards[row_i:row_i + n_cols]
-        row_h = 0.0
-        for card in row:
-            tl = len(wrap_lines(card["title"], 13, cw - 60 - 2 * INSET_X))
-            dl = (len(wrap_lines(card["desc"], 11, cw - 60 - 2 * INSET_X))
-                  if card["desc"] else 0)
-            hh = 10 + stack_text_h(tl, 13) + (GAP_SM + stack_text_h(dl, 11)
-                                              if dl else 0) + 8
-            row_h = max(row_h, hh)
-        for ci, card in enumerate(row):
-            cx = x + ci * (cw + gap)
-            i = row_i + ci
-            elems.append(shape(f"toc-{i}", [cx, cur_y, cw, row_h], "roundRect",
-                               fill=c["card"],
-                               border={"style": "solid", "width": 1.0,
-                                       "color": c["border"]},
-                               adjustments=[8000]))
-            elems.append(_line(f"toc-n{i}", [cx + 12, cur_y + 8, 40, 22],
-                               card["num"], font_size=16, color=c["primary"],
-                               bold=True, align=("left", "middle")))
-            elems.append(_line(f"toc-t{i}", [cx + 56, cur_y + 8, cw - 68, 20],
-                               card["title"], font_size=13,
-                               color=c["text_primary"], bold=True,
-                               align=("left", "middle")))
-            if card["desc"]:
-                elems.append(text(f"toc-d{i}",
-                                  [cx + 56, cur_y + 30, cw - 68, row_h - 36],
-                                  card["desc"], font_size=11,
-                                  color=c["text_secondary"],
-                                  align=("left", "top")))
-        cur_y += row_h + gap
-    return elems, cur_y - y - gap
-
-
-def emit_duo_compare_pptd(n, x, y, w, c):
-    """duo_compare：左右双面板 + 1px 中隔线，P14。"""
-    gap = 16.0
-    pw = (w - gap * 2) / 2
-    elems = []
-    max_h = 0.0
-    for _, key in enumerate(("left", "right")):
-        side = n[key]
-        tl = len(wrap_lines(side["title"], 14, pw - 2 * INSET_X))
-        bl = sum(len(wrap_lines(p, 12, pw - 2 * INSET_X - 16))
-                 for p in side["points"])
-        h = stack_text_h(tl, 14) + 8 + (stack_text_h(bl, 12) if bl else 0) + 8
-        max_h = max(max_h, h)
-    for pi, key in enumerate(("left", "right")):
-        side = n[key]
-        px = x if pi == 0 else x + pw + gap * 2
-        elems.append(_line(f"duo-t{pi}", [px, y, pw, 22], side["title"],
-                           font_size=14, color=c["text_primary"], bold=True,
-                           align=("left", "top")))
-        if side["points"]:
-            body = "\n".join("• " + p for p in side["points"])
-            elems.append(text(f"duo-b{pi}", [px, y + 26, pw, max(max_h - 30, 12)],
-                              body, font_size=12, color=c["text_secondary"],
-                              align=("left", "top")))
-    elems.append(shape("duo-vr", [x + pw + gap, y, 1.5, max_h], "rect",
-                       fill=c["border"]))
-    return elems, max_h
-
-
-def emit_pros_cons_pptd(n, x, y, w, c):
-    """pros_cons：pros/cons 双列（绿/橙头），P15。"""
-    gap = 16.0
-    pw = (w - gap) / 2
-    elems = []
-    max_h = 0.0
-    cols = [("pros", c["lit_text"], "优势"),
-            ("cons", c["part_text"], "风险/成本")]
-    # 先算高度（跳过空侧）
-    non_empty = [(key, hc, head) for key, hc, head in cols if n[key]]
-    if not non_empty:
-        return [], 0
-    for key, _, _ in non_empty:
-        items = n[key]
-        bl = sum(len(wrap_lines(p, 12, pw - 2 * INSET_X - 16)) for p in items)
-        h = 12 + 20 + (stack_text_h(bl, 12) if items else 0) + 10
-        max_h = max(max_h, h)
-    # 渲染非空侧
-    for pi, (key, hc, head) in enumerate(non_empty):
-        items = n[key]
-        px = x + pi * (pw + gap)
-        elems.append(shape(f"pc-bg{pi}", [px, y, pw, max_h], "roundRect",
-                           fill=c["card"],
-                           border={"style": "solid", "width": 1.0,
-                                   "color": c["border"]}, adjustments=[8000]))
-        elems.append(_line(f"pc-h{pi}", [px + 12, y + 8, pw - 24, 20], head,
-                           font_size=13, color=hc, bold=True,
-                           align=("left", "middle")))
-        if items:
-            body = "\n".join("• " + p for p in items)
-            elems.append(text(f"pc-b{pi}", [px + 12, y + 32, pw - 24,
-                                            max(max_h - 40, 12)],
-                              body, font_size=12, color=c["text_secondary"],
-                              align=("left", "top")))
-    return elems, max_h
-
-
-def emit_cta_block_pptd(n, x, y, w, c):
-    """cta_block：深色横幅 + 白标题 + accent 按钮 + 联系方式，P16。"""
-    h = 96.0
-    elems = [shape("cta-bg", [x, y, w, h], "roundRect", fill=c["hero_to"],
-                   adjustments=[6000])]
-    elems.append(_line("cta-t", [x + 24, y + 12, w - 48, 28], n["title"],
-                       font_size=18, color=c["card"], bold=True,
-                       align=("center", "middle")))
-    if n["button"]:
-        bw = 160.0
-        bx = x + (w - bw) / 2
-        elems.append(shape("cta-btn", [bx, y + 46, bw, 26], "roundRect",
-                           fill=c["accent"], adjustments=[50000]))
-        elems.append(_line("cta-bt", [bx, y + 46, bw, 26], n["button"],
-                           font_size=12, color=c["hero_from"], bold=True,
-                           align=("center", "middle")))
-    if n["contact"]:
-        elems.append(_line("cta-c", [x + 24, y + 76, w - 48, 16],
-                           n["contact"], font_size=10, color=c["card"],
-                           align=("center", "middle")))
-    return elems, h
-
-
-def emit_evidence_ledger_pptd(n, x, y, w, c):
-    """evidence_ledger 证据台账（B-3）：四列静态表格（编号/结论/证据/状态）。"""
-    elems = []
-    cur_y = float(y)
-    if n.get("title"):
-        elems.append(_line("ev-t", [x, cur_y, w, 22], n["title"],
-                           font_size=14, color=c["text_primary"], bold=True,
-                           align=("left", "middle")))
-        cur_y += 28
-    col_w = [w * 0.12, w * 0.36, w * 0.40, w * 0.12]
-    headers = ["编号", "结论", "证据", "状态"]
-    row_h = 24.0
-    hx = x
-    for i, hd in enumerate(headers):
-        elems.append(shape(f"ev-h{i}", [hx, cur_y, col_w[i], row_h], "rect",
-                           fill=c["bg_muted"],
-                           border={"style": "solid", "width": 1.0,
-                                   "color": c["border"]}))
-        elems.append(_line(f"ev-ht{i}", [hx + 6, cur_y + 4, col_w[i] - 12, 16],
-                           hd, font_size=11, color=c["text_primary"], bold=True,
-                           align=("left", "middle")))
-        hx += col_w[i]
-    cur_y += row_h
-    for ri, it in enumerate(n["items"]):
-        vals = [it["num"] or "—", it["conclusion"],
-                it["evidence"], it["status"] or "—"]
-        hx = x
-        for ci, v in enumerate(vals):
-            elems.append(shape(f"ev-r{ri}-{ci}", [hx, cur_y, col_w[ci], row_h],
-                               "rect", fill=c["card"],
-                               border={"style": "solid", "width": 1.0,
-                                       "color": c["border"]}))
-            elems.append(_line(f"ev-rt{ri}-{ci}",
-                               [hx + 6, cur_y + 4, col_w[ci] - 12, 16],
-                               v, font_size=10, color=c["text_secondary"],
-                               align=("left", "middle")))
-            hx += col_w[ci]
-        cur_y += row_h
-    return elems, cur_y - y
-
-
-def emit_risk_register_pptd(n, x, y, w, c):
-    """risk_register 风险登记（B-4）：四列静态表格（风险/等级/状态/应对）。"""
-    elems = []
-    cur_y = float(y)
-    if n.get("title"):
-        elems.append(_line("rk-t", [x, cur_y, w, 22], n["title"],
-                           font_size=14, color=c["text_primary"], bold=True,
-                           align=("left", "middle")))
-        cur_y += 28
-    col_w = [w * 0.30, w * 0.10, w * 0.18, w * 0.42]
-    headers = ["风险", "等级", "状态", "应对"]
-    row_h = 24.0
-    hx = x
-    for i, hd in enumerate(headers):
-        elems.append(shape(f"rk-h{i}", [hx, cur_y, col_w[i], row_h], "rect",
-                           fill=c["bg_muted"],
-                           border={"style": "solid", "width": 1.0,
-                                   "color": c["border"]}))
-        elems.append(_line(f"rk-ht{i}", [hx + 6, cur_y + 4, col_w[i] - 12, 16],
-                           hd, font_size=11, color=c["text_primary"], bold=True,
-                           align=("left", "middle")))
-        hx += col_w[i]
-    cur_y += row_h
-    for ri, it in enumerate(n["items"]):
-        vals = [it["risk"], it["level"] or "—",
-                it["status"] or "—", it["response"]]
-        hx = x
-        for ci, v in enumerate(vals):
-            elems.append(shape(f"rk-r{ri}-{ci}", [hx, cur_y, col_w[ci], row_h],
-                               "rect", fill=c["card"],
-                               border={"style": "solid", "width": 1.0,
-                                       "color": c["border"]}))
-            elems.append(_line(f"rk-rt{ri}-{ci}",
-                               [hx + 6, cur_y + 4, col_w[ci] - 12, 16],
-                               v, font_size=10, color=c["text_secondary"],
-                               align=("left", "middle")))
-            hx += col_w[ci]
-        cur_y += row_h
-    return elems, cur_y - y
-
-
-def emit_raci_matrix_pptd(n, x, y, w, c):
-    """raci_matrix 角色责任矩阵（B-5）：动态列矩阵（任务 + 角色列）。"""
-    elems = []
-    cur_y = float(y)
-    if n.get("title"):
-        elems.append(_line("rc-t", [x, cur_y, w, 22], n["title"],
-                           font_size=14, color=c["text_primary"], bold=True,
-                           align=("left", "middle")))
-        cur_y += 28
-    roles = n["roles"]
-    if not roles or not n["tasks"]:
-        return elems, cur_y - y
-    task_w = w * 0.24
-    role_w = (w - task_w) / len(roles)
-    row_h = 24.0
-    hx = x
-    elems.append(shape("rc-h0", [hx, cur_y, task_w, row_h], "rect",
-                       fill=c["bg_muted"],
-                       border={"style": "solid", "width": 1.0,
-                               "color": c["border"]}))
-    elems.append(_line("rc-ht0", [hx + 6, cur_y + 4, task_w - 12, 16],
-                       "任务", font_size=11, color=c["text_primary"], bold=True,
-                       align=("left", "middle")))
-    hx += task_w
-    for i, r in enumerate(roles):
-        elems.append(shape(f"rc-h{i + 1}", [hx, cur_y, role_w, row_h], "rect",
-                           fill=c["bg_muted"],
-                           border={"style": "solid", "width": 1.0,
-                                   "color": c["border"]}))
-        elems.append(_line(f"rc-ht{i + 1}", [hx + 6, cur_y + 4, role_w - 12, 16],
-                           r, font_size=11, color=c["text_primary"], bold=True,
-                           align=("left", "middle")))
-        hx += role_w
-    cur_y += row_h
-    for ri, t in enumerate(n["tasks"]):
-        hx = x
-        elems.append(shape(f"rc-r{ri}-0", [hx, cur_y, task_w, row_h], "rect",
-                           fill=c["card"],
-                           border={"style": "solid", "width": 1.0,
-                                   "color": c["border"]}))
-        elems.append(_line(f"rc-rt{ri}-0", [hx + 6, cur_y + 4, task_w - 12, 16],
-                           t["task"], font_size=10, color=c["text_secondary"],
-                           align=("left", "middle")))
-        hx += task_w
-        for ci, r in enumerate(roles):
-            v = t["cells"].get(r, "")
-            elems.append(shape(f"rc-r{ri}-{ci + 1}", [hx, cur_y, role_w, row_h],
-                               "rect", fill=c["card"],
-                               border={"style": "solid", "width": 1.0,
-                                       "color": c["border"]}))
-            elems.append(_line(f"rc-rt{ri}-{ci + 1}",
-                               [hx + 6, cur_y + 4, role_w - 12, 16],
-                               v, font_size=10, color=c["text_secondary"],
-                               align=("left", "middle")))
-            hx += role_w
-        cur_y += row_h
-    return elems, cur_y - y
-
-
-def emit_decision_board_pptd(n, x, y, w, c):
-    """decision_board 决策面板（B-6）：方案卡 + 推荐横幅 + 下一步。"""
-    elems = []
-    cur_y = float(y)
-    if n.get("title"):
-        elems.append(_line("db-t", [x, cur_y, w, 22], n["title"],
-                           font_size=14, color=c["text_primary"], bold=True,
-                           align=("left", "middle")))
-        cur_y += 28
-    opts = n["options"]
-    if opts:
-        n_cols = min(3, len(opts))
-        gap = 12.0
-        cw = (w - gap * (n_cols - 1)) / n_cols
-        card_h = 84.0
-        for i, opt in enumerate(opts):
-            cx = x + (i % n_cols) * (cw + gap)
-            cy = cur_y + (i // n_cols) * (card_h + gap)
-            body = "\n".join([f"+ {p}" for p in opt["pros"]] +
-                             [f"- {c}" for c in opt["cons"]])
-            elems.append(shape(f"db-c{i}", [cx, cy, cw, card_h], "roundRect",
-                               fill=c["card"],
-                               border={"style": "solid", "width": 1.0,
-                                       "color": c["border"]}, adjustments=[8000]))
-            elems.append(_line(f"db-ct{i}", [cx + 10, cy + 6, cw - 20, 18],
-                               opt["name"], font_size=12, color=c["text_primary"],
-                               bold=True, align=("left", "middle")))
-            elems.append(text(f"db-cb{i}", [cx + 10, cy + 28, cw - 16, 52],
-                              body, font_size=10, color=c["text_secondary"],
-                              align=("left", "top")))
-        cur_y += ((len(opts) + n_cols - 1) // n_cols) * (card_h + gap)
-    if n.get("recommendation"):
-        elems.append(shape("db-r", [x, cur_y, w, 32], "roundRect",
-                           fill=c["primary_mid"], adjustments=[8000]))
-        elems.append(_line("db-rt", [x + 12, cur_y + 6, w - 24, 20],
-                           "推荐：" + n["recommendation"], font_size=12,
-                           color=theme.WHITE, bold=True, align=("left", "middle")))
-        cur_y += 40
-    if n.get("next_step"):
-        elems.append(_line("db-n", [x, cur_y, w, 18], n["next_step"],
-                           font_size=11, color=c["text_secondary"],
-                           align=("left", "middle")))
-        cur_y += 22
-    return elems, cur_y - y
-
-
-_CHROME_PPTD_EMITTERS = {
-    "hero": emit_hero_pptd,
-    "section_tag": emit_section_tag_pptd,
-    "page_header": emit_page_header_pptd,
-    "action_title": emit_action_title_pptd,
-    "stat_cards": emit_stat_cards_pptd,
-    "kpi_cards": emit_kpi_cards_pptd,
-    "pain_cards": emit_pain_cards_pptd,
-    "info_cards": emit_info_cards_pptd,
-    "legend_bar": emit_legend_bar_pptd,
-    "qa_block": emit_qa_block_pptd,
-    # D-093 view_cards（4 列视角卡 + 顶半圆顶）+ callout_block（底部说服区）
-    "view_cards": emit_view_cards_pptd,
-    "callout_block": emit_callout_block_pptd,
-    # v3.0 版式构件（P12/P14/P15/P16）
-    "toc_cards": emit_toc_cards_pptd,
-    "duo_compare": emit_duo_compare_pptd,
-    "pros_cons": emit_pros_cons_pptd,
-    "cta_block": emit_cta_block_pptd,
-    # 批次 B 组件（B-3 证据台账）
-    "evidence_ledger": emit_evidence_ledger_pptd,
-    "risk_register": emit_risk_register_pptd,
-    "raci_matrix": emit_raci_matrix_pptd,
-    "decision_board": emit_decision_board_pptd,
-}
+# ---- S8-B 棘轮拆小（2026-09-07）：chrome 构件发射器族迁 pptd_emit_chrome
+# （v2/v3 构件 + map/dispatch）与 pptd_emit_ext（批次 B/ui_mock/conclusion_band）。
+# 动因：本文件 1826 行 > 基线 cap 1606（只许拆小不许加码；b722f01 _spec_hex 先例）。
+# 本模块保留 _v2c/_line（flow_rows 仍消费）并经懒加载转发保持既有 import 面不变。
 
 
 def emit_chrome_pptd(elem_type, normalized, x, y, w, theme_name=None):
-    """v2 页面构件 pptd 总分派。返回 (元素列表, 消耗高度)。
+    """chrome 构件 pptd 总分派（实现已迁 pptd_emit_chrome，此处懒加载转发）。"""
+    from .pptd_emit_chrome import emit_chrome_pptd as _impl
+    return _impl(elem_type, normalized, x, y, w, theme_name)
 
-    topnav 不在此（§5.2 PPTD 端 DEGRADE，由 _pptd_gen 走 degrade_text）。
-    未知 type 返回 ([], 0)（调用方保证只传已声明 RENDER 的构件）。
-    """
-    emitter = _CHROME_PPTD_EMITTERS.get(elem_type)
-    if emitter is None:
-        return [], 0
-    return emitter(normalized, x, y, w, _v2c(theme_name))
+
+def emit_legend_bar_pptd(n, x, y, w, c):
+    """legend_bar 发射器（已迁 pptd_emit_chrome，懒加载转发；flow_rows 裸名消费）。"""
+    from .pptd_emit_chrome import emit_legend_bar_pptd as _impl
+    return _impl(n, x, y, w, c)
+
+
+# 模块属性懒加载转发（PEP 562）：pptd_emit.emit_xxx_pptd 等既有引用零改动
+_CHROME_REEXPORT = (
+    "emit_hero_pptd", "emit_section_tag_pptd", "emit_page_header_pptd",
+    "emit_action_title_pptd", "emit_stat_cards_pptd", "emit_kpi_cards_pptd",
+    "emit_pain_cards_pptd", "emit_info_cards_pptd", "emit_legend_bar_pptd",
+    "emit_qa_block_pptd", "emit_view_cards_pptd", "emit_callout_block_pptd",
+    "emit_toc_cards_pptd", "emit_duo_compare_pptd", "emit_pros_cons_pptd",
+    "emit_cta_block_pptd", "emit_sla_block_pptd", "emit_profile_card_pptd",
+    "emit_logo_wall_pptd", "emit_evidence_ledger_pptd", "emit_risk_register_pptd",
+    "emit_raci_matrix_pptd", "emit_decision_board_pptd", "emit_ui_mock_pptd",
+    "emit_conclusion_band_pptd", "_CHROME_PPTD_EMITTERS",
+)
+
+
+def __getattr__(name):
+    if name in _CHROME_REEXPORT:
+        from . import pptd_emit_chrome as _chrome
+        return getattr(_chrome, name)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
 
 
 # ---------------------------------------------------------------------------
@@ -1301,16 +529,17 @@ def render_flow_rows_pptd(elem, x, y, w, theme_name=None):
             cur_y += 14
             continue
         cards = [cd for cd in (row.get("cards", []) or []) if isinstance(cd, dict)]
-        if not cards:
-            continue
         dashed_opt = row.get("style") == "dashed_opt"
         has_label = bool(row.get("label"))
+        # 有标签无卡片的行：HTML 端保留（只渲染行标签），pptd 同步保留不整行丢弃
+        if not cards and not has_label:
+            continue
         left_w = label_w if has_label else (opt_w if dashed_opt else 0.0)
         # 行高 hug：行数估算复用 v1.2 单点 wrap_lines/stack_text_h，间距
-        # 用 spacing 常量（GAP_SM/INSET_X）——与 27 种图同一几何语义；
+        # 用 spacing 常量（GAP_SM/INSET_X）——与其他 diagram 同一几何语义；
         # badge 置卡内（不骑缝：骑缝 numt 必触发 pyz TextDrift，§10 检查 7）
         avail_cards_w = w - left_w - (len(cards) - 1) * (arrow_w + 2 * card_gap)
-        cw = avail_cards_w / len(cards)
+        cw = avail_cards_w / len(cards) if cards else 0.0
         card_hs = []
         card_metrics = []  # (title_h, desc_h, has_badge)
         for cd in cards:
@@ -1324,7 +553,7 @@ def render_flow_rows_pptd(elem, x, y, w, theme_name=None):
             desc_h = stack_text_h(dh_, 11) if dh_ else 0
             card_metrics.append((title_h, desc_h, has_badge))
             card_hs.append(10 + title_h + (GAP_SM + desc_h if dh_ else 0) + 8)
-        row_h = max(max(card_hs), 44.0)
+        row_h = max(max(card_hs), 44.0) if card_hs else 44.0
 
         # 底层：行级分组底色 / dashed_opt 虚线框（z-order 最底，先 emit）
         if dashed_opt:
@@ -1333,16 +562,25 @@ def render_flow_rows_pptd(elem, x, y, w, theme_name=None):
                                border={"style": "dash", "width": 1.5,
                                        "color": c["part_border"]},
                                adjustments=[6000]))
-        elif row.get("group") in ("blue", "teal"):
+        elif row.get("group") in ("blue", "teal", "red", "gray") and \
+                c.get(f"group_{row['group']}"):
             elems.append(shape(f"fr-bg{ri}", [x, cur_y, w, row_h], "roundRect",
                                fill=c[f"group_{row['group']}"],
                                adjustments=[6000]))
         # 行标签 / 可选项标签
         if has_label:
-            label_text = row["label"] + (f'\n{row["label_sub"]}'
-                                         if row.get("label_sub") else "")
+            sub = str(row.get("label_sub", "") or "")
+            label_text = row["label"] + (f'\n{sub}' if sub else "")
+            # label_sub 过长时窄栏换行溢出（示例项目 v4 实战暴露，§7.2-5）：
+            # 估算折行超 3 行自动降字号 12→10→9
+            lb_fs = 12
+            if sub:
+                while lb_fs > 9 and len(wrap_lines(label_text, lb_fs,
+                                                   label_w - 10)) > 3:
+                    lb_fs -= 1
+                lb_fs = min(lb_fs, 10)
             elems.append(text(f"fr-lb{ri}", [x + 6, cur_y, label_w - 10, row_h],
-                              label_text, font_size=12, color=c["primary"],
+                              label_text, font_size=lb_fs, color=c["primary"],
                               bold=True, align=("left", "middle")))
             elems.append(shape(f"fr-lbd{ri}",
                                [x + label_w - 4, cur_y + 8, 2, row_h - 16],

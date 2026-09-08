@@ -1,0 +1,35 @@
+template: 完整报价模板
+
+global_slots:
+  client: {cell: C2, sheet: 报价汇总}
+  contact: {cell: E2, sheet: 报价汇总}
+  date: {cell: G2, sheet: 报价汇总}
+  quote_number: {cell: C3, sheet: 报价汇总}
+  version: {cell: F3, sheet: 报价汇总}
+  valid_until: {cell: C4, sheet: 报价汇总}
+  payment_terms: {cell: F4, sheet: 报价汇总}
+
+sheets:
+  软件模块:
+    data_start: 5
+    data_end: 12
+    total_row: 13
+    summary_ref: {sheet: 报价汇总, cell: H7}
+
+  用户许可:
+    data_start: 5
+    data_end: 10
+    total_row: 11
+    summary_ref: {sheet: 报价汇总, cell: H8}
+
+  实施服务:
+    data_start: 5
+    data_end: 10
+    total_row: 11
+    summary_ref: {sheet: 报价汇总, cell: H9}
+
+  第三方产品:
+    data_start: 5
+    data_end: 8
+    total_row: 9
+    summary_ref: {sheet: 报价汇总, cell: H10}

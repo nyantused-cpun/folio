@@ -33,7 +33,7 @@ def _v2_themes_script():
     """v2 主题切换数据（§9.4）：两套主题 tokens 的 :root 变量块注入页面，
     editor.js 切换 = 替换动态样式表内容。非 v2 产物不注入（配色面板不变）。"""
     import json
-    from _renderer.diagram.theme import THEMES, theme_tokens_css, bridge_css
+    from _renderer.theme import THEMES, theme_tokens_css, bridge_css
     data = {name: theme_tokens_css(name) + "\n" + bridge_css(name)
             for name in THEMES}
     return ("<script>window.__V2_THEMES__ = "
@@ -80,9 +80,15 @@ def inject(html_path, inline=False):
 
     inline=False：复制 editor.js/css 到 HTML 同级 _assets/，外部引用
     inline=True：样式与脚本内联进 HTML（单文件无依赖）
+    幂等（P3）：检测到已注入标记（工具条 DOM）时直接跳过，重复执行
+    不再产出双份工具条/双份脚本引用。
     """
     with open(html_path, "r", encoding="utf-8") as f:
         html = f.read()
+
+    # 已注入标记位：工具条 DOM（inject 必写，id 为内部保留名，业务侧不会出现）
+    if 'id="__editor_toolbar"' in html:
+        return html_path
 
     html = _mark_editable(html)
 

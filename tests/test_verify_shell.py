@@ -67,3 +67,22 @@ class TestShellRepetition:
         msgs = check_shell_repetition(_spec(pages))
         # None 页被跳过，剩下 3 页连续同壳 → 仍触发
         assert len(msgs) == 1
+
+
+class TestDensityDegradedNote:
+    """#43：playwright 不可用时美学观察显式标注降级（曾静默过滤佯装通过）。"""
+
+    def test_degraded_note_when_playwright_unavailable(self, tmp_path, monkeypatch):
+        import _verify
+        from _density import check_density_html as _orig  # noqa: F401
+        html = tmp_path / "x.html"
+        html.write_text(
+            "<!DOCTYPE html><html><head><style>body{color:#333}</style></head>"
+            "<body><p>密度降级标注测试</p></body></html>" + "<div>" + "x" * 600 + "</div>", encoding="utf-8")
+        import _density
+        monkeypatch.setattr(_density, "check_density_html",
+                            lambda p, gate="verify": ["playwright 不可用，跳过密度检查"])
+        ok, msg = _verify.verify_html(str(html))
+        assert ok
+        assert "显式降级" in msg
+        assert "美学观察" in msg

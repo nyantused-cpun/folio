@@ -27,7 +27,8 @@ def target(monkeypatch, tmp_path):
     monkeypatch.setattr(_verify_hook, "write_log", lambda *a, **k: None)
     monkeypatch.setattr(_verify_hook, "update_task_history", lambda *a, **k: None)
     monkeypatch.setattr(_verify_hook, "_auto_snippet_capture", lambda *a, **k: None)
-    monkeypatch.setattr("_verify.auto_verify", lambda path, client_name="": (True, "L1 格式检查通过"))
+    monkeypatch.setattr("_verify.auto_verify",
+                        lambda path, client_name="", density_gate="verify": (True, "L1 格式检查通过"))
     return str(tmp_path / "out.html")
 
 
@@ -50,7 +51,7 @@ class TestSkippedFailsVerify:
 
     def test_l1_fail_plus_skipped_still_fails(self, target, monkeypatch):
         monkeypatch.setattr("_verify.auto_verify",
-                            lambda path, client_name="": (False, "HTML 缺少 title"))
+                            lambda path, client_name="", density_gate="verify": (False, "HTML 缺少 title"))
         report = RenderReport()
         report.skip("p3", 1, "tree", "HTML 端不支持")
 
@@ -101,5 +102,5 @@ class TestBackwardCompat:
 
     def test_no_report_l1_fail(self, target, monkeypatch):
         monkeypatch.setattr("_verify.auto_verify",
-                            lambda path, client_name="": (False, "HTML 缺少 title"))
+                            lambda path, client_name="", density_gate="verify": (False, "HTML 缺少 title"))
         assert _verify_hook.run_single(target) is False

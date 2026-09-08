@@ -39,8 +39,9 @@ def backup_before_generate(file_path, max_versions=5):
             old_path = os.path.join(versions_dir, old)
             try:
                 os.remove(old_path)
-            except Exception:
-                pass
+            except Exception as e:
+                # 清理失败不中止主流程（备份本身已落盘），中文告警留痕便于人工清理
+                print(f"  [备份] 旧版本清理失败（不影响本次备份）: {old_path} ({e})")
 
     print(f"  [备份] {basename} → .bak + .versions/")
     return bak_path

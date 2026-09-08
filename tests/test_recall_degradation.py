@@ -10,7 +10,24 @@
 monkeypatch 注意：recall() 内 `from _bm25 import query_bm25` 是函数内 import，
 必须打 _bm25.query_bm25 模块属性；_embedding_recall 是 _recall 模块全局引用，
 打 _recall._embedding_recall。
+
+I-2 起 recall() 默认启用查询改写；本组测试聚焦降级链路，autouse fixture
+把 rewrite_query 固定为恒等返回（确定性、离线，不依赖云端）。
 """
+
+import pytest
+
+
+@pytest.fixture(autouse=True)
+def _identity_rewrite(monkeypatch):
+    """查询改写固定为原样返回（confidence=1.0，走单路），隔离真实云端改写。"""
+    import _query_rewrite
+    monkeypatch.setattr(
+        _query_rewrite, "rewrite_query",
+        lambda input_text, client=None, current_date=None, decisions=None, config=None: {
+            "rewritten": input_text, "changes": [], "confidence": 1.0,
+            "degraded": [],
+        })
 
 
 def _known_config():
@@ -29,7 +46,8 @@ def _bm25_mock(results):
 
 
 def _emb_mock(results):
-    return lambda query_text, top_k=20, client_filter=None: results
+    # client_name 为 I-1 出域开关透传参数（真实 _embedding_recall 签名含之）
+    return lambda query_text, top_k=20, client_filter=None, client_name=None: results
 
 
 class TestRecallDegradation:
@@ -116,3 +134,35 @@ class TestRecallDegradation:
         item = results[0]
         assert item["mode"] == "Embedding"
         assert item["degraded"] is True
+
+    def test_graph_expansion_fully_retired(self, monkeypatch):
+        """M2-R2 图扩展移除 + L6 清偿（2026-09-07）：recall 签名不再含
+        use_graph_expansion，误传即 TypeError；结果不含 graph_expansions，
+        且模块不再暴露图扩展函数。"""
+        import inspect
+
+        import _bm25
+        import _recall
+        monkeypatch.setattr(_recall, "_RECALL_CONFIG", _known_config())
+        monkeypatch.setattr(_recall, "list_clients", lambda: ["测试客户"])
+        monkeypatch.setattr(_recall, "_embedding_recall", _emb_mock(None))
+        monkeypatch.setattr(
+            _bm25, "query_bm25",
+            _bm25_mock([("C:/repo/_knowledge/clients/测试客户/方案_v8.html#h1", 12.0)]))
+
+        assert "use_graph_expansion" not in inspect.signature(_recall.recall).parameters
+        try:
+            _recall.recall("zzT9query7788", rerank=False, return_results=True,
+                           use_embedding=True, use_graph_expansion=True)
+            raised = False
+        except TypeError:
+            raised = True
+        assert raised, "use_graph_expansion 已退役，误传应 TypeError"
+
+        results = _recall.recall(
+            "zzT9query7788", rerank=False, return_results=True, use_embedding=True)
+        assert results, "BM25 单路有结果时应返回结果列表"
+        assert all("graph_expansions" not in item for item in results)
+        assert results[0]["degraded"] is True  # embedding 缺路依旧标记降级
+        assert not hasattr(_recall, "_find_pivot_nodes")
+        assert not hasattr(_recall, "_expand_graph_2hop")

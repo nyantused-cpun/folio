@@ -34,16 +34,57 @@ def test_check1_layout_illegal_error():
     assert not ok and any("未知版式" in e for e in errors)
 
 
-def test_check1_missing_required_error():
-    """§13.1-4 验收场景：P05 缺 legend_bar → error。"""
-    ok, errors, _ = verify_spec_layout_data(_spec(
+def test_check1_missing_required_warning():
+    """P05 缺 legend_bar → warning（目录制：P01-P16 是选型提示，不再 error 阻断）。"""
+    ok, errors, warnings = verify_spec_layout_data(_spec(
         pages=[{"layout": "P05", "elements": [
             {"type": "section_tag", "label": "流程"},
             {"type": "action_title", "segments": [{"t": "合同闭环 8 步"}]},
             {"type": "diagram", "diagram_type": "flow", "subtype": "flow_rows",
              "title": "x", "rows": [{"cards": [{"label": "a"}]}]},
         ]}]))
-    assert not ok and any("legend_bar" in e for e in errors)
+    assert ok and errors == []
+    assert any("legend_bar" in w for w in warnings)
+
+
+def test_graphic_balance_warns_p05_missing_diagram():
+    """图形观察：P05/P06/P08/P09 缺 diagram 时给出明确观察提示。"""
+    _, _, warnings = verify_spec_layout_data(_spec(
+        pages=[{"layout": "P05", "elements": [
+            {"type": "section_tag", "label": "流程"},
+            {"type": "action_title", "segments": [{"t": "合同闭环 8 步"}]},
+            {"type": "cards", "cards": [{"title": "步骤", "body": "a"}]},
+        ]}]))
+    assert any("版式 P05 缺对应 diagram" in w for w in warnings)
+
+
+def test_graphic_balance_warns_text_only_keyword_page():
+    """标题含“流程/架构”信号、页面只有 text/table/cards → 观察建议改图。"""
+    _, _, warnings = verify_spec_layout_data(_spec(
+        pages=[{"title": "业务流程架构", "elements": [
+            {"type": "table", "headers": ["a"], "rows": [["b"]]},
+            {"type": "text", "content": "纯文字说明"},
+        ]}]))
+    assert any("疑似纯文字/卡片页" in w for w in warnings)
+
+
+def test_graphic_balance_warns_zero_diagram_deck():
+    """>=5 页且 0 diagram → 全篇纯文字稿观察。"""
+    pages = [{"title": f"第{i}页", "elements": [
+        {"type": "text", "content": "正文"}]} for i in range(5)]
+    _, _, warnings = verify_spec_layout_data(_spec(pages=pages))
+    assert any("全篇 5 页无 diagram" in w for w in warnings)
+
+
+def test_graphic_balance_quiet_when_diagram_present():
+    """有 diagram 的页面不应误报纯文字。"""
+    _, _, warnings = verify_spec_layout_data(_spec(
+        pages=[{"title": "业务流程架构", "elements": [
+            {"type": "diagram", "diagram_type": "flow", "subtype": "cross_system",
+             "title": "流程", "systems": [{"name": "OA"}],
+             "steps": [{"label": "①", "system": "OA"}]},
+        ]}]))
+    assert not any("疑似纯文字/卡片页" in w for w in warnings)
 
 
 def test_check2_theme_and_hex_error():
@@ -147,8 +188,10 @@ def test_auto_verify_yaml_integration(tmp_path):
             {"type": "diagram", "diagram_type": "flow", "subtype": "flow_rows",
              "title": "x", "rows": [{"cards": [{"label": "a"}]}]},
         ]}]), allow_unicode=True) + " " * 60, encoding="utf-8")
+    # 必需构件缺失已降为版式 warning：auto_verify 仍 PASS，但提示中带出 legend_bar
     ok, msg = auto_verify(str(bad))
-    assert not ok and "legend_bar" in msg
+    assert ok
+    assert "legend_bar" in msg
     # 非 spec 的 yml（无 pages）不受影响
     plain = tmp_path / "plain.yml"
     plain.write_text("key: value\n" + " " * 60, encoding="utf-8")

@@ -1,9 +1,10 @@
 # -*- coding: utf-8 -*-
-"""matrix 类渲染器：fit_gap / raci / crud / cbm / capability_map（5 种全部实现）。
+"""matrix 类渲染器：fit_gap / raci / crud / cbm / capability_map / quadrant /
+harvey_balls。
 
 fit_gap：三色徽章表格（绿 Fit / 橙 Partial / 红 Gap）。
 capability_map：业务能力点亮图（stats 条 + 图例 + CBM 分区 + L1 卡 + chip 三态
-+ 系统清单），chip 级三态 + 覆盖率条（v1.1 定稿，较首版的两点改进）。
++ 系统清单），chip 级三态 + 覆盖率条（v1.1 定稿，较示例集团原版的两点改进）。
 
 spec：
   fit_gap: {requirements: [], products: [], cells: [{req, product, match, note}]}
@@ -12,8 +13,10 @@ spec：
       items: [{name, status}]}]}], systems_inventory: [{name, pts, detail}]}
 """
 
-from . import theme
-from .theme import _esc
+import math
+
+from .. import theme
+from ..theme import _esc
 from . import pptd_emit as pe
 from ..spacing import INSET_X, INSET_Y
 
@@ -219,10 +222,13 @@ def _cmap_pptd(elem, x, y, w):
                              color=theme.BLUE, bold=True, align=("left", "middle")))
         cy += 24 + 8
         caps = sec.get("capabilities", []) or []
-        # 列数自适应（v2.1 紧凑化，防 9 卡 2 列超 PPT 页面空间）：
-        # 3 卡 -> 3 列整行（9 卡 3 行）；2 卡 -> 2 列；1 卡 -> 1 列
+        # 列数自适应（v2.1 紧凑化 → B6 #54 放宽）：≥3 卡 -> 3 列；2 卡 -> 2 列；
+        # 1 卡 -> 1 列。>3 卡原先固定压 2 列加行，多 section 叠加超预算
+        # （蓝海集团需求分析 v2 capability_map 1090>950 真实越界案）；现 3+1
+        # 两行，4 卡 section 高度不变（卡宽 590→386），5/7 卡段行数还降。
+        # （P3-2026-09-06 登记项：cols==3 放宽为 >=3，B6 Wave1 #54 落地。）
         n_caps = len(caps)
-        cols = 3 if n_caps == 3 else (2 if n_caps > 1 else 1)
+        cols = 3 if n_caps >= 3 else (2 if n_caps > 1 else 1)
         card_w = (1200 - 20 * (cols - 1)) / cols
         row_h = 0.0
         for ci, cap in enumerate(caps):
@@ -314,7 +320,7 @@ def _raci_html(elem):
                 tds.append(f'<td><span style="display:inline-block;width:24px;height:24px;line-height:20px;border-radius:50%;'
                            f'text-align:center;font-size:12px;font-weight:700;{badge[ty]}">{ty}</span></td>')
             else:
-                tds.append('<td style="color:{theme.BORDER_STRONG};">—</td>')
+                tds.append(f'<td style="color:{theme.BORDER_STRONG};">—</td>')
         rows.append("<tr>" + "".join(tds) + "</tr>")
     return (f'<table style="width:100%;border-collapse:collapse;font-size:13px;text-align:center;">'
             f'<thead><tr style="background:{theme.BLUE};color:{theme.WHITE};"><th style="text-align:left;width:28%;padding:6px 10px;">任务</th>{head}</tr></thead>'
@@ -337,7 +343,7 @@ def _crud_html(elem):
         tds = [f'<td style="text-align:left;font-weight:600;" data-editable="true">{_esc(d)}</td>']
         for e in entities:
             ops = cell_map.get((d, e), [])
-            tds.append("<td>" + ("".join(chip(o) for o in ops) if ops else '<span style="color:{theme.BORDER_STRONG};">—</span>') + "</td>")
+            tds.append("<td>" + ("".join(chip(o) for o in ops) if ops else f'<span style="color:{theme.BORDER_STRONG};">—</span>') + "</td>")
         rows.append("<tr>" + "".join(tds) + "</tr>")
     return (f'<table style="width:100%;border-collapse:collapse;font-size:13px;text-align:center;">'
             f'<thead><tr style="background:{theme.BLUE};color:{theme.WHITE};"><th style="text-align:left;width:24%;padding:6px 10px;">业务单据</th>{head}</tr></thead>'
@@ -600,11 +606,138 @@ def _quadrant_pptd(elem, x, y, w):
     return elems, sc.len(vb_h)
 
 
+# ---------------------------------------------------------------------------
+# harvey_balls（第 35 种）：哈维球对比表（供应商比选/能力成熟度评估）。
+# 防假精度是核心价值：五档圆（0/25/50/75/100%）只传达档位，不像 7/10 分数
+# 引发精度争论（StrategyU/Deckary 咨询版式惯例，审计报告 §3.2 P1）。
+#   rows: [行名]  columns: [列名]
+#   cells: [{row, col, value(0-4)}]；row/col 按名字匹配（与 fit_gap 同约定）
+#   可选 row_header（缺省「评估项」）；缺 cell = 未评估（灰 —）
+# ---------------------------------------------------------------------------
+
+_HARVEY_LABELS = ((4, "完全满足"), (3, "大部分"), (2, "部分"), (1, "少量"),
+                  (0, "不满足"))
+# pie preset 起止角（OOXML 1/60000° 原值，转换层 ÷100000 归一化）：
+# 起点恒 270°（12 点方向），顺时针扫 value/4×360°
+_HARVEY_ANGLES = {1: (16200000, 0), 2: (16200000, 5400000),
+                  3: (16200000, 10800000)}
+
+
+def _hb_cell_map(elem):
+    rows = [str(r) for r in elem.get("rows", []) or []]
+    cols = [str(c) for c in elem.get("columns", []) or []]
+    cell_map = {}
+    for c in elem.get("cells", []) or []:
+        if isinstance(c, dict) and c.get("value") is not None:
+            cell_map[(str(c.get("row", "")), str(c.get("col", "")))] = c.get("value")
+    return rows, cols, cell_map
+
+
+def _hb_svg_ball(value, size=20):
+    """哈维球 SVG：value 0-4 → 0/25/50/75/100% 扇形填充（12 点起顺时针）。"""
+    r = size / 2 - 1.5
+    cx = cy = size / 2
+    v = max(0, min(4, int(value)))
+    parts = [f'<circle cx="{cx}" cy="{cy}" r="{r}" fill="{theme.WHITE}" '
+             f'stroke="{theme.BLUE}" stroke-width="1.5"/>']
+    if v == 4:
+        parts.append(f'<circle cx="{cx}" cy="{cy}" r="{r}" fill="{theme.BLUE}"/>')
+    elif v > 0:
+        f = v / 4.0
+        theta = 2 * math.pi * f
+        ex = cx + r * math.sin(theta)
+        ey = cy - r * math.cos(theta)
+        large = 1 if f > 0.5 else 0
+        parts.append(f'<path d="M{cx},{cy} L{cx},{cy - r} '
+                     f'A{r},{r} 0 {large},1 {ex:.1f},{ey:.1f} Z" '
+                     f'fill="{theme.BLUE}"/>')
+    return (f'<svg width="{size}" height="{size}" viewBox="0 0 {size} {size}" '
+            f'style="display:inline-block;vertical-align:middle;">'
+            f'{"".join(parts)}</svg>')
+
+
+def _harvey_html(elem):
+    rows, cols, cell_map = _hb_cell_map(elem)
+    head = "".join(f'<th style="padding:6px 10px;text-align:center;">{_esc(c)}</th>'
+                   for c in cols)
+    body = []
+    for r in rows:
+        tds = [f'<td style="font-weight:600;" data-editable="true">{_esc(r)}</td>']
+        for c in cols:
+            v = cell_map.get((r, c))
+            if v is None:
+                tds.append(f'<td style="text-align:center;color:{theme.GRAY};">—</td>')
+            else:
+                tds.append(f'<td style="text-align:center;">{_hb_svg_ball(v)}</td>')
+        body.append("<tr>" + "".join(tds) + "</tr>")
+    legend = "".join(
+        f'<span style="margin-right:14px;font-size:12px;color:{theme.TEXT_SUB};">'
+        f'{_hb_svg_ball(v, 14)} {_esc(label)}</span>'
+        for v, label in _HARVEY_LABELS)
+    return (f'<table style="width:100%;border-collapse:collapse;font-size:13px;">'
+            f'<thead><tr style="background:{theme.BLUE};color:{theme.WHITE};">'
+            f'<th style="padding:6px 10px;text-align:left;width:30%;">'
+            f'{_esc(str(elem.get("row_header", "评估项")))}</th>{head}</tr></thead>'
+            f"<tbody>{''.join(body)}</tbody></table>"
+            f'<div style="margin-top:8px;">{legend}</div>'
+            f'<style>section.diagram[data-subtype="harvey_balls"] td{{padding:6px 10px;'
+            f'border-bottom:1px solid {theme.BORDER};}}</style>')
+
+
+def _harvey_pptd(elem, x, y, w):
+    """harvey_balls pptd：网格 = 文本 + 原生 pie/ellipse preset（不用 table——
+    单元格无法嵌形状）。行列几何与 HTML 端同源（30% 行标签列 + 等宽列）。"""
+    rows, cols, cell_map = _hb_cell_map(elem)
+    label_w = w * 0.30
+    col_w = (w - label_w) / max(1, len(cols))
+    header_h, row_h, ball = 26.0, 30.0, 16.0
+    elems = [pe.shape("hb-head-bg", [x, y, w, header_h], "rect",
+                      fill=theme.BLUE)]
+    elems.append(pe.text("hb-h0", [x + 8, y, label_w - 8, header_h],
+                         str(elem.get("row_header", "评估项")), font_size=12,
+                         color=theme.WHITE, bold=True, align=("left", "middle")))
+    for ci, c in enumerate(cols):
+        elems.append(pe.text(f"hb-h{ci + 1}",
+                             [x + label_w + ci * col_w, y, col_w, header_h],
+                             str(c), font_size=12, color=theme.WHITE, bold=True))
+    cy = y + header_h
+    for ri, r in enumerate(rows):
+        elems.append(pe.text(f"hb-r{ri}", [x + 8, cy, label_w - 8, row_h],
+                             str(r), font_size=12, color=theme.TEXT, bold=True,
+                             align=("left", "middle")))
+        for ci, c in enumerate(cols):
+            v = cell_map.get((r, c))
+            bx = x + label_w + ci * col_w + (col_w - ball) / 2
+            by = cy + (row_h - ball) / 2
+            if v is None:
+                elems.append(pe.text(f"hb-{ri}-{ci}", [bx, by, ball, ball],
+                                     "—", font_size=11, color=theme.GRAY))
+                continue
+            v = max(0, min(4, int(v)))
+            border = {"style": "solid", "width": 1.2, "color": theme.BLUE}
+            if v in (0, 4):
+                elems.append(pe.shape(f"hb-{ri}-{ci}", [bx, by, ball, ball],
+                                      "ellipse",
+                                      fill=theme.WHITE if v == 0 else theme.BLUE,
+                                      border=border))
+            else:
+                elems.append(pe.shape(f"hb-{ri}-{ci}", [bx, by, ball, ball],
+                                      "pie", fill=theme.BLUE,
+                                      adjustments=list(_HARVEY_ANGLES[v]),
+                                      border=border))
+        # 行间发丝线（图表去默认纪律：细横线分隔，无竖线无重框）
+        elems.append(pe.connector(f"hb-ln{ri}", x, cy + row_h, x + w, cy + row_h,
+                                  arrow=("none", "none"), color=theme.BORDER,
+                                  width=0.75))
+        cy += row_h
+    return elems, header_h + row_h * len(rows)
+
+
 def render_html(elem):
     st = elem.get("subtype", "")
     body = {"fit_gap": _fit_html, "capability_map": _cmap_html,
             "raci": _raci_html, "crud": _crud_html, "cbm": _cbm_html,
-            "quadrant": _quadrant_html}.get(st)
+            "quadrant": _quadrant_html, "harvey_balls": _harvey_html}.get(st)
     if not body:
         raise NotImplementedError(f"matrix/{st} 未实现")
     return theme.section_open(elem) + "\n" + body(elem) + "\n" + theme.SECTION_CLOSE
@@ -614,7 +747,7 @@ def render_pptd(elem, x, y, w):
     st = elem.get("subtype", "")
     fn = {"fit_gap": _fit_pptd, "capability_map": _cmap_pptd,
           "raci": _raci_pptd, "crud": _crud_pptd, "cbm": _cbm_pptd,
-          "quadrant": _quadrant_pptd}.get(st)
+          "quadrant": _quadrant_pptd, "harvey_balls": _harvey_pptd}.get(st)
     if not fn:
         raise NotImplementedError(f"matrix/{st} 未实现")
     return fn(elem, x, y, w)

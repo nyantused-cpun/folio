@@ -16,22 +16,22 @@ class TestParseSourceRefs:
         assert mg.parse_source_refs(None) == []
 
     def test_file_with_anchor(self):
-        refs = mg.parse_source_refs("file:output/蓝海集团/方案_v1.html#p3")
+        refs = mg.parse_source_refs("file:output/蓝海/方案_v1.html#p3")
         assert refs == [{
             "kind": "file",
-            "value": "output/蓝海集团/方案_v1.html",
+            "value": "output/蓝海/方案_v1.html",
             "anchor": "p3",
-            "raw": "file:output/蓝海集团/方案_v1.html#p3",
+            "raw": "file:output/蓝海/方案_v1.html#p3",
         }]
 
     def test_file_backslash_normalized(self):
-        refs = mg.parse_source_refs(r"file:output\蓝海集团\方案_v1.html")
-        assert refs[0]["value"] == "output/蓝海集团/方案_v1.html"
+        refs = mg.parse_source_refs(r"file:output\蓝海\方案_v1.html")
+        assert refs[0]["value"] == "output/蓝海/方案_v1.html"
 
     def test_file_no_anchor(self):
-        refs = mg.parse_source_refs("file:_knowledge/clients/蓝海集团/refs/x.xlsx")
+        refs = mg.parse_source_refs("file:_knowledge/clients/蓝海/refs/x.xlsx")
         assert refs[0]["anchor"] == ""
-        assert refs[0]["value"] == "_knowledge/clients/蓝海集团/refs/x.xlsx"
+        assert refs[0]["value"] == "_knowledge/clients/蓝海/refs/x.xlsx"
 
     def test_multiple_refs(self):
         refs = mg.parse_source_refs("file:a#p1;session:12;decision:3;user:微信确认")
@@ -293,8 +293,14 @@ class TestDetectConflict:
 # ============================================================
 class TestCountPendingConflicts:
     def test_count(self, tmp_path):
+        # #61 计数口径 = 未决「块」数（双形态判定）；每块至多 1 个 HTML 标记
+        #（_append_conflict_flag 幂等），按块与按标记在实际文件上等价
         p = tmp_path / "decisions.md"
-        p.write_text("<!-- conflict: pending -->\n<!-- conflict: pending -->\n", encoding="utf-8")
+        p.write_text(
+            "# 客户 决策记录\n"
+            "## [2026-08-17] 甲主题\n- **决策**: A\n<!-- conflict: pending -->\n"
+            "## [2026-08-18] 乙主题\n- **决策**: B\n<!-- conflict: pending -->\n",
+            encoding="utf-8")
         assert mg.count_pending_conflicts(str(p)) == 2
 
     def test_zero(self, tmp_path):
@@ -346,3 +352,19 @@ class TestScanMemoryHealth:
         assert r["evidence_sections"] == 0
         assert r["decision_entries"] == 0
         assert r["conflicts_pending"] == 0
+
+
+class TestExtractThemeTitle:
+    """P2-8（对抗审查补强）：三种标题格式 + 全角冒号分隔符。"""
+
+    def test_d_nnn_separators(self):
+        from _memory_guard import _extract_theme_title
+        assert _extract_theme_title("### D-001 · 以正式招标文件为铁律") == "以正式招标文件为铁律"
+        assert _extract_theme_title("### D-001：以正式招标文件为铁律") == "以正式招标文件为铁律"
+        assert _extract_theme_title("### D-001. 标题") == "标题"
+
+    def test_decision_number_and_date_formats(self):
+        from _memory_guard import _extract_theme_title
+        assert _extract_theme_title("## 决策 1：系统一体化切换") == "系统一体化切换"
+        assert _extract_theme_title("## [2026-07-17] 入库决策") == "入库决策"
+        assert _extract_theme_title("## 2026-07-17：入库决策") == "入库决策"

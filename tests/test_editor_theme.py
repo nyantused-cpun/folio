@@ -17,7 +17,7 @@ def _write_html(tmp_path, style_block=""):
 
 
 def test_v2_gets_theme_switcher(tmp_path):
-    from _renderer.diagram.theme import theme_tokens_css
+    from _renderer.theme import theme_tokens_css
     path = _write_html(tmp_path, theme_tokens_css("consulting_kpmg"))
     inject(path, inline=True)
     with open(path, encoding="utf-8") as f:
@@ -46,7 +46,7 @@ def test_legacy_doc_keeps_color_panel(tmp_path):
 
 def test_editable_marks_preserved(tmp_path):
     """v2 构件渲染期 data-editable 标记经 inject 后保留（幂等补标不破坏）。"""
-    from _renderer.diagram.theme import theme_tokens_css
+    from _renderer.theme import theme_tokens_css
     p = tmp_path / "doc.html"
     p.write_text(f"""<!DOCTYPE html>
 <html><head><meta charset="UTF-8"><style>{theme_tokens_css()}</style></head>

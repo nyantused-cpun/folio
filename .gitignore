@@ -26,8 +26,10 @@ _assets/
 .folio/
 .agents/
 .scratch/
+.trae/
 
 # 系统残留
+_tmp/
 _tmp_*/
 *.bak
 .DS_Store

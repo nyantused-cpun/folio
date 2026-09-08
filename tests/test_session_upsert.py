@@ -23,6 +23,10 @@ def _setup(tmp_path, monkeypatch):
     clients.mkdir()
     monkeypatch.setattr(_context, "CLIENTS_DIR", str(clients))
     monkeypatch.setattr(_aliases, "CLIENTS_DIR", str(clients))
+    # P0 决策单轨化：save_session 经 _theme_guard.append_session_decision 写
+    # decisions.md，必须一并重定向，否则污染真实 _knowledge/clients/
+    import _theme_guard
+    monkeypatch.setattr(_theme_guard, "CLIENTS_DIR", str(clients))
     monkeypatch.setattr(_session, "TASK_HISTORY", str(tmp_path / "task_history.json"))
 
     counters = {"embedding": [], "bm25": [], "graph": [], "cases": [], "outputs": []}
@@ -115,29 +119,54 @@ class TestSameIdUpsert:
         assert _count_marker_blocks(text, SID) == 1
         assert "输入B" in text and "输入A" not in text
         assert counters["embedding"] == [1]
-        # 终局 save 生成 session_notes
+        # P4：session_notes 默认关——全量 save 也不生成（--notes 才生成）
+        assert not glob.glob(str(clients / CLIENT / "session_notes_*.md"))
+
+    def test_notes_flag_generates_session_notes(self, tmp_path, monkeypatch):
+        clients, _ = _setup(tmp_path, monkeypatch)
+        _session.save_session(CLIENT, input_desc="输入B", decisions="决策B",
+                              dsh_session=SID, notes=True)
+        # --notes 显式开启才生成
         assert glob.glob(str(clients / CLIENT / "session_notes_*.md"))
 
 
 # ============================================================
-# 不传新参 = 现状 append（逐字节不变）
+# S8：无 dsh_session 时按日期/会话号 upsert（同一会话不追加双块）
 # ============================================================
-class TestLegacyAppendUnchanged:
-    def test_no_dsh_session_appends_two_blocks_and_entries(self, tmp_path, monkeypatch):
+class TestNonDshUpsertByDate:
+    def test_no_dsh_session_same_day_upserts_to_single_block(self, tmp_path, monkeypatch):
         clients, _ = _setup(tmp_path, monkeypatch)
         assert _session.save_session(CLIENT, input_desc="输入A", decisions="决策A") is True
         assert _session.save_session(CLIENT, input_desc="输入B", decisions="决策B") is True
 
         text = _context_text(clients, CLIENT)
-        # dsh_session=None 时 append 两块（现状不变）
-        assert text.count("### [") == 2
-        assert "第 1 次会话" in text and "第 2 次会话" in text
-        assert "<!-- dsh:session:" not in text  # 无标记
+        # 同一天重复 save -> context.md 仅一块，会话号保持第 1 次
+        assert text.count("### [") == 1
+        assert "第 1 次会话" in text
+        assert "输入B" in text and "输入A" not in text
+        assert "<!-- dsh:session:" not in text  # 无 DSH 标记
 
         entries = _task_entries(tmp_path)
-        assert len(entries) == 2
-        assert all("dsh_session" not in e for e in entries)
-        assert [e["session"] for e in entries] == [1, 2]
+        assert len(entries) == 1
+        assert entries[0]["session"] == 1
+        assert "dsh_session" not in entries[0]
+
+    def test_no_dsh_session_different_day_appends_new_block(self, tmp_path, monkeypatch):
+        clients, _ = _setup(tmp_path, monkeypatch)
+        _session.save_session(CLIENT, input_desc="输入A")
+
+        # 把 context.md 里的日期改成昨天，模拟次日 save
+        ctx_path = clients / CLIENT / "context.md"
+        text = ctx_path.read_text(encoding="utf-8")
+        from datetime import datetime, timedelta
+        yesterday = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
+        ctx_path.write_text(text.replace(datetime.now().strftime("%Y-%m-%d"), yesterday),
+                            encoding="utf-8")
+
+        _session.save_session(CLIENT, input_desc="输入B")
+        text = _context_text(clients, CLIENT)
+        assert text.count("### [") == 2
+        assert "第 1 次会话" in text and "第 2 次会话" in text
 
     def test_marker_only_written_when_dsh_session_given(self, tmp_path, monkeypatch):
         clients, _ = _setup(tmp_path, monkeypatch)
@@ -314,21 +343,30 @@ class TestUpsertMergeSemantics:
 
     def test_second_minimal_save_keeps_old_decisions_and_evidence(self, tmp_path, monkeypatch):
         clients, _ = _setup(tmp_path, monkeypatch)
-        # 第一次：富内容（决策 + 证据）
+        # 第一次：富内容（决策 + 证据）—— P0 后决策真源在 decisions.md
         assert _session.save_session(
             CLIENT, input_desc="输入A", decisions="决策A：重要口径", pending="待办A",
             evidence="file:不存在.md;user:测试", dsh_session=SID) is True
         text1 = _context_text(clients, CLIENT)
-        assert "决策A：重要口径" in text1
+        # context.md 决策段只留一行引用；全文在 decisions.md
+        assert "（见 decisions.md：会话决策" in text1
+        dec_text = (clients / CLIENT / "decisions.md").read_text(encoding="utf-8")
+        assert "决策A：重要口径" in dec_text
+        assert "**persistence: task**" in dec_text
         # 第二次：仅输入（模拟 light/dispose 空参数 upsert）
         assert _session.save_session(
             CLIENT, input_desc="输入B", dsh_session=SID) is True
         text2 = _context_text(clients, CLIENT)
-        # 合并语义：输入被更新，决策与待办保留
+        # 合并语义：输入被更新，决策引用与待办保留
         assert _count_marker_blocks(text2, SID) == 1
         assert "输入B" in text2
-        assert "决策A：重要口径" in text2
+        assert "（见 decisions.md：会话决策" in text2
         assert "待办A" in text2
+        # decisions.md 不因第二次空参数 save 重复追加（幂等）
+        from datetime import datetime as _dt
+        _today = _dt.now().strftime("%Y-%m-%d")
+        assert (clients / CLIENT / "decisions.md").read_text(encoding="utf-8").count(
+            "会话决策 " + _today + " #" + SID) == 1
 
     def test_second_minimal_save_keeps_old_evidence_section(self, tmp_path, monkeypatch):
         clients, _ = _setup(tmp_path, monkeypatch)
@@ -357,8 +395,14 @@ class TestUpsertMergeSemantics:
         _session.save_session(CLIENT, input_desc="输入A", decisions="决策A", dsh_session=SID)
         _session.save_session(CLIENT, input_desc="输入B", decisions="决策B", dsh_session=SID)
         text = _context_text(clients, CLIENT)
-        # 非空新值照常覆盖
-        assert "决策B" in text and "决策A" not in text
+        # P0 后 context.md 决策段是引用行；第二次 save 仍保持引用（不重复 append）
+        assert "（见 decisions.md：会话决策" in text
+        assert text.count("（见 decisions.md：会话决策") == 1
+        # decisions.md 只落一个 task 条目（幂等）
+        from datetime import datetime as _dt
+        _today = _dt.now().strftime("%Y-%m-%d")
+        dec_text = (clients / CLIENT / "decisions.md").read_text(encoding="utf-8")
+        assert dec_text.count(f"## [{_today}] 会话决策") == 1
 
     def test_merge_pure_function_unit(self):
         old_sections = {
@@ -402,3 +446,64 @@ class TestUpsertMergeTaskHistory:
         # 合并语义：新值空 -> 保留旧值（task_history 无 input_desc 键，只查决策/证据）
         assert e["decisions"] == "决策A"
         assert e["evidence"] == "user:测试"
+
+
+# ============================================================
+# I-6 写赢语义：同会话二次 save 传不同 decisions -> decisions.md upsert 后写赢
+# ============================================================
+class TestI6WriteWinsSemantics:
+    def test_same_id_different_decisions_upsert_to_latest(self, tmp_path, monkeypatch):
+        clients, _ = _setup(tmp_path, monkeypatch)
+        _session.save_session(CLIENT, input_desc="输入A", decisions="决策A：先写",
+                              dsh_session=SID)
+        _session.save_session(CLIENT, input_desc="输入B", decisions="决策B：后写覆盖",
+                              dsh_session=SID)
+        from datetime import datetime as _dt
+        _today = _dt.now().strftime("%Y-%m-%d")
+        dec_text = (clients / CLIENT / "decisions.md").read_text(encoding="utf-8")
+        # 单块不膨胀（I-6 后写赢替代旧"跳过"）
+        assert dec_text.count(f"## [{_today}] 会话决策") == 1
+        # 内容为最新决策，旧内容被覆盖
+        assert "决策B：后写覆盖" in dec_text
+        assert "决策A：先写" not in dec_text
+        # task_id 幂等判定仍在（同会话只一块）
+        assert f"task_id: {_today}#{SID}" in dec_text
+
+    def test_second_empty_decisions_keeps_previous(self, tmp_path, monkeypatch):
+        """空决策二次 save 不触发 append/update，决策真源保持首版（与 task_history 合并一致）。"""
+        clients, _ = _setup(tmp_path, monkeypatch)
+        _session.save_session(CLIENT, input_desc="输入A", decisions="决策A",
+                              dsh_session=SID)
+        _session.save_session(CLIENT, input_desc="输入B", dsh_session=SID)
+        dec_text = (clients / CLIENT / "decisions.md").read_text(encoding="utf-8")
+        assert "决策A" in dec_text
+        assert "决策B" not in dec_text
+
+    def test_repeated_overwrite_still_single_block_and_fields_kept(self, tmp_path, monkeypatch):
+        """三次 save 后写赢仍单块；upsert 只换「决策」行，persistence/scope/task_id 保留。"""
+        clients, _ = _setup(tmp_path, monkeypatch)
+        _session.save_session(CLIENT, input_desc="输入A", decisions="决策A", dsh_session=SID)
+        _session.save_session(CLIENT, input_desc="输入B", decisions="决策B", dsh_session=SID)
+        _session.save_session(CLIENT, input_desc="输入C", decisions="决策C", dsh_session=SID)
+        from datetime import datetime as _dt
+        _today = _dt.now().strftime("%Y-%m-%d")
+        dec_text = (clients / CLIENT / "decisions.md").read_text(encoding="utf-8")
+        assert dec_text.count(f"## [{_today}] 会话决策") == 1  # 单块不膨胀
+        assert "决策C" in dec_text
+        assert "决策A" not in dec_text and "决策B" not in dec_text
+        # 块内其他字段行原样保留（upsert 只替换「决策」行）
+        assert "**persistence: task**" in dec_text
+        assert "**scope: task**" in dec_text
+        assert f"task_id: {_today}#{SID}" in dec_text
+
+    def test_different_session_id_appends_separate_block(self, tmp_path, monkeypatch):
+        """不同 dsh_session（不同 task_id）不触发 upsert，正常追加第二块（不误伤）。"""
+        clients, _ = _setup(tmp_path, monkeypatch)
+        _session.save_session(CLIENT, input_desc="输入A", decisions="决策A", dsh_session=SID)
+        _session.save_session(CLIENT, input_desc="输入B", decisions="决策B",
+                              dsh_session="sess-dsh-002")
+        from datetime import datetime as _dt
+        _today = _dt.now().strftime("%Y-%m-%d")
+        dec_text = (clients / CLIENT / "decisions.md").read_text(encoding="utf-8")
+        assert dec_text.count(f"## [{_today}] 会话决策") == 2
+        assert "决策A" in dec_text and "决策B" in dec_text

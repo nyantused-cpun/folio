@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
 """召回模块：BM25 + Embedding 双路召回 + RRF 融合 + 关键词降级。
 
-从 _session.py 拆分（候选 4 · 模块化），依赖 _context + _graph。
+从 _session.py 拆分（候选 4 · 模块化），依赖 _context；
+read_chunk 按需使用 _graph._split_decision_blocks（及 _embed_index）。
 """
 import os
 import json
@@ -9,7 +10,6 @@ import re
 
 from _paths import SCRIPT_DIR
 from _context import list_clients, get_context_path
-from _graph import _expand_graph_2hop, _find_pivot_nodes
 
 
 __all__ = [
@@ -18,7 +18,7 @@ __all__ = [
     # 函数
     "_load_recall_config",
     "recall", "_keyword_fallback", "_embedding_recall",
-    "_rrf_fuse", "_dedup_by_doc",
+    "_rrf_fuse", "_dedup_by_doc", "_apply_bm25_seats",
     "_detect_client_from_path", "_read_snippet", "read_chunk",
 ]
 
@@ -36,6 +36,7 @@ def _load_recall_config():
         "embedding": {"threshold": 0.1, "top_k": 20},
         "bm25": {"top_k": 20},
         "rerank": {"top_k": 5},
+        "bm25_seat": {"enabled": True, "top_docs": 3, "min_score_ratio": 0.95},
     }
     try:
         import yaml
@@ -56,8 +57,14 @@ def _load_recall_config():
 _RECALL_CONFIG = _load_recall_config()
 
 
+# ---- 兼容 no-op 参数退役（W1 记忆收敛遗留 → 0907 计划 L6 清偿）----
+# use_graph_expansion 曾以签名占位兼容旧调用方（M2-R2 图扩展移除，R4 ablation
+# 零增量裁决）；2026-09-07 调用方（_cli_cmds_mem / _recall_eval / CLI 旗标 /
+# tests）全部清零，参数正式从签名删除。回退锚点：git 历史。
 def recall(input_text, force_keyword=False, client_name=None, rerank=True,
-           use_embedding=True, return_results=False, client_filter=None):
+           use_embedding=True, return_results=False, client_filter=None,
+           permanent_only=False, use_aliases=True,
+           use_query_rewrite=True):
     """召回相关历史项目。BM25 + Embedding 双路召回 + RRF 融合。
 
     client_name: 指定客户时用其别名展开查询，并在索引层按客户隔离搜索
@@ -66,6 +73,10 @@ def recall(input_text, force_keyword=False, client_name=None, rerank=True,
     return_results: True 时返回结构化结果列表（RAG 注入用），False 时只打印
     client_filter: True 时在索引层只搜索 client_name 客户的文档。
                    None（默认）时自动按是否有 client_name 决定。
+    permanent_only: True 时只保留 permanent 决策（task 决策排除；非决策结果不受影响）
+    use_aliases: True 时对指定客户展开别名（默认）；False 时不展开。
+    use_query_rewrite: True 时启用查询改写（T2，默认）；False 时不改写（A0 基线/评测用）。
+
 
     返回（return_results=True 时）：
         [{"client", "score", "path", "snippet", "parent_context",
@@ -73,15 +84,14 @@ def recall(input_text, force_keyword=False, client_name=None, rerank=True,
         source: "客户=X | 文档=Y"（现有 print 的来源标注数据化）
         mode: 实际生效链路（"BM25 + Embedding RRF" / "BM25" / "Embedding" / "关键词降级"）
         degraded: 任一降级路径触发即 True（请求 Embedding 无返回 / RRF 阈值 / 依赖缺失 / 关键词 fallback）
+        decision 结果额外带 persistence / scope（P6-2：缺失默认 permanent / client）
     """
     # T9：降级状态跟踪。任一降级路径（见下方分支）触发后置 True，
     # 结果 item 的 "degraded" 键随之置位，供 folio_recall / RAG 注入识别质量折扣。
     degraded = False
     if not force_keyword:
         try:
-            from _bm25 import query_bm25
-            # 别名展开（查询侧）
-            query_text = input_text
+            from _bm25 import query_bm25  # noqa: F401  # 可用性探测（调用在 query 路径）
             # P2-3: client_name 未指定时自动从查询文本检测
             if not client_name:
                 try:
@@ -94,11 +104,41 @@ def recall(input_text, force_keyword=False, client_name=None, rerank=True,
                     # P1-3：原静默 pass，改为打印警告（不影响主流程）
                     print(f"[warn] 客户自动检测失败: {e}")
 
-            if client_name:
+            # I-2 T2 查询改写：高置信单路（用改写查询），低置信双路（原 0.4 + 改写 0.6）
+            # 失败/禁用回退原查询，degraded 标记 REWRITE_FALLBACK
+            _queries = [(input_text, 1.0)]
+            _rewrite = None
+            _qr_cfg = _RECALL_CONFIG.get("query_rewrite", {}) or {}
+            if use_query_rewrite and _qr_cfg.get("enabled", True):
+                from _query_rewrite import rewrite_query
+                _rw = rewrite_query(input_text, client=client_name)
+                _rewrite = {
+                    "rewritten": _rw.get("rewritten", input_text),
+                    "confidence": _rw.get("confidence", 0.0),
+                    "changes": _rw.get("changes", []),
+                    "degraded": _rw.get("degraded", []),
+                }
+                if _rw.get("degraded"):
+                    degraded = True
+                _thr = _qr_cfg.get("confidence_threshold", 0.6)
+                if _rewrite["confidence"] >= _thr:
+                    _queries = [(_rewrite["rewritten"], 1.0)]
+                else:
+                    _queries = [(input_text, 0.4), (_rewrite["rewritten"], 0.6)]
+                    print(f"[query-rewrite] 低置信({_rewrite['confidence']:.2f}<{_thr}) "
+                          f"双路：原查询 0.4 + 改写 0.6")
+
+            # 别名展开（查询侧）——逐条查询
+            if client_name and use_aliases:
                 try:
-                    from _aliases import load_client, expand_text
+                    from _aliases import load_client, normalize_query_with_aliases
                     aliases = load_client(client_name)
-                    query_text = expand_text(input_text, aliases)
+                    _queries = [
+                        (normalize_query_with_aliases(
+                            q, client_name=client_name, aliases=aliases,
+                            use_aliases=True), w)
+                        for q, w in _queries
+                    ]
                 except Exception as e:
                     print(f"[warn] {client_name} 别名加载失败: {e}")
 
@@ -110,37 +150,50 @@ def recall(input_text, force_keyword=False, client_name=None, rerank=True,
             if index_filter:
                 print(f"[recall] 索引层按客户隔离: {index_filter}")
 
-            # BM25 + Embedding 并发检索（两路不相互依赖）
-            emb_results = None
-            if use_embedding:
-                from concurrent.futures import ThreadPoolExecutor
-                with ThreadPoolExecutor(max_workers=2) as pool:
-                    bm25_future = pool.submit(query_bm25, query_text, top_k=_RECALL_CONFIG["bm25"]["top_k"], client_filter=index_filter)
-                    emb_future = pool.submit(_embedding_recall, query_text, top_k=_RECALL_CONFIG["embedding"]["top_k"], client_filter=index_filter)
-                    bm25_results = bm25_future.result()
-                    emb_results = emb_future.result()
-            else:
-                bm25_results = query_bm25(query_text, top_k=_RECALL_CONFIG["bm25"]["top_k"], client_filter=index_filter)
+            # I-1 出域开关：客户 cloud_policy 覆盖调用方参数（recall 与云端层同源解析）
+            #   off → 仅 BM25+本地（熔断 Embedding/Chat/Rerank），degraded 标记质量折扣
+            #   embedding_only → 熔断 Chat/Rerank（Embedding 放行）
+            if client_name:
+                from _cloud_llm import resolve_cloud_policy as _rcp
+                _cloud_policy = _rcp(client_name)
+                if _cloud_policy == "off":
+                    if use_embedding or rerank:
+                        print(f"[cloud-policy] 客户 {client_name} 出域关闭（off）："
+                              f"仅 BM25+本地处理，云端 Embedding/Rerank 熔断")
+                    use_embedding = False
+                    rerank = False
+                    degraded = True
+                elif _cloud_policy == "embedding_only":
+                    if rerank:
+                        print(f"[cloud-policy] 客户 {client_name} 仅 embedding 出域"
+                              f"（embedding_only）：Chat/Rerank 熔断")
+                    rerank = False
 
-            # T9：降级检测 —— 请求了 Embedding 但该路无返回（内部降级：索引模型不一致 /
-            # 无 API key / 无索引 / 异常均以 None 返回）。双路缺一路 = 结果质量打折，必须可见。
-            if use_embedding and emb_results is None:
-                degraded = True
-            # 监工补充（对称规则，B 批报告指出）：BM25 路无返回（索引缺失/损坏
-            # return None）同样 = 缺一路，单腿 Embedding 结果也必须标降级。
-            if bm25_results is None:
-                degraded = True
+            # I-2 T7：逐查询检索（BM25 + Embedding 并发 → 硬隔离 → RRF 融合）
+            _groups = []
+            _last_s = None
+            cross_client_filtered = 0
+            mode = None
+            for _q, _w in _queries:
+                _s = _single_query_retrieve(
+                    _q, index_filter, use_embedding, client_name, _RECALL_CONFIG)
+                _last_s = _s
+                degraded = degraded or _s["degraded"]
+                cross_client_filtered += _s["cross_client_filtered"]
+                if _s["results"]:
+                    _groups.append((_s["results"], _w))
+                if mode is None and _s["mode"]:
+                    mode = _s["mode"]
+            if cross_client_filtered > 0:
+                print(f"[recall] 硬隔离: 丢弃 {cross_client_filtered} 条跨客户候选"
+                      f"（cross_client_filtered={cross_client_filtered}）")
 
-            # RRF 融合
-            if bm25_results is not None and emb_results:
-                results = _rrf_fuse(bm25_results, emb_results, k=_RECALL_CONFIG["rrf"]["k"])
-                mode = "BM25 + Embedding RRF"
-            elif bm25_results is not None:
-                results = bm25_results
-                mode = "BM25"
-            elif emb_results:
-                results = emb_results
-                mode = "Embedding"
+            # 合并：单查询直接用；多查询（低置信双路）按 0.4/0.6 加权 RRF 合并
+            if len(_groups) == 1:
+                results = _groups[0][0]
+            elif len(_groups) > 1:
+                results = _rrf_fuse_weighted(_groups, k=_RECALL_CONFIG["rrf"]["k"])
+                mode = f"{mode} (双查询)"
             else:
                 results = None
                 mode = None
@@ -151,67 +204,40 @@ def recall(input_text, force_keyword=False, client_name=None, rerank=True,
                 max_score = results[0][1] if results else 0
                 if max_score < _RECALL_CONFIG["rrf"]["fallback_threshold"]:
                     print(f"[RRF 最高分 {max_score:.4f} < 阈值 {_RECALL_CONFIG['rrf']['fallback_threshold']}, 降级到关键词模式]")
-                    return _keyword_fallback(input_text, return_results)
+                    return _keyword_fallback(input_text, return_results, permanent_only=permanent_only)
 
             if results:
+                # 铁律加权：decision 类型结果 RRF/BM25 分数 ×1.3（决策排前面）
+                boosted = []
+                for _p, _s in results:
+                    if "decisions.md" in str(_p):
+                        boosted.append((_p, _s * 1.3))
+                    else:
+                        boosted.append((_p, _s))
+                boosted.sort(key=lambda x: x[1], reverse=True)
+                results = boosted
+
                 # 去重：同一文档（path 去掉 #anchor）只保留最高分 chunk
                 dedup_cfg = _RECALL_CONFIG.get("dedup", {})
                 if dedup_cfg.get("enabled", True):
                     results = _dedup_by_doc(results,
                                             max_per_doc=dedup_cfg.get("max_per_doc", 1))
 
-                # 补全 client 和 snippet（两级检索：先读 2000 字 -> extract_attention 摘要）
-                # 改动7：图扩展召回 -- Pivot Search + BFS 2跳（每客户只算一次）
-                from _compress import extract_attention
+                # BM25 强信号保底席位（gq006 型融合挤压治理，消融裁决 2026-09-05）：
+                # 仅在单查询链路启用（按 _queries 判定——双查询即使一路空结果，
+                # 剩余单路也不是消融验证的单查询形态，保守跳过；P1-5）
+                _seat_cfg = _RECALL_CONFIG.get("bm25_seat", {})
+                if (_seat_cfg.get("enabled") and len(_queries) == 1
+                        and _last_s is not None):
+                    results = _apply_bm25_seats(
+                        results, _last_s.get("bm25_leg"),
+                        top_docs=_seat_cfg.get("top_docs", 3),
+                        min_score_ratio=_seat_cfg.get("min_score_ratio", 0.95))
 
-                # 图扩展：按客户缓存，避免同 query 重复计算
-                _graph_exp_cache = {}  # {client: [exp_lines]}
-                def _get_graph_expansions(cli):
-                    if cli in _graph_exp_cache:
-                        return _graph_exp_cache[cli]
-                    exps = []
-                    try:
-                        from _paths import client_graph_path
-                        gp = client_graph_path(cli)
-                        if os.path.exists(gp):
-                            with open(gp, "r", encoding="utf-8") as gf:
-                                g = json.load(gf)
-                            pivots = _find_pivot_nodes(input_text, g, top_k=2)
-                            seen_ids = set()
-                            for pv in pivots:
-                                n = pv["node"]
-                                if n["id"] in seen_ids:
-                                    continue
-                                seen_ids.add(n["id"])
-                                # local 层：命中节点本身，读 summary（实质内容）
-                                tag = {"output": "产出物", "decision": "决策"}.get(
-                                    n["type"], n["type"])
-                                s = (n.get("summary") or "").strip()
-                                exps.append(
-                                    f"  ├─ [命中·{tag}] {n['title']}"
-                                    + (f"：{s}" if s else "")
-                                )
-                                # global 层：沿 supersedes / revised_from 串脉络；
-                                # 其余边作普通关联，均读 summary
-                                for exp in _expand_graph_2hop(gp, n["id"]):
-                                    if exp["id"] in seen_ids:
-                                        continue
-                                    seen_ids.add(exp["id"])
-                                    es = (exp.get("summary") or "").strip()
-                                    if exp["edge_type"] in ("supersedes", "revised_from",
-                                                            "indirectly_revised_from"):
-                                        label = f"脉络·{exp['edge_type']}"
-                                    else:
-                                        label = f"关联·{exp['edge_type']}"
-                                    exps.append(
-                                        f"  ├─ [{label}] {exp['title']}"
-                                        + (f"：{es}" if es else "")
-                                    )
-                            exps = exps[:6]
-                    except Exception:
-                        pass
-                    _graph_exp_cache[cli] = exps
-                    return exps
+                # 补全 client 和 snippet（两级检索：先读 2000 字 -> extract_attention 摘要）
+                # M2-R2：图扩展已从召回链路移除（R4 ablation 证明零增量），
+                # 不再读取 client_graph.json，也不再向结果附加 graph_expansions。
+                from _compress import extract_attention
 
                 enriched = []
                 for path, score in results[:3]:  # top 3（从 5 降为 3）
@@ -232,15 +258,22 @@ def recall(input_text, force_keyword=False, client_name=None, rerank=True,
 
                     item = {"client": client, "score": score,
                              "path": path, "snippet": snippet,
-                             "parent_context": parent_context}
-
-                    # 图扩展：只附加到第一条结果（避免重复噪音）
-                    if not enriched and client:
-                        ge = _get_graph_expansions(client)
-                        if ge:
-                            item["graph_expansions"] = ge
+                             "parent_context": parent_context,
+                             "source_type": _classify_source_type(path)}
+                    if item["source_type"] == "decision":
+                        item["persistence"] = _extract_persistence(raw)
+                        item["scope"] = _extract_scope(raw)
 
                     enriched.append(item)
+
+                # P6-2：--permanent-only —— 只保留 permanent 决策（task 决策排除）
+                if permanent_only:
+                    before = len(enriched)
+                    enriched = [e for e in enriched
+                                if e.get("source_type") != "decision"
+                                or e.get("persistence") == "permanent"]
+                    if before != len(enriched):
+                        print(f"[recall] permanent-only 过滤: {before} -> {len(enriched)}")
 
                 # 客户过滤：只保留指定客户的结果
                 if client_filter and client_name:
@@ -258,7 +291,8 @@ def recall(input_text, force_keyword=False, client_name=None, rerank=True,
                             [(e["client"], e["score"], e["path"], e["snippet"])
                              for e in enriched],
                             top_k=_RECALL_CONFIG["rerank"]["top_k"],
-                            alpha=_RECALL_CONFIG["rerank"].get("alpha", 0.7)
+                            alpha=_RECALL_CONFIG["rerank"].get("alpha", 0.7),
+                            client_name=client_name
                         )
                         if ranked is not None:
                             print(f"[{mode}] BGE-Reranker 精排中...")
@@ -269,15 +303,22 @@ def recall(input_text, force_keyword=False, client_name=None, rerank=True,
                                 input_text,
                                 [(e["client"], e["score"], e["path"], e["snippet"])
                                  for e in enriched],
-                                top_k=_RECALL_CONFIG["rerank"]["top_k"]
+                                top_k=_RECALL_CONFIG["rerank"]["top_k"],
+                                client_name=client_name
                             )
                             mode += " + LLM rerank"
-                        # P0: rerank 后保留 parent_context
-                        _path_to_parent = {e["path"]: e.get("parent_context", "")
-                                           for e in enriched}
+                        # P0: rerank 后保留 parent_context + source_type + persistence
+                        _path_to_meta = {e["path"]: e for e in enriched}
                         enriched = [{"client": c, "score": s, "path": p, "snippet": sn,
-                                     "parent_context": _path_to_parent.get(p, "")}
+                                     "parent_context": _path_to_meta.get(p, {}).get("parent_context", ""),
+                                     "source_type": _path_to_meta.get(p, {}).get("source_type", "unknown")}
                                     for c, s, p, sn in ranked]
+                        for _item in enriched:
+                            _meta = _path_to_meta.get(_item["path"], {})
+                            if _meta.get("persistence"):
+                                _item["persistence"] = _meta["persistence"]
+                            if _meta.get("scope"):
+                                _item["scope"] = _meta["scope"]
                     except Exception as e:
                         print(f"[rerank] 失败: {e}，返回原序")
                         enriched = enriched[:3]
@@ -301,17 +342,37 @@ def recall(input_text, force_keyword=False, client_name=None, rerank=True,
                     print("[报价引用约束] 不同客户的价格严禁混用；如检索结果无精确匹配，需人工确认")
                 # 人读路径：降级时每条结果行前缀 [降级]（不再只在过程日志里闪一次）
                 _deg_prefix = "[降级] " if degraded else ""
+                _type_labels = {"decision": "铁律", "preference": "偏好", "session": "会话",
+                                "reference": "参考", "output": "产出", "method": "方法论",
+                                "unknown": "其他"}
                 for item in enriched:
+                    _tl = _type_labels.get(item.get("source_type", "unknown"), "其他")
+                    _pl = f"·{item.get('persistence', '')}" if item.get("persistence") else ""
                     print(f"\n{_deg_prefix}[{item['client']}] 分数: {item['score']:.3f}")
-                    print(f"{_deg_prefix}  路径: {item['path']}")
+                    print(f"{_deg_prefix}  [{_tl}{_pl}] 路径: {item['path']}")
                     print(f"{_deg_prefix}  来源: {item['source']}")
                     print(f"{_deg_prefix}  片段: {item['snippet']}")
                     # P0: 父级上下文
                     if item.get("parent_context"):
                         print(f"{_deg_prefix}  父级上下文: {item['parent_context']}")
-                    # 图扩展结果
-                    for exp_line in item.get("graph_expansions", []):
-                        print(exp_line)
+
+                # I-2 T7：查询 trace 落盘（失败不阻断召回）
+                try:
+                    from _query_trace import write_query_trace
+                    write_query_trace({
+                        "query": input_text,
+                        "client": client_name,
+                        "rewritten": (_rewrite or {}).get("rewritten"),
+                        "rewrite_confidence": (_rewrite or {}).get("confidence"),
+                        "rewrite_changes": (_rewrite or {}).get("changes", []),
+                        "rewrite_degraded": (_rewrite or {}).get("degraded", []),
+                        "mode": base_mode,
+                        "degraded": degraded,
+                        "n_results": len(enriched),
+                        "cross_client_filtered": cross_client_filtered,
+                    })
+                except Exception:
+                    pass
 
                 if return_results:
                     return enriched
@@ -321,12 +382,16 @@ def recall(input_text, force_keyword=False, client_name=None, rerank=True,
         except ImportError as e:
             print(f"[降级] 缺少依赖 {e.name}，使用关键词模式")
 
-    # 关键词 fallback
-    return _keyword_fallback(input_text, return_results)
+    # 关键词 fallback（P6-2：permanent_only 一并传导，降级路径不静默失效）
+    return _keyword_fallback(input_text, return_results, permanent_only=permanent_only)
 
 
-def _keyword_fallback(input_text, return_results=False):
-    """关键词 fallback 检索。优先 jieba 分词，缺失时降级为正则粗分（兼容中文）。"""
+def _keyword_fallback(input_text, return_results=False, permanent_only=False):
+    """关键词 fallback 检索。优先 jieba 分词，缺失时降级为正则粗分（兼容中文）。
+
+    permanent_only=True（P6-2）：只允许 permanent 决策块参与匹配/返回——
+    context.md/preferences.md 与 task 决策一律不参与，杜绝降级路径把临时决策当证据。
+    """
     try:
         from _bm25 import _tokenize
     except ImportError:
@@ -347,12 +412,38 @@ def _keyword_fallback(input_text, return_results=False):
 
     scores = {}
     content_cache = {}  # P1：缓存已读内容，避免结果输出时重复读磁盘
+    from _paths import CLIENTS_DIR
     for client in list_clients():
-        ctx_path = get_context_path(client)
-        if not os.path.exists(ctx_path):
-            continue
-        with open(ctx_path, "r", encoding="utf-8") as f:
-            content = f.read()
+        if permanent_only:
+            # P6-2：仅用 permanent 决策块参与匹配（跳过 context/preferences/task 决策）
+            dec_path = os.path.join(CLIENTS_DIR, client, "decisions.md")
+            ctx_path = dec_path
+            if not os.path.exists(dec_path):
+                continue
+            try:
+                from _embed_index import _split_decision_chunks, _decision_block_meta
+                dec_text = open(dec_path, "r", encoding="utf-8").read()
+                content_parts = []
+                for _i, blk in _split_decision_chunks(dec_text):
+                    if _decision_block_meta(blk)["persistence"] == "permanent":
+                        content_parts.append(blk)
+            except Exception:
+                continue
+            if not content_parts:
+                continue  # 该客户无 permanent 决策，不参与匹配
+        else:
+            ctx_path = get_context_path(client)
+            if not os.path.exists(ctx_path):
+                continue
+            content_parts = []
+            with open(ctx_path, "r", encoding="utf-8") as f:
+                content_parts.append(f.read())
+            for filename in ("decisions.md", "preferences.md"):
+                extra_path = os.path.join(CLIENTS_DIR, client, filename)
+                if os.path.exists(extra_path):
+                    with open(extra_path, "r", encoding="utf-8") as f:
+                        content_parts.append(f.read())
+        content = "\n".join(content_parts)
         content_lower = content.lower()
         score = sum(1 for w in words if w.lower() in content_lower)
         if score > 0:
@@ -373,24 +464,31 @@ def _keyword_fallback(input_text, return_results=False):
         print(f"[降级]   {content[:80]}")
         # T9：关键词降级链路固定携带 source/mode/degraded（关键词模式 = 质量打折）
         doc_name = os.path.basename(str(ctx_path).split("#")[0])
-        results.append({"client": client, "score": float(score),
-                         "path": ctx_path, "snippet": content[:200],
-                         "source": f"客户={client} | 文档={doc_name}",
-                         "mode": "关键词降级", "degraded": True})
+        item = {"client": client, "score": float(score),
+                "path": ctx_path, "snippet": content[:200],
+                "source": f"客户={client} | 文档={doc_name}",
+                "mode": "关键词降级", "degraded": True}
+        # P6-2：permanent-only 降级结果标注 decision 维度（render 展示 [permanent·scope]）
+        if permanent_only:
+            item["source_type"] = "decision"
+            item["persistence"] = "permanent"
+            item["scope"] = "client"
+        results.append(item)
     return results if return_results else None
 
 
-def _embedding_recall(query_text, top_k=20, client_filter=None):
+def _embedding_recall(query_text, top_k=20, client_filter=None, client_name=None):
     """Embedding 语义召回。返回 [(path, score), ...] 或 None。
 
     client_filter: 指定客户名时，只搜索该客户的文档（在相似度计算前过滤）。
+    client_name: 透传给云端 embed 供出域熔断（I-1）。
     存储格式：numpy .npy 矩阵 + JSON 路径映射（加载 ~10ms，余弦计算向量化）。
     """
     try:
         from _cloud_llm import embed
         import numpy as np
 
-        query_vec = embed(query_text)
+        query_vec = embed(query_text, client_name=client_name)
         if not query_vec:
             return None
 
@@ -424,11 +522,16 @@ def _embedding_recall(query_text, top_k=20, client_filter=None):
                   f"退回 BM25。运行 python _cli.py embed-rebuild --force 重建")
             return None
 
-        # 按客户过滤：numpy 布尔索引（精确匹配 clients/{客户名}/ 目录）
+        # 按客户过滤：优先用索引构建期写入的结构化 clients 字段，
+        # 旧索引缺失时回退到精确匹配 clients/{客户名}/ 目录。
         paths_arr = np.array(paths)
         if client_filter:
-            _client_pat = re.compile(rf'[/\\]clients[/\\]{re.escape(client_filter)}[/\\]')
-            mask = np.array([bool(_client_pat.search(p)) for p in paths])
+            stored_clients = index.get("clients")
+            if stored_clients and len(stored_clients) == len(paths):
+                mask = np.array([c == client_filter for c in stored_clients])
+            else:
+                _client_pat = re.compile(rf'[/\\]clients[/\\]{re.escape(client_filter)}[/\\]')
+                mask = np.array([bool(_client_pat.search(p)) for p in paths])
             if not mask.any():
                 return []
             matrix = matrix[mask]
@@ -461,6 +564,24 @@ def _embedding_recall(query_text, top_k=20, client_filter=None):
         return None
 
 
+def _hard_filter_client(results, client_filter):
+    """融合入口硬隔离：丢弃任何非当前 client 的候选，返回 (保留结果, 丢弃数)。
+
+    T4：即使 BM25/Embedding 内部已过滤，这里仍做第二道防线并计数，
+    cross_client_filtered > 0 时上层告警。
+    """
+    if not client_filter or not results:
+        return results, 0
+    kept = []
+    filtered = 0
+    for path, score in results:
+        if _detect_client_from_path(path) == client_filter:
+            kept.append((path, score))
+        else:
+            filtered += 1
+    return kept, filtered
+
+
 def _rrf_fuse(bm25_results, emb_results, k=10):
     """RRF (Reciprocal Rank Fusion) 融合两路检索结果。
 
@@ -474,6 +595,128 @@ def _rrf_fuse(bm25_results, emb_results, k=10):
     for rank, (path, _) in enumerate(emb_results):
         scores[path] = scores.get(path, 0) + 1.0 / (k + rank + 1)
     return sorted(scores.items(), key=lambda x: x[1], reverse=True)
+
+
+def _rrf_fuse_weighted(groups, k=10):
+    """对多组 (results, weight) 做加权 RRF 合并（I-2 T2 双路用）。
+
+    groups: [(results, weight), ...]，results 为已排序 [(path, score), ...]
+    RRF score = Σ weight * 1/(k + rank_i)
+    返回: [(path, rrf_score), ...] 按分数降序
+    """
+    scores = {}
+    for results, weight in groups:
+        for rank, (path, _) in enumerate(results):
+            scores[path] = scores.get(path, 0) + weight * 1.0 / (k + rank + 1)
+    return sorted(scores.items(), key=lambda x: x[1], reverse=True)
+
+
+def _single_query_retrieve(query_text, index_filter, use_embedding, client_name, config):
+    """单个查询检索：BM25(+Embedding) 并发 → 硬隔离 → RRF 融合（I-2 抽取）。
+
+    返回 dict: results / mode / degraded / cross_client_filtered / bm25_leg。
+    内部降级（缺路/无索引）返回 None 结果并标 degraded，与旧内联逻辑一致。
+    """
+    from _bm25 import query_bm25
+    emb_results = None
+    if use_embedding:
+        from concurrent.futures import ThreadPoolExecutor
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            bm25_future = pool.submit(
+                query_bm25, query_text, top_k=config["bm25"]["top_k"],
+                client_filter=index_filter)
+            emb_future = pool.submit(
+                _embedding_recall, query_text, top_k=config["embedding"]["top_k"],
+                client_filter=index_filter, client_name=client_name)
+            bm25_results = bm25_future.result()
+            emb_results = emb_future.result()
+    else:
+        bm25_results = query_bm25(
+            query_text, top_k=config["bm25"]["top_k"], client_filter=index_filter)
+
+    # T9：降级检测 —— 请求了 Embedding 但该路无返回 / BM25 路无返回 = 缺一路
+    degraded = False
+    if use_embedding and emb_results is None:
+        degraded = True
+    if bm25_results is None:
+        degraded = True
+
+    # T4 硬隔离：融合入口第二道防线，丢弃跨客户候选并计数
+    cross_client_filtered = 0
+    if index_filter:
+        bm25_results, _bm25_cross = _hard_filter_client(bm25_results, index_filter)
+        emb_results, _emb_cross = _hard_filter_client(emb_results, index_filter)
+        cross_client_filtered = _bm25_cross + _emb_cross
+
+    if bm25_results is not None and emb_results:
+        results = _rrf_fuse(bm25_results, emb_results, k=config["rrf"]["k"])
+        mode = "BM25 + Embedding RRF"
+    elif bm25_results is not None:
+        results = bm25_results
+        mode = "BM25"
+    elif emb_results:
+        results = emb_results
+        mode = "Embedding"
+    else:
+        results = None
+        mode = None
+    return {
+        "results": results,
+        "mode": mode,
+        "degraded": degraded,
+        "cross_client_filtered": cross_client_filtered,
+        "bm25_leg": bm25_results,  # BM25 强信号保底席位用（融合前原始排名）
+    }
+
+
+def _apply_bm25_seats(results, bm25_leg, top_docs=3, min_score_ratio=0.95, top_n=3):
+    """BM25 强信号保底席位（gq006 型融合挤压治理，golden 消融裁决 2026-09-05）。
+
+    门控：BM25 路第 top_docs 个文档的分数 ≥ min_score_ratio × top1 分数
+    （前 N 个文档近乎并列 = 词条级强匹配信号，embedding 路泛词文档不应
+    将其挤出最终 top_n）。门控通过时，保证这 N 个文档各占一个 top_n 席位：
+    缺席文档用其在 results 中的最高位 chunk 替换 top_n 内最低位非席位文档。
+    门控不满足 / 席位已在 top_n / 任一路为空时原样返回（零干预）。
+
+    results: [(path, score), ...] 已按分数降序（boost+dedup 后）
+    bm25_leg: [(path, score), ...] BM25 路原始排名（融合前）
+    """
+    if not results or not bm25_leg or top_docs < 1:
+        return results
+    seat_docs = []
+    for p, _s in bm25_leg:
+        d = str(p).split("#")[0]
+        if d not in seat_docs:
+            seat_docs.append(d)
+        if len(seat_docs) >= top_docs:
+            break
+    if len(seat_docs) < top_docs:
+        return results
+    top1_score = bm25_leg[0][1]
+    if top1_score <= 0:
+        return results
+    nth_score = next((s for p, s in bm25_leg
+                      if str(p).split("#")[0] == seat_docs[top_docs - 1]), None)
+    if nth_score is None or nth_score < min_score_ratio * top1_score:
+        return results
+    out = list(results)
+    for d in seat_docs:
+        topn_docs = {str(p).split("#")[0] for p, _s in out[:top_n]}
+        if d in topn_docs:
+            continue
+        best = next(((p, s) for p, s in out if str(p).split("#")[0] == d), None)
+        if best is None:
+            continue
+        for i in range(min(top_n, len(out)) - 1, -1, -1):
+            if str(out[i][0]).split("#")[0] not in seat_docs:
+                # 消融语义（simulate_seats.apply_seat）：原地替换、displaced 丢弃、
+                # 其余同 doc chunk 去重删除。曾把 displaced 插回 i+1——列表变长
+                # 会把其他席位文档挤 top_n 外（P1-4，与消融验证对象不一致）
+                out[i] = best
+                out = out[:i + 1] + [x for x in out[i + 1:]
+                                     if str(x[0]).split("#")[0] != d]
+                break
+    return out
 
 
 def _dedup_by_doc(results, max_per_doc=1):
@@ -499,12 +742,51 @@ def _detect_client_from_path(path):
     # D-121：docs 方法论白名单文档无客户归属，显示为「方法论」
     if "docs" in path and "clients" not in path:
         return "方法论"
-    # P1-11：按客户名长度降序匹配，避免 "蓝" 先于 "蓝海" 匹配（示例：客户名「蓝海集团」）
+    # P1-11：按客户名长度降序匹配，避免 "超" 先于 "蓝海" 匹配
     clients = sorted(list_clients(), key=len, reverse=True)
     for client in clients:
         if client in path:
             return client
     return "?"
+
+
+def _classify_source_type(path):
+    """判断召回结果的来源类型与可信度（供 RAG 注入与渲染标注）。
+
+    类型语义：
+      decision   — decisions.md 决策/铁律，最高可信度
+      preference — preferences.md 客户偏好，高可信度
+      session    — context.md 会话历史，中等可信度（可能过时）
+      reference  — refs/ 参考材料，原文引用
+      output     — outputs/ 历史产出，可能已过时
+      method     — docs/ 方法论文档，规范参考
+    """
+    path_str = str(path)
+    if "decisions.md" in path_str:
+        return "decision"
+    if "preferences.md" in path_str:
+        return "preference"
+    if "context.md" in path_str:
+        return "session"
+    if "refs" in path_str and "clients" in path_str:
+        return "reference"
+    if "outputs" in path_str or "output" in path_str:
+        return "output"
+    if "docs" in path_str:
+        return "method"
+    return "unknown"
+
+
+def _extract_persistence(raw):
+    """从决策块原始文本提取 persistence 字段（缺失默认 permanent，向后兼容）。"""
+    m = re.search(r'[-*]\s*\*{0,2}persistence\*{0,2}\s*[：:]\s*(\w+)', raw or "")
+    return m.group(1).strip().lower() if m else "permanent"
+
+
+def _extract_scope(raw):
+    """从决策块原始文本提取 scope 字段（缺失默认 client，向后兼容）。"""
+    m = re.search(r'[-*]\s*\*{0,2}scope\*{0,2}\s*[：:]\s*(\w+)', raw or "")
+    return m.group(1).strip().lower() if m else "client"
 
 
 def _read_snippet(path_spec, max_chars=200):
@@ -570,7 +852,47 @@ def _read_snippet(path_spec, max_chars=200):
         chunks = re.split(r'(?=\n##\s)', content)
         idx = int(anchor[1:]) if anchor[1:].isdigit() else 0
         if idx < len(chunks):
+            # P3：方法论 #h{i}#w{wi} 锚点——向量命中的是章内滑动窗口 wi，
+            # 忽略窗口号会把整章从头截断，rerank 文本与向量命中窗口不一致。
+            # 保守回退：窗口号缺失/非法/越界/还原失败一律退回整章旧行为，
+            # 不改变正常召回排序路径。
+            if len(parts) > 2 and parts[2].startswith("w") and parts[2][1:].isdigit():
+                try:
+                    from _embed_index import _sliding_window_chunks
+                    wins = _sliding_window_chunks(chunks[idx], chunk_size=800, overlap=200)
+                    w_idx = int(parts[2][1:])
+                    if 0 <= w_idx < len(wins):
+                        return wins[w_idx][:max_chars]
+                except Exception:
+                    pass
             return chunks[idx][:max_chars]
+    elif anchor.startswith("d"):
+        # decisions.md 决策块（P6-1：与切片侧共用 _split_decision_chunks，
+        # 跳过 conflict: pending / 已废弃 块；旧索引指向被跳过块时返回过滤说明）
+        try:
+            from _graph import _split_decision_blocks as _raw_split
+            from _embed_index import _split_decision_chunks, _DEPRECATED_RE, _sliding_window_chunks
+            idx = int(anchor[1:]) if anchor[1:].isdigit() else 0
+            # P2-10：#d{i}#w{j} 超长块滑动窗口子块——还原具体窗口，与切片侧一致
+            window_idx = None
+            if len(parts) > 2 and parts[2].startswith("w") and parts[2][1:].isdigit():
+                window_idx = int(parts[2][1:])
+            for c_idx, text in _split_decision_chunks(content):
+                if c_idx == idx:
+                    if window_idx is None:
+                        return text[:max_chars]
+                    wins = _sliding_window_chunks(text, chunk_size=1800, overlap=200)
+                    if 0 <= window_idx < len(wins):
+                        return wins[window_idx][:max_chars]
+                    return text[:max_chars]
+            raw_blocks = _raw_split(content)[1:]  # 跳过文件头
+            if 0 <= idx < len(raw_blocks):
+                raw = raw_blocks[idx]
+                if "<!-- conflict: pending -->" in raw or _DEPRECATED_RE.search(raw):
+                    return "(该决策条目已废弃或处于未决冲突，已从召回索引过滤)"
+        except Exception:
+            pass
+        return content[:max_chars]
     elif anchor.startswith("sheet"):
         # xlsx 结构化分块：#sheet{N}#row{M}
         # 用 _pipeline.read_xlsx_structured 重新读，定位到具体行
@@ -624,11 +946,27 @@ def read_chunk(path_spec, max_chars=10000):
     if len(parts) == 1:
         return content[:max_chars]
 
+    # I-3 批3 顺带项：analysis/ 三区表 chunk-read 与语料口径一致——只还原
+    # confirmed 条目（draft/开放问题/框架缺口不回读，防假设自我强化污染）
+    if "/analysis/" in fpath.replace("\\", "/"):
+        try:
+            from _embed_index import _parse_analysis_confirmed
+            _warns = []
+            _confirmed = _parse_analysis_confirmed(
+                content, _warns, os.path.basename(fpath))
+            if _confirmed is None:
+                return "(三区表格式损坏，fail-closed 不回读: " + "; ".join(_warns[:2]) + ")"
+            return ("\n".join(_confirmed)[:max_chars]
+                    or "(该三区表无 confirmed 条目，未确认内容不回读)")
+        except Exception:
+            pass
+
     anchor = parts[1]
 
-    # 数字格式锚点：复用 _read_snippet 逻辑
+    # 数字格式锚点：复用 _read_snippet 逻辑（含 decisions.md 的 #d{i} 块锚点）
     if (anchor.startswith("p") or anchor.startswith("session")
-            or anchor.startswith("h") or anchor.startswith("sheet")):
+            or anchor.startswith("h") or anchor.startswith("sheet")
+            or anchor.startswith("d")):
         return _read_snippet(path_spec, max_chars)
 
     # 标题文本锚点：按 ## [日期] 标题 或 ## 决策 N 标题 搜索

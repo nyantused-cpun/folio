@@ -12,21 +12,84 @@
   LLM_PROVIDER=deepseek|mimo|minimax（默认 deepseek）
   DEEPSEEK_API_KEY / MIMO_API_KEY / MINIMAX_API_KEY
   ZHIPU_API_KEY 或 GLM_API_KEY（智谱 Embedding）
+  DEBUG_REMOTE_ECHO=1（调试回显：HTTP 错误响应体 / host-mode prompt 全文；默认截断防泄密）
 """
 import os
 import json
-import time
 import re
-import hashlib
 import threading
 
-from _paths import USAGE_LOG, VISION_CACHE
+from _paths import USAGE_LOG, CLIENTS_DIR, SCRIPT_DIR
 
 try:
     from _cli_infra import _load_dotenv
     _load_dotenv()
 except ImportError:
     pass
+
+# --- #57/Q2 方案A（2026-09-06）：HTTP 传输层下沉 _cloud_transport（真源）。
+# 此处转载保 _cloud_llm._post_json 等别名可用：存量测试 patch("_cloud_llm._post_json")
+# 零强制迁移（chat/embed/rerank 等母文件内路径经本模块全局名解析，打点仍命中）。
+from _cloud_transport import _DEBUG_ECHO_ENV, _debug_echo_enabled, _post_json
+
+# ============================================================
+# I-1 出域开关：cloud_policy = full | embedding_only | off
+# ============================================================
+_CLOUD_POLICY_VALUES = ("full", "embedding_only", "off")
+
+
+def resolve_cloud_policy(client_name=None, clients_dir=None, config_path=None):
+    """客户出域策略：full（默认）| embedding_only | off。
+
+    优先级：客户目录 cloud_policy.yml > recall_config.yml 全局 > 默认 full。
+    非法值回退（打印警告）；client_name 为空恒返回 full（向后兼容，不限制
+    无客户上下文的调用方）。
+    """
+    if not client_name:
+        return "full"
+    clients_dir = clients_dir or CLIENTS_DIR
+    _cfg = os.path.join(clients_dir, client_name, "cloud_policy.yml")
+    if os.path.exists(_cfg):
+        try:
+            import yaml
+            with open(_cfg, encoding="utf-8") as f:
+                data = yaml.safe_load(f) or {}
+            v = data.get("cloud_policy", "")
+            if isinstance(v, bool):
+                # YAML 1.1 布尔：off/no/false → False；on/yes/true → True
+                v = "off" if v is False else "full"
+            else:
+                v = str(v).strip().lower()
+            if v in _CLOUD_POLICY_VALUES:
+                return v
+            print(f"[cloud-policy] 客户 {client_name} 配置值非法({v})，回退全局/默认")
+        except Exception as e:
+            print(f"[cloud-policy] 读取 {client_name} cloud_policy 失败: {e}")
+    try:
+        import yaml
+        with open(config_path or os.path.join(SCRIPT_DIR, "recall_config.yml"),
+                  encoding="utf-8") as f:
+            g = yaml.safe_load(f) or {}
+        v = g.get("cloud_policy", "full")
+        if isinstance(v, bool):
+            v = "off" if v is False else "full"
+        else:
+            v = str(v).strip().lower()
+        if v in _CLOUD_POLICY_VALUES:
+            return v
+    except Exception:
+        pass
+    return "full"
+
+
+def _policy_allows(client_name, kind):
+    """熔断判定：off 全熔断；embedding_only 熔断 chat/rerank。True=放行。"""
+    policy = resolve_cloud_policy(client_name)
+    if policy == "off":
+        return False
+    if policy == "embedding_only" and kind in ("chat", "rerank"):
+        return False
+    return True
 
 # ============================================================
 # Host 模式开关：LLM_MODE=host 时不调云端 API，改打印 prompt 由宿主 AI 执行
@@ -78,6 +141,15 @@ THINKING_PAYLOAD = {
     "deepseek": {"thinking": {"type": "enabled"}, "reasoning_effort": "max"},
 }
 
+# W1-1（#37，2026-09-06 B6 Wave1）：task 级 thinking 参数覆盖，chat() 内后写
+# 覆盖 THINKING_PAYLOAD 的 provider 全局默认。post_generate_review 是审查型
+# 任务：deepseek reasoning_effort=max 时思维链烧光 completion 配额（review
+# 初调撞墙加倍到 12000 仍 length 截断），降 medium 保审查通道可用；
+# 未列出的 task/provider 维持全局默认（质量优先不整体松动）。
+TASK_THINKING_OVERRIDE = {
+    "post_generate_review": {"deepseek": {"reasoning_effort": "medium"}},
+}
+
 # P0-1 max_tokens 自适应（2026-07-21）：glm-5.2 / deepseek 等推理模型的 reasoning
 # 计入 completion 配额，非 thinking 时代的 max_tokens 遗产会顶格截断 JSON
 THINKING_TOKEN_MULTIPLIER = 3   # thinking 开启时 max_tokens 余量倍率
@@ -88,6 +160,7 @@ MAX_TOKENS_RETRY_CEILING = 16000  # finish_reason=length 撞墙加倍重试的�
 # zhipu 端若拒绝超大 max_tokens，由 _post_json 现有 400 处理兜底（None 走 fallback）
 
 EMBEDDING_URL = "https://open.bigmodel.cn/api/paas/v4/embeddings"
+ZHIPU_EMBED_MODEL = "embedding-3-pro"
 
 # ============================================================
 # 能力边界动态策略（L3/L4/L5 三模式 + creative 创意模式）
@@ -233,41 +306,6 @@ def _log_usage(provider, model, prompt_tokens, completion_tokens, task="", cache
         pass
 
 
-def _post_json(url, headers, payload, timeout=30, max_retries=3):
-    """发 POST 请求，带指数退避重试。返回 (json_dict, http_status) 或 (None, status)。"""
-    try:
-        import requests
-    except ImportError:
-        print("[cloud_llm] 需要 requests 库：pip install requests")
-        return None, 0
-
-    last_status = 0
-    for attempt in range(max_retries):
-        try:
-            # 用 data + encode 确保 UTF-8 编码，避免 latin-1 问题
-            body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
-            resp = requests.post(url, headers=headers, data=body, timeout=timeout)
-            if resp.status_code == 200:
-                return resp.json(), 200
-            if resp.status_code == 429 or resp.status_code >= 500:
-                last_status = resp.status_code
-                wait = 2 ** attempt
-                print(f"[cloud_llm] HTTP {resp.status_code}，{wait}s 后重试 ({attempt+1}/{max_retries})")
-                time.sleep(wait)
-                continue
-            print(f"[cloud_llm] HTTP {resp.status_code}: {resp.text[:200]}")
-            return None, resp.status_code
-        except Exception as e:
-            if attempt < max_retries - 1:
-                wait = 2 ** attempt
-                print(f"[cloud_llm] 请求异常: {e}，{wait}s 后重试")
-                time.sleep(wait)
-            else:
-                print(f"[cloud_llm] 请求失败（已重试 {max_retries} 次）: {e}")
-                return None, 0
-    return None, last_status
-
-
 def _get_available_providers():
     """返回当前有 key 的 provider 列表（按 fallback 顺序）。"""
     available = []
@@ -278,15 +316,42 @@ def _get_available_providers():
     return available
 
 
+# #43（B6 Wave3）：provider 卫生熔断——key 存在但失效（HTTP 错误/持续空 content）
+# 时跨调用记忆失败连击，连败达阈值在进程内跳过该 provider，防每轮调用都先撞
+# 一次死链（附册 §1.2：无 key 本就零成本，防的是「key 存在但失效」）。成功清零；
+# 仅进程内生效，新进程重试给失效 key 恢复机会。
+_PROVIDER_FAIL_STREAK: dict = {}
+_PROVIDER_FAIL_MAX = 3
+
+
+def _fail_streak_bump(pname):
+    n = _PROVIDER_FAIL_STREAK.get(pname, 0) + 1
+    _PROVIDER_FAIL_STREAK[pname] = n
+    if n == _PROVIDER_FAIL_MAX:
+        print(f"[cloud_llm] {pname} 连续失败 {n} 次，本进程内卫生跳过"
+              f"（key 存在但疑似失效；新进程自动重试）")
+
+
 def host_prompt(task, prompt, system="", image_path=None):
-    """LLM_MODE=host 时打印推理请求，由宿主 AI 执行；返回 None 表示调用方应中止后续解析。"""
+    """LLM_MODE=host 时打印推理请求，由宿主 AI 执行；返回 None 表示调用方应中止后续解析。
+
+    安全（安全审查 P3）：prompt 常携带客户材料，默认只记长度+前 80 字符
+    （格式对齐 _cloud_llm_vision._host_prompt_brief），防材料全文落会话日志；
+    设 DEBUG_REMOTE_ECHO=1 时输出全文（调试用）。
+    """
     if LLM_MODE != "host":
         return None
     print("\n[host-mode] 以下推理交由宿主 AI 执行（LLM_MODE=host）：")
     print(f"[host-mode] task={task}" + (f" image={image_path}" if image_path else ""))
     if system:
         print(f"[host-mode system] {system}")
-    print(f"[host-mode prompt] {prompt}\n")
+    if _debug_echo_enabled():
+        print(f"[host-mode prompt] {prompt}\n")
+    else:
+        head = (prompt or "")[:80]
+        print(f"[host-mode prompt] 长度={len(prompt or '')} 字符"
+              f"（安全截断，仅前 80 字符预览）: {head}..."
+              f"（全文回显需显式开 {_DEBUG_ECHO_ENV}=1）\n")
     return None
 
 
@@ -308,16 +373,21 @@ def _is_length_truncated(data):
         return False
 
 
-def chat(prompt, system="", provider=None, model_type="chat",
-         temperature=0.1, max_tokens=2000, json_mode=False, task="", mode=None):
+def chat(prompt, system="", provider=None, model_type="chat", model=None,
+         temperature=0.1, max_tokens=2000, json_mode=False, task="", mode=None,
+         client_name=None):
     """统一 Chat 接口。返回文本或 None。
 
     provider: 强制指定 provider 名，None 时用环境变量 + fallback
     model_type: "chat"（快+便宜）或 "reasoning"（强推理）
+    model: 可选模型覆盖（F5-2 用于 review 独立模型；None 用 provider 默认）
     json_mode: True 时要求输出 JSON
     task: 用途标签（用于 token 追踪日志）
     mode: 能力边界模式（directed/collaborative/autonomous），None 时用传入的 temperature
+    client_name: 指定客户时按其 cloud_policy 熔断（off/embedding_only 返回 None）。
     """
+    if not _policy_allows(client_name, "chat"):
+        return None
     if LLM_MODE == "host":
         host_prompt(task, prompt, system)
         return None
@@ -331,15 +401,23 @@ def chat(prompt, system="", provider=None, model_type="chat",
     else:
         primary, _ = _get_provider()
         available = _get_available_providers()
-        # 主 provider 排在最前，其余按 fallback 顺序
-        providers_to_try = [primary] + [p for p in available if p != primary]
+        # #43 卫生熔断：连败达阈值的 provider 本进程内让位（显式指定 provider
+        # 时不拦，保留人工诊断通道）
+        available = [p for p in available
+                     if _PROVIDER_FAIL_STREAK.get(p, 0) < _PROVIDER_FAIL_MAX]
+        # primary 已熔断则直接从 fallback 起（不拦显式指定，见上）
+        if primary in available:
+            providers_to_try = [primary] + [p for p in available if p != primary]
+        else:
+            providers_to_try = available
 
     if not providers_to_try:
         print("[cloud_llm] 没有可用的 provider（未设置任何 API KEY）")
         return None
 
     last_error = None
-    for pname in providers_to_try:
+    explicit_model = model  # P1-16：显式模型覆盖仅首轮生效；fallback 各轮
+    for idx, pname in enumerate(providers_to_try):  # 必须用当轮 provider 自家模型名
         cfg = PROVIDERS.get(pname)
         if not cfg:
             continue
@@ -347,7 +425,8 @@ def chat(prompt, system="", provider=None, model_type="chat",
         if not key:
             continue
 
-        model = cfg.get(f"{model_type}_model", cfg["chat_model"])
+        model = explicit_model if (explicit_model and idx == 0) else cfg.get(
+            f"{model_type}_model", cfg["chat_model"])
 
         # 思考模式 provider 列表：这些 provider 会开启 thinking，并要求中文思考
         thinking_providers = {"deepseek", "zhipu", "minimax"}
@@ -387,6 +466,8 @@ def chat(prompt, system="", provider=None, model_type="chat",
         # minimax adaptive 不可控无条目，行为与原来一致）
         if use_thinking:
             payload.update(THINKING_PAYLOAD.get(pname, {}))
+            # W1-1（#37）：task 级覆盖后写生效，只收窄不放宽全局默认
+            payload.update(TASK_THINKING_OVERRIDE.get(task, {}).get(pname, {}))
 
         headers = {
             "Authorization": f"Bearer {key}",
@@ -415,7 +496,17 @@ def chat(prompt, system="", provider=None, model_type="chat",
 
         if data:
             try:
-                content = _strip_think(data["choices"][0]["message"]["content"])
+                choice = data["choices"][0]
+                content = _strip_think(choice.get("message", {}).get("content", ""))
+                # P0-1 补充（2026-09-06）：thinking provider 可能把 completion 配额
+                # 全烧在 reasoning_content 上，最终 content 为空/纯空白。空内容不是
+                # 可用回答，继续 fallback 到下一个 provider；否则 review 会误判为
+                # 「无可用 provider」并返回 ERROR（实为 deepseek 空 content 通道病）。
+                if not content or not content.strip():
+                    finish_reason = choice.get("finish_reason", "?")
+                    last_error = f"{pname} 返回空内容（finish_reason={finish_reason}）"
+                    _fail_streak_bump(pname)
+                    continue
                 # token 用量追踪
                 usage = data.get("usage", {})
                 # P1 优化：提取缓存命中 token（zhipu glm-5.2 隐式缓存）
@@ -439,11 +530,14 @@ def chat(prompt, system="", provider=None, model_type="chat",
                     cache_hit_tokens=cache_hit_tokens,
                     cache_miss_tokens=cache_miss_tokens,
                 )
+                _PROVIDER_FAIL_STREAK[pname] = 0  # #43：成功清零连击
                 return content
             except (KeyError, IndexError):
                 last_error = f"响应解析失败: {json.dumps(data, ensure_ascii=False)[:200]}"
+                _fail_streak_bump(pname)
         else:
             last_error = f"{pname} HTTP {status}"
+            _fail_streak_bump(pname)
 
     if last_error:
         print(f"[cloud_llm] 所有 provider 均失败: {last_error}")
@@ -451,7 +545,7 @@ def chat(prompt, system="", provider=None, model_type="chat",
 
 
 # ============================================================
-# Embedding：智谱 embedding-3 优先，SiliconFlow BGE-m3 兜底
+# Embedding：智谱 embedding-3-pro 优先，SiliconFlow BGE-m3 兜底
 # ============================================================
 SILICONFLOW_EMBED_URL = "https://api.siliconflow.cn/v1/embeddings"
 SILICONFLOW_EMBED_MODEL = "BAAI/bge-m3"
@@ -460,24 +554,32 @@ SILICONFLOW_EMBED_MODEL = "BAAI/bge-m3"
 def current_embed_provider():
     """返回当前可用的 embedding provider (name, model)；无可用 key 返回 None。
 
-    顺序：智谱 embedding-3（2048 维）→ SiliconFlow BGE-m3（1024 维）。
-    两个模型向量空间不兼容，切换 provider 后需 embed-rebuild --force 重建索引。
+    顺序：智谱 embedding-3-pro（4096 维，索引实测口径）→ SiliconFlow BGE-m3（1024 维）。
+    两个模型向量空间不兼容，切换 provider/模型后需 embed-rebuild --force 重建索引。
     """
     if os.environ.get("ZHIPU_API_KEY", "") or os.environ.get("GLM_API_KEY", ""):
-        return ("zhipu", "embedding-3")
+        return ("zhipu", ZHIPU_EMBED_MODEL)
     if os.environ.get("SILICONFLOW_API_KEY", ""):
         return ("siliconflow", SILICONFLOW_EMBED_MODEL)
     return None
 
 
-def embed(text, dimensions=None):
-    """单条 embedding，返回向量 list[float] 或 None。"""
-    vecs = embed_batch([text], dimensions=dimensions)
+def embed(text, dimensions=None, client_name=None):
+    """单条 embedding，返回向量 list[float] 或 None。
+
+    client_name: 指定客户时按其 cloud_policy 熔断（off 返回 None）。
+    """
+    vecs = embed_batch([text], dimensions=dimensions, client_name=client_name)
     return vecs[0] if vecs else None
 
 
-def embed_batch(texts, dimensions=None):
-    """批量 embedding。返回 list[list[float]] 或 None。"""
+def embed_batch(texts, dimensions=None, client_name=None):
+    """批量 embedding。返回 list[list[float]] 或 None。
+
+    client_name: 指定客户时按其 cloud_policy 熔断（off 返回 None）。
+    """
+    if not _policy_allows(client_name, "embed"):
+        return None
     provider = current_embed_provider()
     if not provider:
         return None
@@ -512,13 +614,16 @@ def embed_batch(texts, dimensions=None):
 # ============================================================
 # Rerank：LLM 精排（防幻觉版）
 # ============================================================
-def rerank(query, candidates, top_k=5, provider=None, mode="directed"):
+def rerank(query, candidates, top_k=5, provider=None, mode="directed", client_name=None):
     """LLM rerank。
 
     candidates: [(client, score, path, snippet), ...] 或 [(path, snippet), ...]
     返回 rerank 后的 top_k 列表（保持输入格式）。
     mode: 能力边界模式，默认 directed（rerank 需严格）
+    client_name: 指定客户时按其 cloud_policy 熔断（off/embedding_only 返回 None）。
     """
+    if not _policy_allows(client_name, "rerank"):
+        return None
     if not candidates:
         return candidates
 
@@ -580,7 +685,7 @@ def _siliconflow_key():
     return key
 
 
-def siliconflow_rerank(query, candidates, top_k=5, alpha=0.7):
+def siliconflow_rerank(query, candidates, top_k=5, alpha=0.7, client_name=None):
     """调用 Silicon Flow 的 BGE-reranker-v2-m3 精排。
 
     输入 candidates 与 rerank() 格式一致：
@@ -593,7 +698,10 @@ def siliconflow_rerank(query, candidates, top_k=5, alpha=0.7):
       - RRF 分数归一化到 [0,1]，避免量纲不一致
 
     Key 缺失或调用失败时返回 None，调用方应回退到 LLM rerank。
+    client_name: 指定客户时按其 cloud_policy 熔断（off/embedding_only 返回 None）。
     """
+    if not _policy_allows(client_name, "rerank"):
+        return None
     if not candidates:
         return candidates
 
@@ -774,14 +882,19 @@ def quality_check(proposal_text, provider=None, mode="collaborative"):
 # ============================================================
 # Token 用量查询
 # ============================================================
-def get_usage_summary():
-    """读取用量日志，返回汇总统计。"""
+def get_usage_summary(month=None):
+    """读取用量日志，返回汇总统计。
+
+    month: 可选 "YYYY-MM"，只统计该月内 record；None 表示全量（兼容旧调用）。
+    """
     if not os.path.exists(USAGE_LOG):
         return {"total_calls": 0, "total_tokens": 0, "by_provider": {}}
 
     by_provider = {}
     total_calls = 0
     total_tokens = 0
+    corrupted = 0  # 损坏行计数：单条跳过不中止全量（尾部统一告警）
+    month_prefix = f"{month}-" if month else None
 
     try:
         with open(USAGE_LOG, "r", encoding="utf-8") as f:
@@ -789,7 +902,19 @@ def get_usage_summary():
                 line = line.strip()
                 if not line:
                     continue
-                entry = json.loads(line)
+                # 单条损坏行跳过并计数，不中止全量统计（旧实现 try 包住整个
+                # 循环，一条坏行会静默吞掉其后全部记录，用量汇总整体失真）
+                try:
+                    entry = json.loads(line)
+                except ValueError:
+                    corrupted += 1
+                    continue
+                if not isinstance(entry, dict):
+                    corrupted += 1
+                    continue
+                ts = entry.get("time", "")
+                if month_prefix and not ts.startswith(month_prefix):
+                    continue
                 total_calls += 1
                 total_tokens += entry.get("total_tokens", 0)
                 p = entry.get("provider", "unknown")
@@ -799,6 +924,9 @@ def get_usage_summary():
                 by_provider[p]["tokens"] += entry.get("total_tokens", 0)
     except Exception:
         pass
+
+    if corrupted:
+        print(f"[cloud_llm] 用量日志有 {corrupted} 条损坏行，已跳过（不参与统计）")
 
     return {
         "total_calls": total_calls,
@@ -825,7 +953,7 @@ def check_providers():
     zhipu_key = os.environ.get("ZHIPU_API_KEY", "") or os.environ.get("GLM_API_KEY", "")
     if zhipu_key:
         v = embed("测试")
-        results["zhipu_embedding"] = (v is not None, "embedding-3")
+        results["zhipu_embedding"] = (v is not None, ZHIPU_EMBED_MODEL)
     else:
         results["zhipu_embedding"] = (False, "未设置 ZHIPU_API_KEY")
 
@@ -870,459 +998,18 @@ VISION_CACHE_MAX_ENTRIES = 200
 _VISION_CACHE_LOCK = threading.Lock()
 
 
-def _vision_cache_load():
-    """加载视觉识别缓存 dict；文件缺失/损坏返回空 dict（不阻断识图）。"""
-    try:
-        with open(VISION_CACHE, "r", encoding="utf-8") as f:
-            data = json.load(f)
-        return data if isinstance(data, dict) else {}
-    except (OSError, ValueError):
-        return {}
 
 
-def _vision_cache_save(cache):
-    """原子写回缓存（先临时文件再替换），失败不阻断识图。"""
-    try:
-        os.makedirs(os.path.dirname(VISION_CACHE), exist_ok=True)
-        tmp = VISION_CACHE + ".tmp"
-        with open(tmp, "w", encoding="utf-8") as f:
-            json.dump(cache, f, ensure_ascii=False)
-        os.replace(tmp, VISION_CACHE)
-    except OSError as e:
-        print(f"[vision] 缓存写入失败（不影响识图）: {e}")
 
-
-def _vision_cache_get(key):
-    """命中返回 desc 字符串，未命中返回 None。"""
-    entry = _vision_cache_load().get(key)
-    return entry.get("desc") if isinstance(entry, dict) else None
-
-
-def _vision_cache_put(key, desc):
-    """写入缓存并按 ts 做 LRU 淘汰，保留最新 VISION_CACHE_MAX_ENTRIES 条。
-
-    加锁串行 load-modify-save：read_batch 并行读图时多线程同时写入，
-    无锁会互相覆盖丢条目。
-    """
-    with _VISION_CACHE_LOCK:
-        cache = _vision_cache_load()
-        cache[key] = {"desc": desc, "ts": time.time()}
-        if len(cache) > VISION_CACHE_MAX_ENTRIES:
-            overflow = sorted(cache.items(), key=lambda kv: kv[1].get("ts", 0))[:len(cache) - VISION_CACHE_MAX_ENTRIES]
-            for old_key, _ in overflow:
-                cache.pop(old_key, None)
-        _vision_cache_save(cache)
-
-
-def _preprocess_image(raw, ext, mime):
-    """发送前压缩图片，降低上传体积（对抗网速，P-vision-4）。
-
-    - 长边缩到 1600px：截图/示意图识别足够，超高清对 OCR/理解无增益
-    - 位图转 JPEG 质量 85；透明 PNG 合成白底，防转 JPEG 变黑底
-    - Pillow 缺失或解码失败时原图直发（降级，不阻断识图）
-    返回 (bytes, mime)。
-    """
-    # svg（矢量）、heic（PIL 常缺解码器）、gif（动图）不压缩，原样直发
-    if ext in ("svg", "heic", "gif"):
-        return raw, mime
-    try:
-        from PIL import Image
-        import io as _io
-    except ImportError:
-        return raw, mime
-    try:
-        img = Image.open(_io.BytesIO(raw))
-        img.load()
-    except Exception:
-        return raw, mime
-
-    max_side = 1600
-    if max(img.size) > max_side:
-        ratio = max_side / max(img.size)
-        new_size = (max(1, int(img.size[0] * ratio)), max(1, int(img.size[1] * ratio)))
-        img = img.resize(new_size, Image.LANCZOS)
-    # 透明通道合成白底，再统一转 RGB（JPEG 不支持 alpha）
-    if img.mode in ("RGBA", "LA"):
-        bg = Image.new("RGB", img.size, (255, 255, 255))
-        bg.paste(img.convert("RGB"), mask=img.getchannel("A"))
-        img = bg
-    elif img.mode != "RGB":
-        img = img.convert("RGB")
-    buf = _io.BytesIO()
-    img.save(buf, format="JPEG", quality=85)
-    return buf.getvalue(), "jpeg"
-
-
-def vision_chat(prompt, image_path, provider="minimax", task="vision", cache_bust=False):
-    """视觉理解：把图片 + prompt 发给多模态模型，返回文本描述。
-
-    当 AGENT_MODEL_SUPPORTS_VISION=true 时跳过本调用：
-    表示当前运行的 AI agent 本身具备多模态能力，
-    应直接传图片而非先转文本。
-
-    cache_bust=True 时完全跳过结果缓存（读写都不走）：
-    A/B 双观察轮次需要同图多次独立采样，不能命中彼此的缓存。
-    """
-    if LLM_MODE == "host":
-        host_prompt(task, prompt, image_path=image_path)
-        return None
-    import base64
-    # P-vision-1：声明式跳过。当前的 AI agent 本身多模态时不必预转文本
-    if os.environ.get("AGENT_MODEL_SUPPORTS_VISION", "").lower() in ("1", "true", "yes"):
-        print("[vision] 已跳过：AGENT_MODEL_SUPPORTS_VISION=true（agent 自身多模态）")
-        return ""
-    cfg = PROVIDERS.get(provider, PROVIDERS["minimax"])
-    key = _get_api_key(cfg, provider)
-    if not key:
-        print(f"[vision] {provider} API key 未配置")
-        return ""
-
-    # P-vision-3：格式白名单 + 大小上限（base64 后约 1.33 倍，超限 API 直接拒）
-    ext = os.path.splitext(image_path)[1].lower().lstrip(".")
-    mime = {"jpg": "jpeg", "jpeg": "jpeg", "png": "png", "gif": "gif",
-            "bmp": "bmp", "webp": "webp", "svg": "svg+xml",
-            "tiff": "tiff", "tif": "tiff", "heic": "heic"}.get(ext)
-    if not mime:
-        print(f"[vision] 不支持的图片格式: .{ext}（支持 jpg/png/gif/bmp/webp/svg/tiff/heic）")
-        return ""
-
-    try:
-        with open(image_path, "rb") as f:
-            raw = f.read()
-    except OSError as e:
-        print(f"[vision] 读取图片失败: {e}")
-        return ""
-    # P-vision-5：结果缓存——同图（内容 hash 相同）跳过上传，直接返回上次描述
-    cache_key = hashlib.sha256(raw).hexdigest()
-    cached = None if cache_bust else _vision_cache_get(cache_key)
-    if cached is not None:
-        print(f"[vision] 命中缓存，跳过上传: {os.path.basename(image_path)}")
-        return cached
-    # P-vision-4：发送前压缩（大图缩到 1600px + 转 JPEG），体积降 80%+ 直接缓解网速影响
-    raw, mime = _preprocess_image(raw, ext, mime)
-    if len(raw) > VISION_MAX_IMAGE_BYTES:
-        print(f"[vision] 图片过大: {len(raw) / 1024 / 1024:.1f}MB > "
-              f"{VISION_MAX_IMAGE_BYTES / 1024 / 1024:.0f}MB，请压缩后再试")
-        return ""
-    b64 = base64.b64encode(raw).decode()
-
-    url = f"{cfg['base_url']}/chat/completions"
-    headers = {"Authorization": f"Bearer {key}", "Content-Type": "application/json"}
-    # P-vision-2：注入防幻觉 system 约束 + 独立 max_tokens 防截断
-    payload = {
-        "model": cfg.get("chat_model", "MiniMax-M3"),
-        "messages": [
-            {"role": "system", "content": VISION_SYSTEM},
-            {"role": "user", "content": [
-                {"type": "text", "text": prompt},
-                {"type": "image_url", "image_url": {"url": f"data:image/{mime};base64,{b64}"}}
-            ]},
-        ],
-        "temperature": 0.1,
-        "max_tokens": VISION_MAX_TOKENS,
-    }
-    # P-vision-4：超时随体积自适应，慢网 + 大图给更长窗口，避免 30s 误判失败
-    timeout = max(60, min(300, len(b64) // 20_000))
-    data, status = _post_json(url, headers, payload, timeout=timeout)
-    if not data:
-        print(f"[vision] 请求失败: HTTP {status or '无响应'}")
-        return ""
-    # P1-1（2026-07-21）：vision 计量接入 _log_usage，堵 CLI vision 黑洞。
-    # 各家 usage 结构不一，防御式提取，缺失记 0 不报错
-    usage = data.get("usage", {}) or {}
-    prompt_details = usage.get("prompt_tokens_details", {}) or {}
-    completion_details = usage.get("completion_tokens_details", {}) or {}
-    _log_usage(
-        provider, cfg.get("chat_model", "MiniMax-M3"),
-        usage.get("prompt_tokens", 0) or 0,
-        usage.get("completion_tokens", 0) or 0,
-        task=task,
-        reasoning_tokens=completion_details.get("reasoning_tokens", 0) or 0,
-        image_tokens=prompt_details.get("image_tokens", 0) or 0,
-    )
-    # P-vision-2：minimax 的推理在 message.reasoning_content 独立字段，正文在 content；
-    # 兼容某些 provider 把 reasoning 用 <think> 塞进 content 的情况
-    message = (data.get("choices", [{}]) or [{}])[0].get("message", {}) or {}
-    content = message.get("content", "")
-    if not content:
-        reasoning = message.get("reasoning_content", "")
-        print(f"[vision] 模型未返回正文（reasoning_content {len(reasoning)} 字符）")
-        return ""
-    result = _strip_think(content)
-    if result and not cache_bust:
-        _vision_cache_put(cache_key, result)
-    return result
-
-
-# ============================================================
-# A/B 双观察 + 分歧仲裁（vision-describe --rounds 2；参考 ds-vision-v3 证据契约）
-# ============================================================
-
-def _vision_conflicts(da, db):
-    """字段级差异清单：A/B 两份 JSON 的逐字段比较。
-
-    列表类字段按元素排序后比较（顺序无关），dict 类字段按键排序序列化比较，
-    缺失字段视为 None。返回有差异的字段名列表；两份输出完全一致时为空。
-    """
-    if not isinstance(da, dict) or not isinstance(db, dict):
-        return ["raw_output"]
-    diffs = []
-    for key in sorted(set(da) | set(db)):
-        va, vb = da.get(key), db.get(key)
-        if isinstance(va, list) or isinstance(vb, list):
-            sa = json.dumps(sorted(json.dumps(x, ensure_ascii=False)
-                                   for x in (va or [])), ensure_ascii=False)
-            sb = json.dumps(sorted(json.dumps(x, ensure_ascii=False)
-                                   for x in (vb or [])), ensure_ascii=False)
-        else:
-            sa = json.dumps(va, ensure_ascii=False, sort_keys=True)
-            sb = json.dumps(vb, ensure_ascii=False, sort_keys=True)
-        if sa != sb:
-            diffs.append(key)
-    return diffs
-
-
-# 仲裁 prompt：把 A/B 分歧点摆给第 3 次观察裁决，输出与主模板同构 + arbitration 字段
-VISION_ARBITRATION_SUFFIX = (
-    "\n以下是两次独立观察的输出，两份在字段 {diff_fields} 存在分歧。"
-    "请对照原图逐一裁决分歧，给出唯一的最终结论。\n"
-    "【观察 A】\n{a}\n\n【观察 B】\n{b}\n\n"
-    '只输出 JSON，不要输出任何 JSON 之外的文字或解释：'
-    '{"summary": "一段总述", "extracted_text": "图中全部文字原文摘录", '
-    '"objects": ["主要对象"], "layout": "版式结构", '
-    '"uncertain": ["不确定或无法辨认的内容"], '
-    '"evidence": {"visible_fact": ["图中直接可见、可逐字核验的事实"], '
-    '"image_candidate": ["基于视觉的推断性判断（需人工或二次核验）"], '
-    '"unknown": ["无法辨认或图中不存在、无法回答的项"]}, '
-    '"arbitration": {"conflicts": ["被裁决的分歧字段"], "ruling": "每个分歧的裁决一句话"}}'
+# === T9 拆分：子模块 re-export（调用方 import 路径不变）===
+# 【到期复审】下游（_cli/_cli_cmds_qa/_pipeline 等）仍经此处转载导入 vision/search
+# 符号，暂不可删；下游全部直连 _cloud_llm_vision/_cloud_llm_search 后应整体退役
+# （对齐 B4 theme 退役先例）。HTTP 真源已下沉 _cloud_transport，
+# 两子模块不再经母文件取 _post_json（mother→vision→mother 导入环已断）。
+from _cloud_llm_vision import (  # noqa: F401
+    vision_chat, vision_describe_ab,
+    _vision_cache_get, _vision_cache_load, _vision_cache_put,
 )
-
-
-def vision_describe_ab(prompt, image_path, provider="minimax", task="vision"):
-    """A/B 隔离双观察 + 分歧仲裁。
-
-    两次独立观察互不泄漏（cache_bust 绕过同图缓存）；若两份输出逐字段一致，
-    直接返回 A 并标 independent_ab_consistent；有分歧则第 3 次带分歧清单仲裁，
-    标 independent_ab_arbitration。
-
-    返回 (final_text, meta)：
-      - final_text：最终结论文本（一致= A 原文；分歧= 仲裁 JSON 文本）；失败时 None
-      - meta：{"verification_mode", "conflicts", "a": 解析后的A, "b": 解析后的B}
-        任一轮调用失败时 meta["failed_round"] 记录失败轮次，调用方降级处理。
-    """
-    text_a = vision_chat(prompt, image_path, provider=provider, task=task, cache_bust=True)
-    if not text_a:
-        return None, {"verification_mode": "ab_failed", "failed_round": "A", "conflicts": []}
-    text_b = vision_chat(prompt, image_path, provider=provider, task=task, cache_bust=True)
-    if not text_b:
-        return None, {"verification_mode": "ab_failed", "failed_round": "B", "conflicts": []}
-    da, db = _parse_json(text_a), _parse_json(text_b)
-    diffs = _vision_conflicts(da, db)
-    if not diffs:
-        # 一致：两份输出等价，A 原文作为最终结论（已含完整 JSON 结构）
-        return text_a, {"verification_mode": "independent_ab_consistent", "conflicts": [],
-                        "a": da, "b": db}
-    arb_prompt = prompt + VISION_ARBITRATION_SUFFIX.format(
-        diff_fields="、".join(diffs), a=text_a, b=text_b)
-    text_arb = vision_chat(arb_prompt, image_path, provider=provider, task=task, cache_bust=True)
-    if not text_arb:
-        return None, {"verification_mode": "ab_failed", "failed_round": "arbitration",
-                      "conflicts": diffs, "a": da, "b": db}
-    return text_arb, {"verification_mode": "independent_ab_arbitration", "conflicts": diffs,
-                      "a": da, "b": db}
-
-
-# ============================================================
-# 联网搜索：双引擎（Tavily 为主，字节搜索为辅）
-# ============================================================
-
-def _get_tavily_key():
-    key = os.environ.get("TAVILY_API_KEY", "").strip()
-    if not key or not key.isascii():
-        return None
-    return key
-
-
-def _get_volcengine_keys():
-    ak = os.environ.get("VOLCENGINE_ACCESS_KEY", "").strip()
-    sk = os.environ.get("VOLCENGINE_SECRET_KEY", "").strip()
-    api_key = os.environ.get("ASK_ECHO_SEARCH_INFINITY_API_KEY", "").strip()
-    return ak, sk, api_key
-
-
-def tavily_search(query, max_results=5):
-    """调用 Tavily 搜索 API（第一检索引擎）。
-    
-    返回: (results_list, http_status_code) 或 (None, status_code)
-    """
-    key = _get_tavily_key()
-    if not key:
-        print("[search] Tavily API key 未配置")
-        return None, 0
-
-    url = "https://api.tavily.com/search"
-    headers = {
-        "Authorization": f"Bearer {key}",
-        "Content-Type": "application/json",
-    }
-    payload = {
-        "query": query,
-        "max_results": max_results,
-        "search_depth": "advanced",
-        "include_answer": True,
-        "include_raw_content": False,
-    }
-
-    data, status = _post_json(url, headers, payload, timeout=30)
-    if not data:
-        print(f"[search] Tavily 请求失败: HTTP {status}")
-        return None, status
-
-    results = []
-    for r in data.get("results", []):
-        results.append({
-            "title": r.get("title", ""),
-            "url": r.get("url", ""),
-            "content": r.get("content", "") or r.get("raw_content", ""),
-            "score": r.get("score", 0),
-            "source": "tavily",
-        })
-    return results, status
-
-
-def byte_search(query, max_results=5):
-    """调用豆包搜索（火山引擎 Search Infinity，第二检索引擎）。
-
-    API 文档：https://www.volcengine.com/docs/87772/2272953
-    """
-    ak, sk, api_key = _get_volcengine_keys()
-
-    if not api_key and (not ak or not sk):
-        print("[search] 字节搜索 API key 未配置（需要 ASK_ECHO_SEARCH_INFINITY_API_KEY 或 VOLCENGINE_ACCESS_KEY/SECRET_KEY）")
-        return None
-
-    # API Key 接入（推荐）
-    if api_key:
-        url = "https://open.feedcoopapi.com/search_api/web_search"
-        headers = {
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {api_key}",
-        }
-        payload = {
-            "Query": query,
-            "SearchType": "web",
-            "Count": max_results,
-        }
-    # AK/SK 接入（TOP 网关）
-    else:
-        url = "https://mercury.volcengineapi.com?Action=WebSearch&Version=2025-01-01"
-        headers = {
-            "Content-Type": "application/json",
-            "X-Volcengine-Access-Key": ak,
-            "X-Volcengine-Secret-Key": sk,
-        }
-        payload = {
-            "Query": query,
-            "SearchType": "web",
-            "Count": max_results,
-        }
-
-    data, status = _post_json(url, headers, payload, timeout=30)
-    if not data:
-        print(f"[search] 字节搜索请求失败: HTTP {status}")
-        return None
-
-    # 检查 API 层错误
-    err = data.get("ResponseMetadata", {}).get("Error")
-    if err:
-        print(f"[search] 字节搜索 API 错误: {err.get('Code', '')} {err.get('Message', '')}")
-        return None
-
-    results = []
-    for r in data.get("Result", {}).get("WebResults", []):
-        results.append({
-            "title": r.get("Title", ""),
-            "url": r.get("Url", ""),
-            "content": r.get("Summary", "") or r.get("Snippet", ""),
-            "score": r.get("RankScore", 0),
-            "source": "byte_search",
-        })
-    return results
-
-
-def web_search(query, max_results=5, engines=None):
-    """联网搜索：支持多引擎融合。
-    
-    engines: 指定引擎列表，如 ["tavily", "byte_search"]，None 时自动检测可用引擎。
-    返回合并后的结果列表，按 score 降序。
-    
-    降级策略：优先使用 Tavily，如果配额用完（429错误）则自动降级到字节搜索。
-    """
-    if engines is None:
-        engines = []
-        if _get_tavily_key():
-            engines.append("tavily")
-        if any(_get_volcengine_keys()):
-            engines.append("byte_search")
-        if not engines:
-            print("[search] 未配置任何搜索引擎 key（TAVILY_API_KEY / ASK_ECHO_SEARCH_INFINITY_API_KEY / VOLCENGINE_ACCESS_KEY），联网搜索不可用")
-            print("  提示：在 .env 中配置，或运行 python _cli.py key-doctor 检查")
-            return None
-
-    all_results = []
-    tavily_quota_exceeded = False
-    
-    for engine in engines:
-        try:
-            if engine == "tavily":
-                # 如果 Tavily 配额已用完，跳过
-                if tavily_quota_exceeded:
-                    print("[search] Tavily 配额已用完，跳过")
-                    continue
-                results, status = tavily_search(query, max_results)
-                # 检测 Tavily 429 错误（配额用完）
-                if status == 429:
-                    tavily_quota_exceeded = True
-                    print("[search] Tavily 配额已用完（HTTP 429），降级到字节搜索")
-                    continue
-                if results:
-                    all_results.extend(results)
-            elif engine == "byte_search":
-                results = byte_search(query, max_results)
-                if results:
-                    all_results.extend(results)
-                    # 如果字节搜索成功且之前 Tavily 配额用完，记录日志
-                    if tavily_quota_exceeded:
-                        print("[search] 字节搜索成功，已降级使用")
-            else:
-                continue
-        except Exception as e:
-            print(f"[search] 引擎 {engine} 调用异常: {e}")
-            # 如果 Tavily 异常且是配额相关错误，标记配额用完
-            if engine == "tavily" and "429" in str(e):
-                tavily_quota_exceeded = True
-                print("[search] Tavily 配额异常（429），标记配额已用完")
-            continue
-
-    if not all_results:
-        print("[search] 所有引擎均返回空结果")
-        return None
-
-    # URL 去重（同一 URL 只保留 score 最高的）
-    seen_urls = {}
-    for r in all_results:
-        url = r.get("url", "")
-        if not url:
-            continue
-        if url not in seen_urls or r.get("score", 0) > seen_urls[url].get("score", 0):
-            seen_urls[url] = r
-    all_results = list(seen_urls.values())
-
-    # 英文域名加权：非 .cn 域名加 0.1 bonus
-    for r in all_results:
-        url = r.get("url", "")
-        if url and ".cn" not in url:
-            r["score"] = r.get("score", 0) + 0.1
-
-    all_results.sort(key=lambda x: x.get("score", 0), reverse=True)
-    return all_results[:max_results]
+from _cloud_llm_search import tavily_search, byte_search, web_search  # noqa: F401
+# 测试/外部仍经 _cloud_llm.VISION_CACHE 访问
+from _paths import VISION_CACHE  # noqa: F401

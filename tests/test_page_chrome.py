@@ -173,9 +173,9 @@ def test_topnav_anchors_from_pages():
     pages = [{"id": "p1", "title": "业务背景"},
              {"id": "p2", "title": "合同流程"},
              {"title": "无 id 不出锚点"}]
-    html = pc.render_topnav(_norm({"type": "topnav", "brand": "瓴寓国际",
+    html = pc.render_topnav(_norm({"type": "topnav", "brand": "蓝海国际",
                                    "brand_sub": "私有化 OA 平台"}), pages=pages)
-    assert 'class="topnav"' in html and "瓴寓国际" in html
+    assert 'class="topnav"' in html and "蓝海国际" in html
     assert "私有化 OA 平台" in html
     assert 'href="#p1"' in html and "业务背景" in html
     assert 'href="#p2"' in html
@@ -300,6 +300,9 @@ def test_chrome_css_uses_theme_vars():
 
 @pytest.fixture()
 def renderer(tmp_path):
+    # 保存/条件还原 _PRESALES_CLI_INVOKED（S6 同款）：无条件 pop 会误删
+    # 外层（套件级/conftest 级）预设，造成套件级污染。
+    saved = os.environ.get("_PRESALES_CLI_INVOKED")
     os.environ["_PRESALES_CLI_INVOKED"] = "1"
     try:
         from _renderer import Renderer
@@ -314,7 +317,7 @@ pages:
     elements:
       - type: hero
         eyebrow: "SECTION 0"
-        title: "蓝海集团统建 7 大系统全量替换"
+        title: "蓝海统建 7 大系统全量替换"
         meta: ["版本 v3"]
       - type: stat_cards
         cards:
@@ -332,7 +335,10 @@ pages:
 """, encoding="utf-8")
         yield Renderer(str(spec))
     finally:
-        os.environ.pop("_PRESALES_CLI_INVOKED", None)
+        if saved is None:
+            os.environ.pop("_PRESALES_CLI_INVOKED", None)
+        else:
+            os.environ["_PRESALES_CLI_INVOKED"] = saved
 
 
 def _render_to_output(renderer):
@@ -358,17 +364,19 @@ def test_end_to_end_theme_injection(renderer):
     assert "--t-lit-border:#059669" in html
     # 构件 CSS 注入 + 构件渲染
     assert ".hero-eyebrow" in html
-    assert 'class="hero"' in html and "蓝海集团统建 7 大系统全量替换" in html
+    assert 'class="hero"' in html and "蓝海统建 7 大系统全量替换" in html
     assert 'class="stat-card s-lit"' in html
     assert '<span class="hl-yellow">4 部门</span>' in html
 
 
-def test_end_to_end_legacy_default(tmp_path):
-    """老 spec（无 theme 字段）：v2 tokens 缺省 legacy_bluegreen（F9）。"""
+def test_end_to_end_default_consulting(tmp_path):
+    """无 theme 字段的 spec：缺省 consulting_kpmg（Step 2 行为变化）。"""
+    # 保存/条件还原，同 S6 先例（无条件 pop 会误删外层预设）
+    saved = os.environ.get("_PRESALES_CLI_INVOKED")
     os.environ["_PRESALES_CLI_INVOKED"] = "1"
     try:
         from _renderer import Renderer
-        spec = tmp_path / "legacy.yml"
+        spec = tmp_path / "default.yml"
         spec.write_text("""\
 confirmed: true
 pages:
@@ -380,7 +388,10 @@ pages:
 """, encoding="utf-8")
         r = Renderer(str(spec))
         html = _render_to_output(r)
-        assert "--t-primary:#1B5E8A" in html  # legacy 蓝绿
+        assert "--t-primary:#00338D" in html  # consulting 蓝
         assert 'class="section-tag"' in html
     finally:
-        os.environ.pop("_PRESALES_CLI_INVOKED", None)
+        if saved is None:
+            os.environ.pop("_PRESALES_CLI_INVOKED", None)
+        else:
+            os.environ["_PRESALES_CLI_INVOKED"] = saved

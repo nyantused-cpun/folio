@@ -2,14 +2,13 @@
 """统一渲染器：spec 驱动的 HTML/PPT/DOCX 生成。"""
 
 import os
-import json
 import yaml
 from string import Template
 
 from _renderer.elements import (
-    RenderReport, _esc, _nl2br, degrade_text, empty_payload_reason,
-    is_empty_payload, normalize_element)
-from _renderer.theme import resolve_theme
+    CAPABILITIES, DEGRADE, END_DOCX, RenderReport, _esc, _nl2br, degrade_text,
+    empty_payload_reason, is_empty_payload, normalize_element)
+from _renderer.theme import DEFAULT_VEIL, WHITE, resolve_theme
 
 
 class NotInvokedViaCLIError(Exception):
@@ -27,7 +26,7 @@ class OutputPathNotAllowedError(Exception):
     pass
 
 
-SCRIPT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))  # 仓库根（output 白名单）
+SCRIPT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))  # 仓库根（output 白名单；src/_renderer 上三级）
 
 # outline-to-spec 提取失败占位页的标记串（生成点：_outline_to_spec.py
 # 失败章节的占位 text 元素 content），Renderer init 据此进 report.warnings
@@ -39,16 +38,19 @@ def _validate_output_path(output_path):
 
     用 commonpath 做目录级比较（而非字符串前缀），防止
     output_evil/ 这类前缀兄弟目录绕过白名单；Windows 下 normcase
-    统一大小写与斜杠。
+    统一大小写与斜杠。P2-8：比较前对路径做 realpath——不存在的叶子
+    原样返回（零行为变化），已存在的 junction/symlink 祖先被解析，
+    指 output/ 外即拒绝。
     """
     allowed_dirs = [
         os.path.join(SCRIPT_DIR, "output"),
     ]
     abs_path = os.path.normcase(os.path.abspath(output_path))
+    real = os.path.normcase(os.path.realpath(abs_path))
     for allowed in allowed_dirs:
-        allowed = os.path.normcase(os.path.abspath(allowed))
+        allowed = os.path.normcase(os.path.realpath(os.path.abspath(allowed)))
         try:
-            if os.path.commonpath([abs_path, allowed]) == allowed:
+            if os.path.commonpath([real, allowed]) == allowed:
                 return
         except ValueError:
             continue  # 不同盘符，commonpath 无法比较
@@ -56,13 +58,34 @@ def _validate_output_path(output_path):
 
 
 def _resolve_style(style_name):
-    """解析风格名称，返回 styles.json 中对应的配置。"""
-    styles_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "styles.json")
-    if os.path.exists(styles_path):
-        with open(styles_path, "r", encoding="utf-8") as f:
-            styles = json.load(f)
-        return styles.get(style_name, styles.get("enterprise", {}))
-    return {}
+    """解析主题名：旧 style 名迁移到 v2 theme，返回 theme 名字符串。"""
+    from _renderer.theme import normalize_theme_name
+    return normalize_theme_name(style_name)
+
+
+def _docx_shade_paragraph(paragraph, fill="EEF2F7"):
+    """给 python-docx 段落加底纹（Step 5 conclusion_band DOCX 整段底纹）。"""
+    try:
+        from docx.oxml.ns import qn
+        from docx.oxml import OxmlElement
+        pPr = paragraph._p.get_or_add_pPr()
+        shd = OxmlElement("w:shd")
+        shd.set(qn("w:val"), "clear")
+        shd.set(qn("w:color"), "auto")
+        shd.set(qn("w:fill"), fill)
+        pPr.append(shd)
+    except Exception:
+        # 底纹是锦上添花，失败不阻断 DOCX 生成
+        pass
+
+
+def _is_hex6_color(value):
+    """严格 6 位 hex 色（# 前缀可选）——cover.veil 等无 schema 校验字段的
+    解析防护用，杜绝 _hex_to_rgba 对非法输入裸崩。"""
+    if not isinstance(value, str):
+        return False
+    h = value[1:] if value.startswith("#") else value
+    return len(h) == 6 and all(c in "0123456789abcdefABCDEF" for c in h)
 
 
 class Renderer:
@@ -76,8 +99,8 @@ class Renderer:
         self.spec_path = spec_path
         self.client_industry = client_industry
         self.spec = {}
-        self.style_name = "enterprise"
-        self.style = {}
+        self.style_name = "consulting_kpmg"
+        self.style = "consulting_kpmg"
         self.pages = []
 
         if os.path.exists(spec_path):
@@ -100,16 +123,53 @@ class Renderer:
             for i, item in enumerate(self.definition_of_done, 1):
                 print(f"  {i}. {item}")
 
-        self.style_name = self.spec.get("style", "enterprise")
-        self.style = _resolve_style(self.style_name)
-        # v2 主题包名（§5.1 双形态：str = v2 主题；dict/缺省 = None → legacy）
+        # Step 2：spec 顶层 theme 为唯一事实源；缺省 consulting_kpmg
         _spec_theme = self.spec.get("theme")
-        self.v2_theme_name = _spec_theme if isinstance(_spec_theme, str) else None
+        self.style_name = _spec_theme if isinstance(_spec_theme, str) else "consulting_kpmg"
+        self.style = _resolve_style(self.style_name)
+        # P1-9（D5 拍板）主题回退入口归一：v2_theme_name 落 _resolve_style 结果，
+        # 未知主题名的裸 spec 值不再流入下游 get_theme（其 raise 保留作双保险）
+        self.v2_theme_name = _resolve_style(self.style_name)
         self.pages = self.spec.get("pages", [])
-        self.format_config = self.spec.get("format", {})
+        # P2 容错：format 为 YAML null 时 get 命中键返回 None（默认值不生效），
+        # 下游 fmt.get 必崩；非 dict 一律归一为空 dict
+        _format_cfg = self.spec.get("format")
+        self.format_config = _format_cfg if isinstance(_format_cfg, dict) else {}
 
         # 渲染报告：跳过/降级/警告收集（§6.3），调用方经 r.report 读取
         self.report = RenderReport()
+
+        # P2 渲染层守卫：pages 非列表 / 混入非 dict 项时剔除并告警——
+        # 校验层守卫之外，占位页检查、diagram 探测、页面循环等渲染路径
+        # 不再裸 .get 崩（体面降级为跳过该页）
+        if not isinstance(self.pages, list):
+            self.report.warn(
+                f"pages 不是列表（实际 {type(self.pages).__name__}），按空文档渲染")
+            self.pages = []
+        else:
+            _pages_ok = []
+            for _pi, _page in enumerate(self.pages):
+                if isinstance(_page, dict):
+                    _pages_ok.append(_page)
+                else:
+                    self.report.warn(f"pages[{_pi}] 不是 dict，渲染时已跳过")
+            self.pages = _pages_ok
+
+        # S8-A 2×3 合规矩阵（crafted 定制页轨，crafted-track.md）：
+        # weaver×crafted 默认禁止为阻断级（特批字段 APPROVAL_FIELD 见
+        # narrative_schema），每 deck crafted ≤2 页为观察级。升级条件: 实测 >2 页 deck 占比上升 → 升阻断（长期纪律保留；盘点#5）挂在 Renderer
+        # 构造（html-build/docx-build 渲染最前，前置即拦）；verify 侧同规则
+        # 汇聚（verify_spec_layout_data），检查单点在 narrative_schema。
+        try:
+            from _renderer.narrative_schema import check_compliance_matrix
+            _mx_errors, _mx_warnings = check_compliance_matrix(
+                self.spec, spec_path=self.spec_path)
+        except Exception as _e:  # 检查自身异常不锁死业务，降级为告警
+            _mx_errors, _mx_warnings = [], [f"合规矩阵检查异常: {_e}"]
+        for _w in _mx_warnings:
+            self.report.warn(_w)
+        if _mx_errors:
+            raise RenderBlockedError("；".join(_mx_errors))
 
         # spec 全量元素校验（§6.2）：错误逐条进 report.warnings，
         # 不阻断——非法元素由渲染层降级/跳过，同样进 report。
@@ -117,16 +177,19 @@ class Renderer:
         try:
             from _renderer.schema import (
                 validate_layout_warnings,
-                validate_spec, validate_page_warnings, validate_element_warnings)
+                validate_spec, validate_page_warnings, validate_element_warnings,
+                validate_deprecated_field_warnings)
             for _e in validate_spec(self.spec):
                 self.report.warn(f"[spec校验] {_e}")
+            for _w in validate_deprecated_field_warnings(self.spec):
+                self.report.warn(f"[spec废弃] {_w}")
             # 页面级容量检查（§七 2.5 第一级 源头限量）：warning 级别，
             # 只进 report.warnings 不阻断，阈值见 schema.PAGE_ELEMENTS_WARN
             for _pi, _page in enumerate(self.pages):
                 for _w in validate_page_warnings(_page, page_index=_pi):
                     self.report.warn(f"[spec校验] {_w}")
-                # v2 P 系版式：必需构件顺序 + 容量上限（§6，warning 级；
-                # 必需构件缺失的 error 已由 validate_spec 收集）
+                # v2 P 系版式：必需构件缺失/顺序 + 容量上限（§6，warning 级；
+                # 必需构件缺失已按“目录制 + 自由流兜底”降为提示）
                 for _w in validate_layout_warnings(_page, page_index=_pi):
                     self.report.warn(f"[spec校验] {_w}")
                 # diagram 数量型容量阈值（间距体系 v1 §六 5）：warning 级别，
@@ -155,18 +218,58 @@ class Renderer:
                     return True
         return False
 
-    def _has_chrome_elements(self):
-        """spec 是否含 v2 页面构件或 flow_rows 图（决定是否注入 v2 CSS）。"""
-        from _renderer.page_chrome import CHROME_RENDERERS
+    def _needs_diagram_css(self):
+        """是否需要注入 diagram CSS 外壳（render_html 的注入判定）。
+
+        P3：纯占位页（只有 product_intro_placeholder、无 diagram）同样渲染
+        section.diagram 外壳卡（render_placeholder_html 产物），缺 CSS 时
+        卡片丢失底色/圆角/边距/字体；占位元素因此同样触发注入。含 diagram
+        或完全无占位的页面判定结果不变（零 diff）。
+        """
         for page in self.pages:
             for elem in page.get("elements", []):
-                if elem.get("type") in CHROME_RENDERERS or elem.get("type") == "topnav":
-                    return True
-                if elem.get("type") == "diagram" and (
-                        elem.get("subtype") == "flow_rows"
-                        or elem.get("exhibit") or elem.get("source")):
+                if elem.get("type") in ("diagram", "product_intro_placeholder"):
                     return True
         return False
+
+    def _has_chrome_elements(self):
+        """是否需要注入 v2 页面 CSS。
+
+        2026-09 起只要是 HTML 页面输出，就统一注入页骨架 CSS：
+        否则自由流页的 page-shell / v2-page 卡片样式缺失，页面之间没有边界。
+        """
+        return bool(self.pages)
+
+    def _resolve_asset_path(self, src):
+        """解析 spec 中图片/截图路径到本地绝对路径。
+
+        约定（Q2）：
+        - `refs/` 开头 → `_knowledge/clients/{client_name}/refs/`（I/O 分流）
+        - `_assets/` / `assets/` 开头 → 项目根 _assets/
+        - 绝对路径 → 原样
+        - 其他 → 相对 spec 目录
+        文件缺失时返回 None，调用方降级+report 警告，不抛异常。
+        """
+        if not src:
+            return None
+        src = str(src)
+        script_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        spec_dir = os.path.dirname(os.path.abspath(self.spec_path))
+        client_name = self.spec.get("client_name") or ""
+        if src.startswith("refs/"):
+            base = os.path.join(script_dir, "_knowledge", "clients",
+                                client_name, "refs")
+            candidate = os.path.join(base, src[5:])
+        elif src.startswith("_assets/"):
+            candidate = os.path.join(script_dir, src)
+        elif src.startswith("assets/"):
+            candidate = os.path.join(script_dir, "_" + src)
+        elif os.path.isabs(src):
+            candidate = src
+        else:
+            candidate = os.path.join(spec_dir, src)
+        candidate = os.path.abspath(candidate)
+        return candidate if os.path.exists(candidate) else None
 
     @staticmethod
     def _hex_to_rgba(hex_color, opacity):
@@ -181,17 +284,23 @@ class Renderer:
         spec 字段：
           background_image  背景照片（相对 HTML 的路径）
           logo_image        logo（深底用反白稿）
-          veil / veil_opacity  罩层色与不透明度（缺省 #0A1540 / 0.8）
+          veil / veil_opacity  罩层色与不透明度（缺省 theme.DEFAULT_VEIL / 0.8）
           confidential      右上机密标注（空则不显示）
           show_date + date  右下日期（date 缺省取 spec.date）
-        版式依据视觉基准样板 §5 T1：logo (3%,6%)，标题 x8%/y42%，
+        版式依据 蓝海 VI 统一规范 §5 T1：logo (3%,6%)，标题 x8%/y42%，
         右上 Sensitivity，右下斜体日期。画布固定 1280x720（html-to-ppt 一页）。
         """
         cover = document.get("cover", {}) or {}
         title = document.get("title", "")
         subtitle = document.get("subtitle", "")
         author = document.get("author") or self.spec.get("author", "")
-        veil = cover.get("veil", "#0A1540")
+        veil = cover.get("veil", DEFAULT_VEIL)
+        # P2 解析防护：veil 无 schema 校验，非 6 位 hex 时 _hex_to_rgba 裸崩；
+        # 体面回退默认遮罩色（保留暗色封面可读性，而非跳过 veil）
+        if not _is_hex6_color(veil):
+            self.report.warn(
+                f"[cover] veil 不是 6 位 hex（{veil!r}），已回退默认遮罩 {DEFAULT_VEIL}")
+            veil = DEFAULT_VEIL
         veil_rgba = self._hex_to_rgba(veil, cover.get("veil_opacity", 0.8))
         bg = cover.get("background_image", "")
         logo = cover.get("logo_image", "")
@@ -204,28 +313,28 @@ class Renderer:
                          'width:1280px;height:720px;object-fit:cover;">')
         parts.append(f'<div style="position:absolute;left:0;top:0;width:1280px;height:720px;'
                      f'background:{veil_rgba};"></div>')
-        # 内容层：流式布局（absolute 在 dom-to-pptx 下会文本换行重叠）；
-        # bg/veil/logo 三个 img 在 PPT 转换时降级丢弃，PPT 得满版 veil 色封面。
+        # 内容层：流式布局；bg/veil/logo 三个 img 在 PPT 转换时降级丢弃，PPT 得满版 veil 色封面。
+        # 白字/alpha 白一律走 theme.WHITE（S2 清尾：禁白字 hex/rgba 硬编码）
         parts.append('<div style="position:relative;height:720px;box-sizing:border-box;'
-                     'padding:43px 38px 0 38px;color:#FFFFFF;">')
+                     f'padding:43px 38px 0 38px;color:{WHITE};">')
         parts.append('<div style="display:flex;justify-content:space-between;align-items:flex-start;">')
         if logo:
             parts.append(f'<img src="{_esc(logo)}" style="height:56px;">')
         else:
             parts.append('<div></div>')
         if cover.get("confidential"):
-            parts.append(f'<div style="color:#FFFFFF;font-size:12px;opacity:0.9;">{_esc(cover["confidential"])}</div>')
+            parts.append(f'<div style="color:{WHITE};font-size:12px;opacity:0.9;">{_esc(cover["confidential"])}</div>')
         parts.append('</div>')
-        parts.append(f'<div style="margin-top:190px;color:#FFFFFF;font-size:52px;'
+        parts.append(f'<div style="margin-top:190px;color:{WHITE};font-size:52px;'
                      f'font-weight:700;line-height:1.25;">{_esc(title)}</div>')
         if subtitle:
-            parts.append(f'<div style="margin-top:22px;color:rgba(255,255,255,0.92);'
+            parts.append(f'<div style="margin-top:22px;color:{WHITE};opacity:0.92;'
                          f'font-size:22px;line-height:1.5;">{_esc(subtitle)}</div>')
         if cover.get("show_author") and author:
-            parts.append(f'<div style="margin-top:14px;color:rgba(255,255,255,0.85);'
+            parts.append(f'<div style="margin-top:14px;color:{WHITE};opacity:0.85;'
                          f'font-size:16px;">{_esc(author)}</div>')
         if cover.get("show_date") and date_str:
-            parts.append(f'<div style="margin-top:150px;text-align:right;color:#FFFFFF;'
+            parts.append(f'<div style="margin-top:150px;text-align:right;color:{WHITE};'
                          f'font-size:12px;font-style:italic;opacity:0.9;">{_esc(date_str)}</div>')
         parts.append('</div>')
         parts.append('</div>')
@@ -251,19 +360,19 @@ class Renderer:
         html_parts.append(f'    <title>{_esc(title)}</title>')
         html_parts.append('    <style>')
         html_parts.append(self._get_html_styles(has_cover=bool(cover_html)))
-        if self._has_diagram_elements():
-            from _renderer.diagram import theme as _dg_theme
+        if self._needs_diagram_css():
+            from _renderer import theme as _dg_theme
             html_parts.append(_dg_theme.css_variables(self.style_name))
         if self._has_chrome_elements():
             # v2 页面构件/flow_rows：主题 tokens :root 块 + 构件 CSS（§7/§9）
-            from _renderer.diagram import theme as _dg_theme2
+            from _renderer import theme as _dg_theme2
             from _renderer.page_chrome import chrome_css
             html_parts.append(_dg_theme2.theme_tokens_css(self.v2_theme_name))
             html_parts.append(chrome_css())
-        if self._has_diagram_elements():
+        if self._needs_diagram_css():
             # 旧 diagram 变量桥接：v2 主题下统一色板（桥接块必须后于
             # theme_tokens_css，--t- 变量先定义；legacy 等值零视觉变化）
-            from _renderer.diagram import theme as _dg_theme3
+            from _renderer import theme as _dg_theme3
             html_parts.append(_dg_theme3.bridge_css(self.v2_theme_name))
         html_parts.append('    </style>')
         html_parts.append('</head>')
@@ -292,12 +401,18 @@ class Renderer:
                 pid = _esc(page.get("id", ""))
                 html_parts.append(f'    <section class="v2-page" id="{pid}">')
             else:
-                html_parts.append(f'    <h2>{_esc(page_title)}</h2>')
+                # 自由流页也包一层 page-shell，让每页在滚动时有清晰“页面卡片”边界
+                pid = _esc(page.get("id", ""))
+                html_parts.append(f'    <section class="page-shell" id="{pid}">')
+                html_parts.append(f'        <h2>{_esc(page_title)}</h2>')
             elements = page.get("elements", [])
             for index, elem in enumerate(elements):
                 html_parts.append(
-                    self._render_element_html(elem, page.get("id"), index))
+                    self._render_element_html(elem, page.get("id"), index,
+                                              v2_page=is_v2_page))
             if is_v2_page:
+                html_parts.append('    </section>')
+            else:
                 html_parts.append('    </section>')
 
         html_parts.append('</body>')
@@ -311,7 +426,7 @@ class Renderer:
         """返回 HTML 样式。
 
         配色与字体来自样式单一源 _renderer.theme.resolve_theme
-        （styles.json 该风格 + spec.theme.colors 逐槽覆盖，缺省保持原配色）：
+        （THEMES 主题 + spec.theme.colors 逐槽覆盖，缺省 consulting_kpmg）：
           theme:
             colors:
               heading / primary / h2 / subtitle / muted /
@@ -355,7 +470,8 @@ class Renderer:
         """
         return css
 
-    def _render_element_html(self, elem, page_id=None, index=None):
+    def _render_element_html(self, elem, page_id=None, index=None,
+                             v2_page=False):
         """渲染单个元素为 HTML。
 
         字段读取走 _renderer.elements normalize 层（§6.1）；不支持的元素
@@ -380,11 +496,27 @@ class Renderer:
             items = normalized["items"]
             if not items:
                 return ""
-            # 用 div.bullet 而非 ul/li：dom-to-pptx 对 ul 高度测量有 bug
-            # （多行 li 按单行计高，后续元素上移叠印），div 排版定位可靠
+            # 用 div.bullet 而非 ul/li：多行 li 计高不可靠，div 排版定位可靠
             divs = "\n".join(f'        <div class="bullet">{_nl2br(item)}</div>' for item in items)
             return f'    <div class="bullets">\n{divs}\n    </div>'
         elif elem_type == "cards":
+            if v2_page:
+                # v2 页面内老式 cards 映射为 info_cards 卡片样式（示例项目 v4
+                # 实战暴露 §7.2-4：cards 在 v2 页面渲染为扁平行）；
+                # tag/highlight 不丢内容：并入 items 首/末位
+                from _renderer.page_chrome import render_chrome_html
+                mapped = {"cards": [
+                    {"title": card["title"],
+                     "items": ([card["tag"]] if card["tag"] else [])
+                              + [ln for ln in str(card["body"]).split("\n")
+                                 if ln.strip()]
+                              + ([card["highlight"]]
+                                 if card["highlight"] else [])}
+                    for card in normalized["cards"]]}
+                chrome_html = render_chrome_html("info_cards", mapped,
+                                                 pages=self.pages)
+                if chrome_html is not None:
+                    return chrome_html
             card_html = ""
             for card in normalized["cards"]:
                 card_html += '    <div class="card">\n'
@@ -425,6 +557,36 @@ class Renderer:
                 pq += f'        <div class="pq-cite">{_nl2br(normalized["cite"])}</div>\n'
             pq += '    </div>'
             return pq
+        elif elem_type == "image":
+            # HTML 端图片（P1-7）：语义与 DOCX 端对齐——src 存在且文件在
+            # 才渲染 <img>；缺失/文件不存在体面降级为占位文本，不裸崩。
+            # image 无 normalizer，normalized 即原始 elem dict（与 DOCX 端
+            # 读取口径一致），用户文本统一 _esc（§七 2.6）
+            src = str(normalized.get("src") or "")
+            caption = str(normalized.get("caption") or "")
+            if src and os.path.exists(src):
+                try:
+                    width_ratio = float(normalized.get("width", 0.9))
+                except (TypeError, ValueError):
+                    width_ratio = 0.9
+                align = ("margin:0 auto;display:block;"
+                         if normalized.get("alignment", "center") == "center"
+                         else "")
+                img_parts = [
+                    '    <div class="element-image">',
+                    f'        <img src="{_esc(src)}" alt="{_esc(caption or src)}" '
+                    f'style="width:{width_ratio * 100:.0f}%;max-width:100%;{align}">',
+                ]
+                if caption:
+                    img_parts.append(
+                        f'        <div class="image-caption" style="text-align:center;'
+                        f'color:#888;font-size:0.9em;margin-top:4px;">{_esc(caption)}</div>')
+                img_parts.append('    </div>')
+                return "\n".join(img_parts)
+            text = f"[图片：{caption or src}]"
+            self.report.warn(f"[渲染] {page_id} elements[{index}] image "
+                             f"图片不存在或未指定 src，已降级为占位文本")
+            return f'    <p class="degraded">{_esc(text)}</p>'
         elif elem_type == "architecture_4a":
             # 4A 架构图仅 DOCX 有原生渲染，HTML 端显式降级（§6.1 能力矩阵）
             text = degrade_text(elem_type, normalized, "html")
@@ -436,15 +598,74 @@ class Renderer:
         elif elem_type == "product_intro_placeholder":
             from _renderer.diagram import render_placeholder_html
             return render_placeholder_html(elem, style=self.style_name)
+        elif elem_type == "screenshot":
+            src_path = self._resolve_asset_path(normalized["src"])
+            caption = normalized["caption"]
+            if not src_path:
+                text = f"[截图：{caption or normalized['src']}]"
+                self.report.warn(f"[渲染] {page_id} elements[{index}] screenshot "
+                                 f"图片不存在或未指定 src，已降级为占位文本")
+                return f'    <p class="degraded">{_esc(text)}</p>'
+            width_ratio = normalized["width"]
+            align = normalized["alignment"]
+            align_style = ("margin:0 auto;display:block;"
+                           if align == "center" else "")
+            rel_src = _esc(normalized["src"])
+            parts = [
+                '    <div class="element-screenshot" '
+                'style="position:relative;display:inline-block;'
+                f'max-width:100%;{align_style}">',
+                f'        <img src="{_esc(src_path)}" alt="{_esc(caption or rel_src)}" '
+                f'style="width:{width_ratio * 100:.0f}%;max-width:100%;display:block;">',
+            ]
+            for ann in normalized["annotations"]:
+                parts.append(
+                    f'        <div style="position:absolute;left:{ann["x"]}px;'
+                    f'top:{ann["y"]}px;background:rgba(0,0,0,0.75);color:#fff;'
+                    f'padding:2px 6px;border-radius:3px;font-size:12px;'
+                    f'pointer-events:none;white-space:nowrap;">'
+                    f'{_esc(ann["text"])}</div>')
+            parts.append('    </div>')
+            if caption:
+                parts.append(
+                    f'    <div class="image-caption" style="text-align:center;'
+                    f'color:#888;font-size:0.9em;margin-top:4px;">{_esc(caption)}</div>')
+            return "\n".join(parts)
+        elif elem_type == "raw_html":
+            # crafted 页唯一边界标记：audit 判定依据
+            return (f'    <div class="raw-html-crafted" data-track="crafted">\n'
+                    f'{normalized["content"]}\n'
+                    f'    </div>')
         # v2 页面构件（§5.2/§7）：HTML 全端 RENDER，主题变量驱动
         from _renderer.page_chrome import render_chrome_html
-        # topnav 特殊：合并文档级 brand（logo 槽位，v3.0），元素级声明优先
+        # S8 Wave B（C-E2）：含图构件（logo/头像）先解析资产路径（同
+        # screenshot 链路），缺失置空由渲染函数走文字牌/首字头像兜底
+        if elem_type in ("logo_wall", "profile_card"):
+            items_field, img_key = (("logos", "src") if elem_type == "logo_wall"
+                                    else ("profiles", "photo"))
+            for item in normalized.get(items_field) or []:
+                src = item.get(img_key)
+                if not src:
+                    continue
+                resolved = self._resolve_asset_path(src)
+                if resolved:
+                    item[img_key] = resolved
+                else:
+                    item[img_key] = ""
+                    self.report.warn(
+                        f"[渲染] {page_id} elements[{index}] {elem_type} "
+                        f"图片不存在或未指定 {img_key}，已降级为文字兜底")
+        # topnav 特殊：合并文档级 brand（logo 槽位，v3.0），元素级声明优先。
+        # normalize 后 logo/logo_position 键恒在（空串占位），setdefault 恒
+        # no-op——改为判空回退，spec.brand.logo 才能真实生效（P1-6）
         if elem_type == "topnav" and isinstance(self.spec.get("brand"), dict):
+            brand = self.spec["brand"]
             merged = dict(normalized)
-            merged.setdefault("logo", self.spec["brand"].get("logo", ""))
-            merged.setdefault("logo_position",
-                              self.spec["brand"].get("logo_position",
-                                                     "topnav_left"))
+            if not merged.get("logo"):
+                merged["logo"] = str(brand.get("logo") or "")
+            if not merged.get("logo_position"):
+                merged["logo_position"] = str(brand.get("logo_position")
+                                              or "topnav_left")
             normalized = merged
         chrome_html = render_chrome_html(elem_type, normalized, pages=self.pages)
         if chrome_html is not None:
@@ -565,6 +786,33 @@ class Renderer:
             doc.add_paragraph(normalized["content"])
         elif elem_type == "heading":
             doc.add_heading(normalized["text"], level=normalized["level"])
+        elif elem_type == "image":
+            from docx.shared import Cm
+            from docx.enum.text import WD_ALIGN_PARAGRAPH
+
+            src = normalized.get("src", "")
+            caption = normalized.get("caption", "")
+            width_ratio = normalized.get("width", 0.9)
+            alignment = normalized.get("alignment", "center")
+
+            if src and os.path.exists(src):
+                # 图片段落（居中）
+                img_para = doc.add_paragraph()
+                if alignment == "center":
+                    img_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                run = img_para.add_run()
+                # 版心宽度约 14cm（A4 减去页边距）
+                run.add_picture(src, width=Cm(14 * width_ratio))
+
+                # 图题
+                if caption:
+                    cap_para = doc.add_paragraph(f"图：{caption}")
+                    cap_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                    cap_para.style = doc.styles["Normal"]
+            else:
+                # 图片不存在时降级
+                text = f"[图片：{caption or src}]"
+                doc.add_paragraph(text)
         elif elem_type == "bullets":
             for item in normalized["items"]:
                 doc.add_paragraph(item, style="List Bullet")
@@ -580,9 +828,23 @@ class Renderer:
             rows = normalized["rows"]
             n_cols = len(headers)
             table = doc.add_table(rows=1 + len(rows), cols=n_cols)
+            # 应用 Word 内置表格样式，stripe 时使用浅色网格+斑马纹
+            stripe = normalized.get("stripe", False)
+            try:
+                if stripe:
+                    table.style = "Light Grid Accent 1"
+                else:
+                    table.style = "Table Grid"
+            except Exception:
+                pass  # nosec B110 - 表格样式为尽力而为，失败时保留 python-docx 默认
+            # 表头加粗 + 底色
             hdr_cells = table.rows[0].cells
             for i, h in enumerate(headers):
                 hdr_cells[i].text = h
+                # 表头第一段加粗
+                for para in hdr_cells[i].paragraphs:
+                    for run in para.runs:
+                        run.bold = True
             for i, row in enumerate(rows):
                 if len(row) != n_cols:
                     # schema 校验已报列数不齐；渲染层兜底不崩：
@@ -721,9 +983,45 @@ class Renderer:
                 run.bold = True
             if normalized["next_step"]:
                 doc.add_paragraph(normalized["next_step"])
-        elif elem_type in ("hero", "stat_cards", "kpi_cards", "pain_cards",
-                           "legend_bar", "topnav"):
-            # DOCX 端 DEGRADE（§5.2），显式降级文本 + report
+        elif elem_type == "ui_mock":
+            # DOCX 端 DEGRADE：界面示意降级为一行文本
+            text = degrade_text(elem_type, normalized, "docx")
+            doc.add_paragraph(text)
+            self.report.degrade(page_id, index, elem_type, "docx", text)
+        elif elem_type == "screenshot":
+            # DOCX 端 DEGRADE：图+标注摘要显式降级文本
+            text = degrade_text(elem_type, normalized, "docx")
+            doc.add_paragraph(text)
+            self.report.degrade(page_id, index, elem_type, "docx", text)
+        elif elem_type == "raw_html":
+            # DOCX 端 DEGRADE：crafted 定制页不同步
+            text = degrade_text(elem_type, normalized, "docx")
+            doc.add_paragraph(text)
+            self.report.degrade(page_id, index, elem_type, "docx", text)
+        elif elem_type == "conclusion_band":
+            # DOCX 整段底纹段落；`**红字**` 转为主色加粗保留强调
+            p = doc.add_paragraph()
+            _docx_shade_paragraph(p)
+            raw = normalized["text"]
+            idx = 0
+            while True:
+                start = raw.find("**", idx)
+                if start < 0:
+                    p.add_run(raw[idx:])
+                    break
+                p.add_run(raw[idx:start])
+                end = raw.find("**", start + 2)
+                if end < 0:
+                    p.add_run(raw[start:])
+                    break
+                run = p.add_run(raw[start + 2:end])
+                run.bold = True
+                idx = end + 2
+        elif CAPABILITIES.get(elem_type, {}).get(END_DOCX) == DEGRADE:
+            # DOCX 端 DEGRADE（§5.2/§T5）：按能力矩阵泛化判定，凡声明
+            # DOCX 降级的构件一律走显式降级文本，不再手维护元组——
+            # page_header/view_cards/callout_block/toc_cards/duo_compare/
+            # pros_cons/cta_block 曾落 else 静默 skip，整页内容缺失（P1-8）
             text = degrade_text(elem_type, normalized, "docx")
             doc.add_paragraph(text)
             self.report.degrade(page_id, index, elem_type, "docx", text)

@@ -1,10 +1,11 @@
-﻿# -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 import os
 import json
 import shutil
 from datetime import datetime
 
-SCRIPT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # 仓库根
+# SCRIPT_DIR 事实源：_paths（B4-G5 收拢，值语义不变）
+from _paths import SCRIPT_DIR
 CONFIG_PATH = os.path.join(SCRIPT_DIR, "_classify_config.json")
 LOG_DIR = os.path.join(SCRIPT_DIR, ".folio", "logs")
 INDEX_PATH = os.path.join(SCRIPT_DIR, "_knowledge", "index.json")
@@ -19,7 +20,8 @@ def _default_config():
         "archive": "_archive",
         "rules_meta": {
             "input_only_ext": [".docx", ".doc", ".pdf", ".pptx", ".xlsx", ".html", ".md", ".txt"],
-            "forbidden_ininbox_ext": [".py", ".log", ".pyc"],
+            # 与 _archive_auto.FORBIDDEN_IN_INBOX_EXTS / _session 检查1 三方同源（B5 #55），勿单边增减
+            "forbidden_ininbox_ext": [".py", ".log", ".pyc", ".tmp", ".bak"],
             "archive_root": "_archive",
         },
         "routes": [

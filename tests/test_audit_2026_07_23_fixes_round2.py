@@ -1,8 +1,4 @@
 # -*- coding: utf-8 -*-
-
-import pytest
-
-pytestmark = pytest.mark.internal
 """audit_2026-07-23 报告 第二轮（剩余 bug + 机制项）修复的回归测试。
 
 覆盖：#3 #4 #9 #10 #11 #13 #14 #21 #22 M1 M3
@@ -179,11 +175,11 @@ class TestBlockedModules:
 class TestBidRisksCorruptJson:
     def test_corrupt_criteria_no_crash(self, tmp_path, monkeypatch):
         import _verify
-        out = tmp_path / "output" / "蓝海集团"
+        out = tmp_path / "output" / "嘉益"
         out.mkdir(parents=True)
         (out / "bid_criteria.json").write_text("{broken json", encoding="utf-8")
         monkeypatch.setattr(_verify, "SCRIPT_DIR", str(tmp_path))
-        ok, issues = _verify.check_bid_risks("any.docx", "蓝海集团")
+        ok, issues = _verify.check_bid_risks("any.docx", "嘉益")
         assert ok is False
         assert any("解析失败" in i for i in issues)
 
@@ -276,10 +272,10 @@ class TestFileHash:
 
 
 # ---------------------------------------------------------------------------
-# M3 quote-build/pptd-gen 门禁统一 require_confirmed（行为不变：exit 1）
+# M3 quote-build/pptd-gen 门禁统一 require_confirmed（契约：守卫阻断 exit 2）
 # ---------------------------------------------------------------------------
 class TestConfirmedGateSinglePoint:
-    def test_quote_build_unconfirmed_exits_1(self, tmp_path, monkeypatch, capsys):
+    def test_quote_build_unconfirmed_exits_2(self, tmp_path, monkeypatch, capsys):
         import yaml
         import _cli
         monkeypatch.setattr("_cli_generate._run_pre_check", lambda **kw: {"ok": True})
@@ -293,7 +289,7 @@ class TestConfirmedGateSinglePoint:
         finally:
             if saved is None:
                 os.environ.pop("_PRESALES_CLI_INVOKED", None)
-        assert exc.value.code == 1
+        assert exc.value.code == 2
 
 
 # ---------------------------------------------------------------------------
@@ -310,7 +306,7 @@ class TestBidRisksLogic:
         return str(p)
 
     def _mk_criteria(self, tmp_path, criteria):
-        out = tmp_path / "output" / "蓝海集团"
+        out = tmp_path / "output" / "嘉益"
         out.mkdir(parents=True)
         (out / "bid_criteria.json").write_text(
             json.dumps(criteria, ensure_ascii=False), encoding="utf-8")
@@ -323,7 +319,7 @@ class TestBidRisksLogic:
         })
         monkeypatch.setattr(_verify, "SCRIPT_DIR", str(tmp_path))
         path = self._mk_docx(tmp_path, "技术方案 售后服务 ISO9001 内容")
-        ok, issues = _verify.check_bid_risks(path, "蓝海集团")
+        ok, issues = _verify.check_bid_risks(path, "嘉益")
         assert ok, issues
 
     def test_uncovered_scoring_flagged(self, tmp_path, monkeypatch):
@@ -334,7 +330,7 @@ class TestBidRisksLogic:
         })
         monkeypatch.setattr(_verify, "SCRIPT_DIR", str(tmp_path))
         path = self._mk_docx(tmp_path, "技术方案 内容")
-        ok, issues = _verify.check_bid_risks(path, "蓝海集团")
+        ok, issues = _verify.check_bid_risks(path, "嘉益")
         assert not ok
         assert any("保密资质" in i for i in issues)
         assert any("ISO9001" in i for i in issues)
@@ -344,3 +340,7 @@ class TestBidRisksLogic:
         path = self._mk_docx(tmp_path, "任意内容")
         ok, issues = _verify.check_bid_risks(path)
         assert ok and issues == []
+
+
+# v2.0 同源对齐（2026-09-08）：依赖主仓工作区契约/真实数据，发布面标记 internal 不随 CI 跑
+pytestmark = pytest.mark.internal

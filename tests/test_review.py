@@ -42,10 +42,10 @@ def test_safe_print_gbk_fallback(monkeypatch):
 # ---------------------------------------------------------------------------
 class TestStructureDimension:
     def test_checklist_has_categories(self):
-        assert len(_review.STRUCTURE_CHECKLIST) == 11
+        assert len(_review.STRUCTURE_CHECKLIST) == 12
         for key in ("叙事组件", "指标组件", "流程时序", "架构图", "数据图表",
-                    "证据台账", "风险登记", "责任矩阵", "决策面板",
-                    "层级金字塔", "四象限"):
+                    "图形化表达", "证据台账", "风险登记", "责任矩阵",
+                    "决策面板", "层级金字塔", "四象限"):
             assert key in _review.STRUCTURE_CHECKLIST
 
     def _mock_llm(self, monkeypatch, tmp_path, scores, verdict="PASS"):
@@ -231,3 +231,159 @@ class TestAdversarialParallel:
         # 单路内重复去重；不同角度的同文本保留各角度前缀（共 5 条）
         assert result["issues"].count("[可反驳论断] 同一条挑刺") == 1
         assert len(result["issues"]) == 5
+
+
+# ---------------------------------------------------------------------------
+# F5-2：REVIEW_PROVIDER / REVIEW_MODEL 独立审查模型
+# ---------------------------------------------------------------------------
+class TestReviewModelOverride:
+    def test_review_llm_kwargs_empty_by_default(self, monkeypatch):
+        monkeypatch.delenv("REVIEW_PROVIDER", raising=False)
+        monkeypatch.delenv("REVIEW_MODEL", raising=False)
+        assert _review._review_llm_kwargs() == {}
+
+    def test_review_llm_kwargs_reads_env(self, monkeypatch):
+        monkeypatch.setenv("REVIEW_PROVIDER", "zhipu")
+        monkeypatch.setenv("REVIEW_MODEL", "glm-5.2")
+        assert _review._review_llm_kwargs() == {
+            "provider": "zhipu",
+            "model": "glm-5.2",
+        }
+
+    def test_review_passes_override_to_chat(self, monkeypatch, tmp_path):
+        import _cloud_llm
+        monkeypatch.setenv("REVIEW_PROVIDER", "zhipu")
+        monkeypatch.setenv("REVIEW_MODEL", "glm-5.2")
+        captured = {}
+
+        def fake_chat(**kwargs):
+            captured.update(kwargs)
+            return json.dumps({"verdict": "PASS", "issues": [], "summary": "ok",
+                               "scores": {"设计": 3, "原创": 3, "工艺": 3,
+                                          "功能": 3, "结构": 3, "总分": 15}},
+                              ensure_ascii=False)
+
+        monkeypatch.setattr(_cloud_llm, "chat", fake_chat)
+        monkeypatch.setattr(_review, "write_review_log", lambda *a, **k: None)
+        out = tmp_path / "t.html"
+        out.write_text("<html>test</html>", encoding="utf-8")
+        _review.review(str(out), quiet=True)
+        assert captured.get("provider") == "zhipu"
+        assert captured.get("model") == "glm-5.2"
+
+
+# ---------------------------------------------------------------------------
+# 运行验收 §9-B 回归：HTML 文本提取必须剔除 style/script/head 块
+# ---------------------------------------------------------------------------
+class TestReadOutputTextStripsNonBody:
+    """修复前 CSS 规则占满 MAX_OUTPUT_CHARS 截断窗口 → review 假阴性 FAIL。"""
+
+    def _html(self):
+        return (
+            "<!DOCTYPE html><html><head><meta charset='utf-8'>"
+            "<title>方案标题</title><style>.x{color:red}</style></head>"
+            "<body><style>.big{width:100%;background:#fff}</style>"
+            "<script>var secret=1;</script><h1>核心结论</h1><p>正文内容 ABC123</p>"
+            "</body></html>"
+        )
+
+    def test_body_text_survives_css_script_stripped(self, tmp_path):
+        p = tmp_path / "d.html"
+        p.write_text(self._html(), encoding="utf-8")
+        text = _review._read_output_text(str(p))
+        assert text is not None
+        # 正文保留
+        assert "核心结论" in text
+        assert "正文内容" in text
+        # 非正文（CSS/JS/head 内容）剔除
+        assert ".big" not in text
+        assert "color:red" not in text
+        assert "var secret" not in text
+        assert "方案标题" not in text
+        # 标签本身也被去除
+        assert "<style" not in text and "<script" not in text
+        assert "<head" not in text and "<h1>" not in text
+
+    def test_css_flood_does_not_occupy_truncation_window(self, tmp_path):
+        big_css = "<style>" + "a{color:#fff;}\n" * 3000 + "</style>"
+        p = tmp_path / "flood.html"
+        p.write_text("<html><head></head><body>" + big_css
+                     + "<p>真正的内容在这</p></body></html>", encoding="utf-8")
+        text = _review._read_output_text(str(p))
+        # CSS 约 5 万字符 > MAX_OUTPUT_CHARS，修复前正文会被截断窗口吞掉
+        assert "真正的内容在这" in text
+        assert "color:#fff" not in text
+
+    def test_non_html_file_unaffected(self, tmp_path):
+        p = tmp_path / "t.txt"
+        p.write_text("纯文本 <style>不剔除</style>", encoding="utf-8")
+        text = _review._read_output_text(str(p))
+        assert "纯文本" in text
+        assert "<style>不剔除</style>" in text
+
+
+# ---------------------------------------------------------------------------
+# P1 双向判分：verdict 缺省 FAIL + scores 缺失/非数值不做 <15 比较（三处统一）
+# ---------------------------------------------------------------------------
+class TestBidirectionalVerdict:
+    def _mock_llm(self, monkeypatch, tmp_path, payload):
+        import _cloud_llm
+        monkeypatch.setattr(_cloud_llm, "chat", lambda **kw: payload)
+        monkeypatch.setattr(_review, "write_review_log", lambda *a, **k: None)
+        out = tmp_path / "t.html"
+        out.write_text("<html>test</html>", encoding="utf-8")
+        return str(out)
+
+    def test_missing_verdict_defaults_fail_serial(self, monkeypatch, tmp_path):
+        payload = json.dumps({"issues": [], "summary": "ok"}, ensure_ascii=False)
+        out = self._mock_llm(monkeypatch, tmp_path, payload)
+        assert _review.review(out, quiet=True)["verdict"] == "FAIL"
+
+    def test_missing_scores_no_false_auto_fail(self, monkeypatch, tmp_path):
+        """LLM 判 PASS 但缺 scores → 不做 <15 比较、不追加"总分 0"误导 issue。"""
+        payload = json.dumps({"verdict": "PASS", "issues": [], "summary": "ok"},
+                             ensure_ascii=False)
+        out = self._mock_llm(monkeypatch, tmp_path, payload)
+        r = _review.review(out, quiet=True)
+        assert r["verdict"] == "PASS"
+        assert not any("总分" in i for i in r["issues"])
+
+    def test_low_total_still_auto_fails(self, monkeypatch, tmp_path):
+        payload = json.dumps({"verdict": "PASS",
+                              "scores": {"设计": 2, "原创": 3, "工艺": 3,
+                                         "功能": 3, "结构": 3, "总分": 14},
+                              "issues": [], "summary": "ok"}, ensure_ascii=False)
+        out = self._mock_llm(monkeypatch, tmp_path, payload)
+        r = _review.review(out, quiet=True)
+        assert r["verdict"] == "FAIL"
+        assert any("低于阈值" in i for i in r["issues"])
+
+    def test_missing_verdict_defaults_fail_parallel_dim(self, monkeypatch, tmp_path):
+        """并行模式：维度返回缺 verdict → 汇总 verdict 翻 FAIL。"""
+        payload = json.dumps({"issues": [], "summary": "ok"}, ensure_ascii=False)
+
+        def fake_chat(**kw):
+            return payload
+
+        import _cloud_llm
+        monkeypatch.setattr(_cloud_llm, "chat", fake_chat)
+        monkeypatch.setattr(_review, "write_review_log", lambda *a, **k: None)
+        out = tmp_path / "t.html"
+        out.write_text("<html>test</html>", encoding="utf-8")
+        assert _review.review_parallel(str(out), quiet=True)["verdict"] == "FAIL"
+
+    def test_merge_scores_without_total_no_false_fail(self):
+        """并行汇总：scores 有值但缺"总分"键 → 不误判低分。"""
+        ok = {"verdict": "PASS", "issues": [], "summary": "s"}
+        dim_results = {
+            "铁律覆盖": dict(ok, dim="铁律覆盖"),
+            "内容一致性": dict(ok, dim="内容一致性"),
+            "去AI化": dict(ok, dim="去AI化"),
+            "事实可追溯": dict(ok, dim="事实可追溯"),
+            "五维打分": dict(ok, dim="五维打分", extra_key="scores",
+                           extra={"设计": 3, "原创": 3, "工艺": 3,
+                                  "功能": 3, "结构": 3}),
+        }
+        r = _review._merge_parallel_results(dim_results, [])
+        assert r["verdict"] == "PASS"
+        assert not any("总分" in i for i in r["issues"])

@@ -1,8 +1,4 @@
 # -*- coding: utf-8 -*-
-
-import pytest
-
-pytestmark = pytest.mark.internal
 """错误路径退出码回归测试。
 
 背景：多个命令的错误路径曾是 print 错误信息后裸 return（exit 0），
@@ -73,6 +69,15 @@ class TestErrorExitCodes:
         )
         assert code == 1
 
+    def test_theme_guard_nonexistent_client_list_exits_1(self, monkeypatch):
+        """C-A2：theme-guard 列表路径对不存在客户 exit 1（V3 漏网补修）。
+
+        此前静默打印「共 0 条主题」仍 exit 0——ZCode 纪律 ~10 轮手跑该命令，
+        客户名打错拿到空列表会被误读为「该客户无铁律」。
+        """
+        code = _run_main(["_cli.py", "theme-guard", "绝不存在的客户xyz"], monkeypatch)
+        assert code == 1
+
     def test_review_missing_file_exits_1(self, monkeypatch):
         code = _run_main(["_cli.py", "review", "不存在的文件xyz.html"], monkeypatch)
         assert code == 1
@@ -111,7 +116,9 @@ class TestKeyDoctor:
         assert code in (None, 0)
         out = capsys.readouterr().out
         assert "ZHIPU_API_KEY" in out
-        assert "test-k***7890" in out
+        # 掩码 2026-09-06 收紧为前0后4（安全报告 P3：前6后4 对短 key 暴露偏高）
+        assert "***7890" in out
+        assert "test-k***" not in out  # 旧前6后4 形态不再出现
         assert "test-key-abcdef1234567890" not in out  # 完整 key 不回显
 
     def test_conflict_warn_when_env_differs_from_dotenv(self, monkeypatch, tmp_path, capsys):
@@ -138,12 +145,18 @@ class TestParserDispatchConsistency:
 
     def test_deprecated_count(self):
         import _cli
-        assert len(_cli._DEPRECATED) == 22
+        # P3：insight / diff-record 并入（替代 reflect），feedback/diff 改指 reflect
+        # F0-10：handoff 死代码删除后废弃映射减 1
+        # 2026-08-31 清理与下线工程（3B）：consolidate 墓碑化（固化走 theme-guard --set）
+        assert len(_cli._DEPRECATED) == 24
 
-    def test_handoff_deprecated_exits_1(self, monkeypatch, capsys):
-        code = _run_main(["_cli.py", "handoff", "通用"], monkeypatch)
-        assert code == 1
-        assert "已废弃" in capsys.readouterr().out
+    def test_handoff_dead_code_removed(self, monkeypatch):
+        """F0-10：handoff 不再作为废弃别名存在（无拦截、无消费端）。"""
+        import _cli
+        import _session
+        assert "handoff" not in _cli._DEPRECATED
+        assert not hasattr(_session, "generate_handoff_packet")
+        assert not hasattr(_session, "check_handoff_packet")
 
 
 class TestCompactBackup:
@@ -224,19 +237,26 @@ class TestQuoteConfirmedGate:
         import yaml
         spec = tmp_path / "q.yml"
         spec.write_text(yaml.dump(data, allow_unicode=True), encoding="utf-8")
+        if data.get("confirmed"):
+            import hashlib
+            import json
+            digest = hashlib.sha256(spec.read_bytes()).hexdigest()
+            sidecar = tmp_path / "q.confirm.json"
+            sidecar.write_text(json.dumps({"spec_sha256": digest}),
+                               encoding="utf-8")
         return str(spec)
 
     def test_unconfirmed_spec_blocked(self, monkeypatch, tmp_path):
         monkeypatch.setattr("_cli_generate._run_pre_check", lambda **kw: {"ok": True})
         spec = self._mk_spec(tmp_path, {"client": "测试", "confirmed": False})
         code = _run_main(["_cli.py", "quote-build", spec, "output/通用/q"], monkeypatch)
-        assert code == 1
+        assert code == 2
 
     def test_missing_confirmed_field_blocked(self, monkeypatch, tmp_path):
         monkeypatch.setattr("_cli_generate._run_pre_check", lambda **kw: {"ok": True})
         spec = self._mk_spec(tmp_path, {"client": "测试"})
         code = _run_main(["_cli.py", "quote-build", spec, "output/通用/q"], monkeypatch)
-        assert code == 1
+        assert code == 2
 
 
 class TestVisionDescribeJson:
@@ -245,10 +265,11 @@ class TestVisionDescribeJson:
     def test_json_format_wraps_source(self, monkeypatch, tmp_path, capsys):
         img = tmp_path / "a.png"
         img.write_bytes(b"\x89PNG\r\n\x1a\n")  # vision_chat 会被 mock，文件只需存在
-        monkeypatch.setattr("_cli.vision_chat",
+        monkeypatch.setattr("_cli_cmds_qa.vision_chat",
                             lambda *a, **kw: '{"summary": "一张测试图", "objects": ["矩形"]}')
         code = _run_main_allow_success(
-            ["_cli.py", "vision-describe", str(img), "--format", "json"], monkeypatch)
+            ["_cli.py", "vision-describe", str(img), "--format", "json",
+             "--allow-outside"], monkeypatch)
         assert code in (None, 0)
         out = capsys.readouterr().out
         assert '"source_image"' in out
@@ -266,6 +287,9 @@ class TestVisionCache:
         assert _cloud_llm._vision_cache_get("missing") is None
 
     def test_cache_lru_eviction(self, monkeypatch, tmp_path):
+        # #57 下沉后母文件不再 import time（原 _cloud_llm.time 别名消失），
+        # 改打标准库 time 模块（vision 缓存 ts 消费的同一对象，语义不变）
+        import time as time_mod
         import _cloud_llm
         monkeypatch.setattr(_cloud_llm, "VISION_CACHE", str(tmp_path / "vc.json"))
         counter = {"t": 0.0}
@@ -274,7 +298,7 @@ class TestVisionCache:
             counter["t"] += 1.0
             return counter["t"]
 
-        monkeypatch.setattr(_cloud_llm.time, "time", fake_time)
+        monkeypatch.setattr(time_mod, "time", fake_time)
         limit = _cloud_llm.VISION_CACHE_MAX_ENTRIES
         for i in range(limit + 5):
             _cloud_llm._vision_cache_put(f"k{i}", f"desc{i}")
@@ -287,13 +311,15 @@ class TestVisionCache:
     def test_vision_chat_cache_hit_skips_upload(self, monkeypatch, tmp_path):
         import hashlib
         import _cloud_llm
+        # _post_json 真源自 #57 下沉后在 _cloud_transport，vision 按调用时属性解析
+        import _cloud_transport
         monkeypatch.setattr(_cloud_llm, "VISION_CACHE", str(tmp_path / "vc.json"))
         monkeypatch.setattr(_cloud_llm, "_get_api_key", lambda cfg, p="": "fake-key")
 
         def _fail_post(*a, **kw):
             raise AssertionError("缓存命中时不应发起网络请求")
 
-        monkeypatch.setattr(_cloud_llm, "_post_json", _fail_post)
+        monkeypatch.setattr(_cloud_transport, "_post_json", _fail_post)
         img = tmp_path / "a.png"
         raw = b"\x89PNG\r\n\x1a\n"
         img.write_bytes(raw)
@@ -314,6 +340,13 @@ class TestOutputWhitelistCLI:
         import yaml
         spec = tmp_path / "spec.yml"
         spec.write_text(yaml.dump(data, allow_unicode=True), encoding="utf-8")
+        if data.get("confirmed"):
+            import hashlib
+            import json
+            digest = hashlib.sha256(spec.read_bytes()).hexdigest()
+            sidecar = tmp_path / "spec.confirm.json"
+            sidecar.write_text(json.dumps({"spec_sha256": digest}),
+                               encoding="utf-8")
         return str(spec)
 
     def test_spec_gen_default_output_blocked(self, monkeypatch, tmp_path, capsys):
@@ -330,14 +363,14 @@ class TestOutputWhitelistCLI:
 
     def test_quote_build_output_outside_blocked(self, monkeypatch, tmp_path, capsys):
         monkeypatch.setattr("_cli_generate._run_pre_check", lambda **kw: {"ok": True})
-        spec = self._mk_spec(tmp_path, {"client": "测试", "confirmed": True})
+        spec = self._mk_spec(tmp_path, {"client": "测试", "confirmed": True, "tax_rate": 0.06})
         code = _run_main(
             ["_cli.py", "quote-build", spec, str(tmp_path / "q")], monkeypatch)
         assert code == 1
         assert "白名单" in capsys.readouterr().out
 
     def test_quote_spec_gen_output_outside_blocked(self, monkeypatch, tmp_path, capsys):
-        monkeypatch.setattr("_cli._run_pre_check", lambda **kw: {"ok": True})
+        monkeypatch.setattr("_cli_cmds_gen._run_pre_check", lambda **kw: {"ok": True})
         code = _run_main(
             ["_cli.py", "quote-spec-gen", str(tmp_path),
              str(tmp_path / "quote_spec.yml")], monkeypatch)
@@ -377,3 +410,92 @@ class TestKeywordFallback:
         results = _keyword_fallback("报价", return_results=True)
         assert isinstance(results, list)
 
+
+
+class TestQuoteExitCodes:
+    """P0-3/P1-3：quote-spec-gen 失败与 quote-validate 有问题必须非 0 退出
+    （曾 print 后裸 return，交付链把失败当成功继续走）。"""
+
+    def test_quote_spec_gen_missing_materials_exits_1(self, monkeypatch, capsys):
+        """材料目录不存在 → gen_quote_spec 返回 None → exit 1。
+
+        密封性（2026-09-08）：显式关 skill 哨兵门（干净工作区被哨兵先拦 exit 2）。
+        """
+        monkeypatch.setenv("REQUIRE_SKILL_SENTINEL", "false")
+        code = _run_main(
+            ["_cli.py", "quote-spec-gen", "不存在的材料目录_xyz",
+             "output/通用/quote_spec_exitcode_test.yml"], monkeypatch)
+        assert code == 1
+        assert "失败" in capsys.readouterr().out
+
+    def test_quote_validate_issues_exit_1(self, monkeypatch, tmp_path):
+        """公式引用不存在的 sheet → 有 issues → exit 1。"""
+        import openpyxl
+        p = tmp_path / "bad.xlsx"
+        wb = openpyxl.Workbook()
+        wb.active["A1"] = "=BadSheet!A1"
+        wb.save(p)
+        code = _run_main(["_cli.py", "quote-validate", str(p)], monkeypatch)
+        assert code == 1
+
+    def test_quote_validate_clean_exit_0(self, monkeypatch, tmp_path):
+        """无公式问题的干净工作簿 → 校验通过，退出码 0。"""
+        import openpyxl
+        p = tmp_path / "good.xlsx"
+        wb = openpyxl.Workbook()
+        wb.active["A1"] = "=SUM(B1:B2)"
+        wb.save(p)
+        code = _run_main_allow_success(["_cli.py", "quote-validate", str(p)], monkeypatch)
+        assert code in (None, 0)
+
+
+class TestCiteAuditNoSourceOverwrite:
+    """P1-2：cite-audit 默认报告路径 splitext 派生 + 写前 abspath 断言，
+    .yaml 输入不再覆盖源文件（曾 replace(".yml") 不生效致报告写向源 spec）。"""
+
+    def _mk_yaml_spec(self, tmp_path):
+        import yaml
+        spec = tmp_path / "spec.yaml"
+        spec.write_text(yaml.dump({"pages": [{"title": "p", "elements": []}]},
+                                  allow_unicode=True), encoding="utf-8")
+        return str(spec)
+
+    def test_yaml_input_default_report_not_source(self, monkeypatch, tmp_path, capsys):
+        """.yaml 输入走默认路径：报告写到 <spec>_审查报告.md，源文件原样。"""
+        import shutil
+        from _cli_infra import SCRIPT_DIR
+        out_root = os.path.join(SCRIPT_DIR, "output", "通用", "_cite_yaml_test")
+        os.makedirs(out_root, exist_ok=True)
+        # spec 放 output/ 下（默认报告跟随 spec 目录才能过白名单，才是真实覆盖场景）
+        spec = os.path.join(out_root, "spec.yaml")
+        with open(spec, "w", encoding="utf-8") as f:
+            f.write("pages:\n- title: p\n  elements: []\n")
+        try:
+            code = _run_main_allow_success(["_cli.py", "cite-audit", spec], monkeypatch)
+            assert code in (None, 0)
+            assert os.path.exists(os.path.join(out_root, "spec_审查报告.md"))
+            with open(spec, "r", encoding="utf-8") as f:
+                assert "pages:" in f.read()  # 源文件未被报告覆盖
+        finally:
+            shutil.rmtree(out_root, ignore_errors=True)
+
+    def test_output_same_as_source_blocked(self, monkeypatch, tmp_path, capsys):
+        """--output 显式指向源 spec 本身 → 写前断言拦截 exit 1。"""
+        spec = self._mk_yaml_spec(tmp_path)
+        code = _run_main(["_cli.py", "cite-audit", spec, "--output", spec], monkeypatch)
+        assert code == 1
+        assert "拒绝写入" in capsys.readouterr().out
+
+
+class TestLoadNewExitCodes:
+    """V1/V2：load 客户不存在与 new 建目录失败必须 exit 1（曾 print 后裸 return）。"""
+
+    def test_load_nonexistent_client_exits_1(self, monkeypatch, capsys):
+        code = _run_main(["_cli.py", "load", "不存在的客户xyz"], monkeypatch)
+        assert code == 1
+        assert "不存在" in capsys.readouterr().out
+
+    def test_new_mkdir_failure_exits_1(self, monkeypatch, capsys):
+        """非法客户名触发建目录失败 → onboard 返回 client_path=None → exit 1。"""
+        code = _run_main(["_cli.py", "new", "../非法客户"], monkeypatch)
+        assert code == 1

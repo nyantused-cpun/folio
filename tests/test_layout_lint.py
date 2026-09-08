@@ -1,8 +1,4 @@
 # -*- coding: utf-8 -*-
-
-import pytest
-
-pytestmark = pytest.mark.internal
 """_layout_lint 版式 lint 测试（重构 Phase 2，§七 2.8；间距体系 v1 §四）。
 
 覆盖：
@@ -558,6 +554,13 @@ class TestCliIntegration:
     def _write_spec(self, tmp_path, spec):
         p = tmp_path / "spec.yml"
         p.write_text(yaml.safe_dump(spec, allow_unicode=True), encoding="utf-8")
+        if spec.get("confirmed"):
+            import hashlib
+            import json
+            digest = hashlib.sha256(p.read_bytes()).hexdigest()
+            sidecar = tmp_path / "spec.confirm.json"
+            sidecar.write_text(json.dumps({"spec_sha256": digest}),
+                               encoding="utf-8")
         return str(p)
 
     def setup_method(self):
@@ -623,6 +626,28 @@ class TestCliIntegration:
 
 
 # ---------------------------------------------------------------------------
-# 基线回归测试已随发布版移除（基线 spec 含客户材料，见 README 测试说明）
+# 基线回归：6 个冻结 spec build_deck 后 lint 零 error（§七 2.8 验收口径）
+# 注：真实超量页的元素由防线碎片跳过（"可用空间不足一行"），经 CLI 生成时
+# verify 会 FAIL（skipped→FAIL 是 P1-D 语义）——逼用户拆页，预期行为不是 bug。
 # ---------------------------------------------------------------------------
 
+class TestBaselineLintClean:
+    @pytest.mark.parametrize("key", [
+        "arms_v5", "fuwu_jianyishu", "jishubiao", "main_ppt", "saijite_v1",
+        "summary",
+    ])
+    def test_baseline_spec_lint_zero_error(self, key, monkeypatch):
+        # 全量套件中前面的用例会 pop _PRESALES_CLI_INVOKED，这里显式保证
+        monkeypatch.setenv("_PRESALES_CLI_INVOKED", "1")
+        from baseline_kit import render_spec
+        files = render_spec(key)["pptd"]
+        issues = lint_pptd_files(files)
+        errors = [i for i in issues if i.severity == ERROR]
+        assert not errors, (
+            f"[{key}] 基线 spec lint 发现 {len(errors)} 个 error"
+            "（防线或 lint 有 bug，停查）：\n"
+            + "\n".join(f"  {i.page} {i.element_id}: {i.message}" for i in errors))
+
+
+# v2.0 同源对齐（2026-09-08）：依赖主仓工作区契约/真实数据，发布面标记 internal 不随 CI 跑
+pytestmark = pytest.mark.internal

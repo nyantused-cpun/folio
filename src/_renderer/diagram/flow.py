@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """flow 类渲染器：sequence / swimlane / cross_system / parallel / decision（5 种全部实现）。
 
-HTML：内联 SVG（viewBox 1200 宽），沿用既有 figures 节点语言
+HTML：内联 SVG（viewBox 1200 宽），沿用蓝海 figures 节点语言
 （左色条 + 步骤序号圆点 + 实线同步/虚线异步 + doc 便签节点）。
 pptd：同一套坐标经 PptdScaler 换算，连接器走原生 connector（§4.1 契约）。
 
@@ -12,14 +12,15 @@ spec 字段（dev plan §4.2）：
   direction: horizontal | vertical（本期实现 horizontal）
 """
 
-from . import theme
-from .theme import _esc
+from .. import theme
+from ..theme import _esc
 from . import pptd_emit as pe
 from ..spacing import GAP_SM, INSET_X
 
 NODE_W, NODE_H = 180, 72
 MARGIN_X = 40
-LANE_H, LANE_GAP = 132, 16  # 泳道紧凑化：4 道总高 <=640px，保证 PPTD 单页（可用高 ~560pt）不溢出
+LANE_H, LANE_GAP = 132, 10  # 泳道紧凑化：4 道总高 <=640px，保证 PPTD 单页（可用高 ~560pt）不溢出
+LANE_LABEL_W = 44  # v1.4 道头色条宽：道名竖排，道体节点整体右移让位
 TOP_PAD = 20
 
 
@@ -79,21 +80,30 @@ def _layout_swimlane(elem):
     per_lane = {name: [] for name in lanes}
     for i, st in enumerate(steps):
         ln = st.get("lane", lanes[0])
+        if ln not in per_lane:
+            # 未声明泳道的步骤保持双端一致丢弃（历史行为不变）；但 typo 即
+            # 触发丢步骤，静默不可接受，显式告警（HTML/pptd 共用本布局，
+            # 两端各告警一次，口径一致）
+            print(f"[diagram] swimlane 步骤「{st.get('label', '')}」引用了未声明的"
+                  f"泳道「{ln}」，该步骤已丢弃（请在 lanes 声明或修正 lane 拼写）")
         per_lane.setdefault(ln, []).append((i, st))
     nodes = []
     node_map = {}
     lane_rects = []
     ly = TOP_PAD  # 泳道 y 游标：按带内节点堆叠实高推进（hug）
-    for name in lanes:
+    # v1.4 道头色条：节点区右移 LANE_LABEL_W，可用宽相应收窄
+    node_x0 = MARGIN_X + LANE_LABEL_W
+    node_avail_w = 1200 - MARGIN_X - node_x0
+    for li, name in enumerate(lanes):
         band = per_lane.get(name, [])
         cnt = len(band)
         node_w = NODE_W
         if cnt > 1:
-            gap = (1200 - 2 * MARGIN_X - cnt * node_w) / (cnt - 1)
+            gap = (node_avail_w - cnt * node_w) / (cnt - 1)
             if gap < 60:
                 # gap 至少 60px：给边上 note（关联键标注）留出显示位，避免被节点遮挡
                 gap = 60
-                node_w = (1200 - 2 * MARGIN_X - gap * (cnt - 1)) / cnt
+                node_w = (node_avail_w - gap * (cnt - 1)) / cnt
         else:
             gap = 60
         band_max_h = NODE_H
@@ -101,7 +111,7 @@ def _layout_swimlane(elem):
             nd = {
                 "label": st.get("label", ""), "desc": st.get("desc", ""),
                 "type": st.get("type", "task"), "lane": name,
-                "x": MARGIN_X + k * (node_w + gap),
+                "x": node_x0 + k * (node_w + gap),
                 "y": ly + 44, "num": i + 1, "w": node_w,
             }
             nd["h"] = _hug_h(nd)
@@ -109,8 +119,9 @@ def _layout_swimlane(elem):
             nodes.append(nd)
             node_map[i] = nd
         lane_h = max(LANE_H, 44 + band_max_h + 16)
+        # 6 元组：末位为道序（道头色条取 LAYER_COLORS 循环、交替底色用）
         lane_rects.append((name, MARGIN_X - 10, ly,
-                           1200 - 2 * MARGIN_X + 20, lane_h))
+                           1200 - 2 * MARGIN_X + 20, lane_h, li))
         ly += lane_h + LANE_GAP
     edges = _build_edges(steps, nodes, node_map=node_map)
     vb_h = ly + 20
@@ -166,7 +177,13 @@ def _layout_cross_system(elem):
     node_w = min(NODE_W + 40, col_w - 40)
     per_sys = {name: [] for name in systems}
     for i, st in enumerate(steps):
-        per_sys.setdefault(st.get("system", systems[0]), []).append((i, st))
+        sys_name = st.get("system", systems[0])
+        if sys_name not in per_sys:
+            # 未声明系统的步骤保持双端一致丢弃（历史行为不变）；同 swimlane，
+            # typo 即丢步骤，显式告警兜底
+            print(f"[diagram] cross_system 步骤「{st.get('label', '')}」引用了未声明的"
+                  f"系统「{sys_name}」，该步骤已丢弃（请在 systems 声明或修正 system 拼写）")
+        per_sys.setdefault(sys_name, []).append((i, st))
     nodes = []
     node_map = {}
     v_gap = 44
@@ -278,11 +295,13 @@ def _layout_decision(elem):
 
 def _node_style():
     """节点配色表（调用时取 theme：风格透传 P2-A2，模块级快照会在
-    use_style 切换后滞留旧色板，故改为函数）。"""
+    use_style 切换后滞留旧色板，故改为函数）。trigger 深文字色由
+    ORANGE×TEXT 派生（v1.4 去字面量，theme.mix 单点）。"""
+    orange_dark = theme.mix(theme.ORANGE, theme.TEXT, 0.45)
     return {
         "task": (theme.WHITE, theme.BLUE, theme.BLUE, theme.TEXT),
         "system": (theme.GREEN_LIGHT, theme.GREEN, theme.GREEN, theme.GREEN),
-        "trigger": ("#FFFAF0", "#C05621", "#C05621", "#C05621"),
+        "trigger": (theme.ORANGE_LIGHT, theme.ORANGE, theme.ORANGE, orange_dark),
     }
 
 
@@ -303,7 +322,7 @@ def _svg_node(nd):
         dw, dh = 200, 110
         dx, dy = cx, y + nh / 2
         parts.append(f'<polygon points="{dx},{dy - dh / 2} {dx + dw / 2},{dy} {dx},{dy + dh / 2} {dx - dw / 2},{dy}" fill="{theme.ORANGE_LIGHT}" stroke="{theme.ORANGE}" stroke-width="1.5"/>')
-        parts.append(f'<text x="{dx}" y="{dy + 4}" font-size="12" font-weight="700" fill="#7B341E" text-anchor="middle">{_esc(nd["label"])}</text>')
+        parts.append(f'<text x="{dx}" y="{dy + 4}" font-size="12" font-weight="700" fill="{theme.mix(theme.ORANGE, theme.TEXT, 0.45)}" text-anchor="middle">{_esc(nd["label"])}</text>')
         return "\n".join(parts)
     if t == "doc":
         # 单据便签（青色折角，BPMN data object）
@@ -315,7 +334,7 @@ def _svg_node(nd):
             parts.append(f'<text x="{x + dw / 2}" y="{y + 44}" font-size="10" fill="{theme.TEXT_SUB}" text-anchor="middle">{_esc(nd["desc"])}</text>')
         return "\n".join(parts)
     fill, border, bar, title_c = _node_style().get(t, _node_style()["task"])
-    parts.append(f'<rect x="{x}" y="{y}" width="{nw}" height="{nh}" rx="8" fill="{fill}" stroke="{border}" stroke-width="1.5" filter="url(#dgm-shadow)"/>')
+    parts.append(f'<rect x="{x}" y="{y}" width="{nw}" height="{nh}" rx="10" fill="{fill}" stroke="{border}" stroke-width="1.5" filter="url(#dgm-shadow)"/>')
     parts.append(f'<rect x="{x}" y="{y}" width="5" height="{nh}" rx="2" fill="{bar}"/>')
     # 序号徽章骑缝（§3.2 overlay(straddle=top-left)，I-1）：圆心压节点左上角，
     # 一半在节点外，不再放节点内压标题
@@ -349,18 +368,24 @@ def _svg_arrow(a, b, dashed=False, note="", idx=0):
     bx, by = b["x"] + (65 if doc_b else bw / 2), b["y"] + (30 if doc_b else bh / 2)
     color = theme.TEAL if doc_b else (theme.GREEN if dashed else theme.BLUE)
     dash = ' stroke-dasharray="6,4"' if dashed else ""
-    w = 1.5 if dashed else 2
+    w = 1.8 if dashed else 2.4
     marker = "dgm-arr-g" if (dashed or doc_b) else "dgm-arr"
     same_row = abs(ay - by) < 40
-    if same_row:
+    if doc_b:
+        # doc 挂接：绕行走廊（出底 → 下 → 水平 → 上 → 入底），不穿中间节点盒。
+        # 原实现直线斜穿（同行泳道横穿带内节点）；v1 改绕行后 r0 与主链 r0
+        # 同 x 重合、入点穿 doc 节点本体，这里 x 偏移 +12px 并止于底边。
+        gap_y = max(a["y"] + ah, b["y"] + bh) + 24
+        axo = ax + 12
+        bxo = b["x"] + (65 if doc_b else bw / 2) + 12
+        path = f"M{ax},{a['y'] + ah} L{axo},{a['y'] + ah} L{axo},{gap_y} L{bxo},{gap_y} L{bxo},{b['y'] + bh}"
+        lx, ly = (ax + bx) / 2 + 8, gap_y + 12
+        dash = ' stroke-dasharray="3,3"'
+        w = 1.2
+    elif same_row:
         x1, x2 = a["x"] + aw, b["x"]
         path = f"M{x1},{ay} C{x1 + 30},{ay} {x2 - 30},{by} {x2},{by}"
         lx, ly = (x1 + x2) / 2, ay - 10
-    elif doc_b:
-        path = f"M{ax},{a['y'] + ah} L{bx},{b['y']}"
-        lx, ly = (ax + bx) / 2 + 8, (a["y"] + ah + b["y"]) / 2
-        dash = ' stroke-dasharray="3,3"'
-        w = 1.2
     else:
         # 跨行/跨带 S 曲线：下行出底入顶，上行出顶入底（不穿节点盒）
         downward = b["y"] > a["y"]
@@ -375,15 +400,27 @@ def _svg_arrow(a, b, dashed=False, note="", idx=0):
         lx, ly = max(x1, x2) + 8, ym
     parts = [f'<path d="{path}" stroke="{color}" stroke-width="{w}" fill="none"{dash} marker-end="url(#{marker})"/>']
     if note:
-        parts.append(f'<text x="{lx}" y="{ly}" font-size="11" fill="{color}" font-style="italic">{_esc(note)}</text>')
+        # 注记去斜体（v1.4：中文无真斜体，机械倾斜损可读性），用字重+颜色强调
+        parts.append(f'<text x="{lx}" y="{ly}" font-size="11" font-weight="600" fill="{color}">{_esc(note)}</text>')
     return "\n".join(parts)
 
 
 def _render_flow_svg(elem, nodes, edges, vb_w, vb_h, lane_rects=None):
     parts = [f'<svg class="dg" viewBox="0 0 {vb_w} {vb_h}" xmlns="http://www.w3.org/2000/svg">', theme.SVG_DEFS]
-    for name, lx, ly, lw, lh in lane_rects or []:
-        parts.append(f'<rect x="{lx}" y="{ly}" width="{lw}" height="{lh}" rx="10" fill="{theme.BG}" stroke="{theme.BORDER_STRONG}" stroke-width="1.5"/>')
-        parts.append(f'<text x="{lx + 18}" y="{ly + 28}" font-size="13" font-weight="700" fill="{theme.TEXT_STRONG}">{_esc(name)}</text>')
+    for rect in lane_rects or []:
+        # 兼容 5/6 元组：6 元组末位为道序（v1.4 道头色条 + 交替底色）
+        name, lx, ly, lw, lh = rect[:5]
+        li = rect[5] if len(rect) > 5 else 0
+        lane_fill = theme.BG if li % 2 == 0 else theme.WHITE
+        strip_c = theme.LAYER_COLORS[li % len(theme.LAYER_COLORS)]
+        parts.append(f'<rect x="{lx}" y="{ly}" width="{lw}" height="{lh}" rx="10" fill="{lane_fill}" stroke="{theme.BORDER_STRONG}" stroke-width="1.2"/>')
+        # 道头色条：左缘圆角实色条（path 只圆左侧两角），道名竖排白字
+        sx, sw = lx + 1.5, LANE_LABEL_W - 6
+        parts.append(f'<path d="M{sx + 8},{ly + 1.5} h{sw - 8} v{lh - 3} h-{sw - 8} '
+                     f'a8,8 0 0 1 -8,-8 v-{lh - 19} a8,8 0 0 1 8,-8 z" fill="{strip_c}"/>')
+        parts.append(f'<text x="{sx + sw / 2}" y="{ly + lh / 2}" font-size="13" font-weight="700" '
+                     f'fill="{theme.WHITE}" text-anchor="middle" '
+                     f'style="writing-mode:vertical-rl;text-orientation:upright;letter-spacing:3px;" data-editable="true">{_esc(name)}</text>')
     node_map = {}
     for i, nd in enumerate(nodes):
         key = nd.get("num", i + 1) - 1
@@ -415,7 +452,7 @@ def _render_cross_svg(elem, nodes, edges, vb_w, vb_h, col_rects):
     for nd in nodes:
         parts.append(_svg_node(nd))
     if edges:
-        parts.append(f'<text x="{vb_w / 2}" y="{vb_h - 8}" font-size="11" fill="{theme.TEXT_SUB}" text-anchor="middle" font-style="italic">图例：实线 = 同步接口 · 虚线 = 异步回传</text>')
+        parts.append(f'<text x="{vb_w / 2}" y="{vb_h - 8}" font-size="11" font-weight="600" fill="{theme.TEXT_SUB}" text-anchor="middle">图例：实线 = 同步接口 · 虚线 = 异步回传</text>')
     parts.append("</svg>")
     return "\n".join(parts)
 
@@ -430,7 +467,11 @@ def _render_parallel_svg(elem, nodes, edges, vb_w, vb_h, gate):
         if not a or not b:
             continue
         aw, _bw = a.get("w", NODE_W), b.get("w", NODE_W)
-        if bi >= len(nodes) - 1 or ai == bi:
+        # 旧守卫 bi >= len(nodes)-1 误伤末节点：merge→after 末段边、以及
+        # after=[]（schema 合法）时全部「源→网关」箭头被静默吞掉，与 pptd 侧
+        # （render_pptd 对 _layout_parallel 边集全量连线，无此守卫）双端不一致；
+        # 对齐 pptd 侧语义，边集全部绘制，仅留自环兜底
+        if ai == bi:
             continue
         if a.get("num", 0) <= len(elem.get("sources", []) or []):
             # 源 -> 网关
@@ -450,7 +491,7 @@ def _render_parallel_svg(elem, nodes, edges, vb_w, vb_h, gate):
     parts.append(f'<path d="M{gx + 14},{gy} C{gx + 40},{gy} {merge_nd["x"] - 30},{gy} {merge_nd["x"]},{gy}" stroke="{theme.BLUE}" stroke-width="2" fill="none" marker-end="url(#dgm-arr)"/>')
     for nd in nodes:
         parts.append(_svg_node(nd))
-    parts.append(f'<text x="{vb_w / 2}" y="{vb_h - 8}" font-size="11" fill="{theme.TEXT_SUB}" text-anchor="middle" font-style="italic">各源并行完成后方可在网关汇聚</text>')
+    parts.append(f'<text x="{vb_w / 2}" y="{vb_h - 8}" font-size="11" font-weight="600" fill="{theme.TEXT_SUB}" text-anchor="middle">各源并行完成后方可在网关汇聚</text>')
     parts.append("</svg>")
     return "\n".join(parts)
 
@@ -469,14 +510,25 @@ def _render_decision_svg(elem, nodes, edges, alt_edges, vb_w, vb_h):
         a, b = node_map.get(ai), node_map.get(bi)
         if not a or not b:
             continue
-        # 否分支：菱形底部 -> 下方虚线 -> 目标底部
         ax = a["x"] + a.get("w", NODE_W) / 2
-        ay = a["y"] + a.get("h", NODE_H) / 2 + 55
-        bx_t = b["x"] + b.get("w", NODE_W) / 2
-        by_t = b["y"] + b.get("h", NODE_H) + 30
-        path = f"M{ax},{ay} C{ax},{ay + 40} {bx_t},{by_t + 20} {bx_t},{by_t}"
+        b_cx = b["x"] + b.get("w", NODE_W) / 2
+        b_bot = b["y"] + b.get("h", NODE_H)
+        if bi < ai:
+            # 回游边（v1.5，示例项目 v4 实战暴露 §7.2-3）：alt_next 指向前序节点时
+            # 旧贝塞尔终点悬在目标下方且水平段穿同行中间节点；改为
+            # 菱形底尖 → 下行至走廊 → 水平回游 → 入目标底缘的直角虚线
+            ay = a["y"] + a.get("h", NODE_H) / 2 + 55  # 菱形底尖（200×110）
+            corridor = max(ay, b_bot) + 42
+            path = f"M{ax},{ay} L{ax},{corridor} L{b_cx},{corridor} L{b_cx},{b_bot + 2}"
+            label_y = corridor + 14
+        else:
+            # 否分支（前向）：菱形底部 -> 下方虚线 -> 目标底部
+            ay = a["y"] + a.get("h", NODE_H) / 2 + 55
+            by_t = b_bot + 30
+            path = f"M{ax},{ay} C{ax},{ay + 40} {b_cx},{by_t + 20} {b_cx},{by_t}"
+            label_y = max(ay, by_t) + 20
         parts.append(f'<path d="{path}" stroke="{theme.ORANGE}" stroke-width="1.8" fill="none" stroke-dasharray="6,4" marker-end="url(#dgm-arr)"/>')
-        parts.append(f'<text x="{(ax + bx_t) / 2}" y="{max(ay, by_t) + 20}" font-size="12" font-weight="700" fill="{theme.ORANGE}" text-anchor="middle">{_esc(blabel)}</text>')
+        parts.append(f'<text x="{(ax + b_cx) / 2}" y="{label_y}" font-size="12" font-weight="700" fill="{theme.ORANGE}" text-anchor="middle">{_esc(blabel)}</text>')
     for nd in nodes:
         parts.append(_svg_node(nd))
     parts.append("</svg>")
@@ -499,10 +551,17 @@ def render_html(elem):
         nodes, edges, alt_edges, vb_w, vb_h = _layout_decision(elem)
         svg = _render_decision_svg(elem, nodes, edges, alt_edges, vb_w, vb_h)
     elif st == "sequence":
-        nodes, edges, vb_w, vb_h = _layout_sequence(elem)
-        svg = _render_flow_svg(elem, nodes, edges, vb_w, vb_h)
+        # sequence 中 decision 步骤带 alt_next（回环）时走 decision 布线与渲染，
+        # 否则 alt_next 会被静默忽略（示例项目 v4 实战暴露 §7.2-3）
+        if any(isinstance(s, dict) and s.get("type") == "decision" and s.get("alt_next")
+               for s in (elem.get("steps", []) or [])):
+            nodes, edges, alt_edges, vb_w, vb_h = _layout_decision(elem)
+            svg = _render_decision_svg(elem, nodes, edges, alt_edges, vb_w, vb_h)
+        else:
+            nodes, edges, vb_w, vb_h = _layout_sequence(elem)
+            svg = _render_flow_svg(elem, nodes, edges, vb_w, vb_h)
     elif st == "flow_rows":
-        # 第 28 种子类型（v2.0 §8.1）：行式 HTML，不走 SVG 路径
+        # flow_rows（v2.0 §8.1）：行式 HTML，不走 SVG 路径
         return render_flow_rows(elem)
     else:
         raise NotImplementedError(f"flow/{st} 未实现")
@@ -510,7 +569,7 @@ def render_html(elem):
 
 
 # ---------------------------------------------------------------------------
-# flow_rows（v2.0 第 28 种子类型，§8.1/§8.2；F8 纯增量，不动既有 5 种 SVG）
+# flow_rows（v2.0 §8.1/§8.2；F8 纯增量，不动既有 5 种 SVG）
 # ---------------------------------------------------------------------------
 
 def _flow_rows_legend(elem):
@@ -547,7 +606,9 @@ def render_flow_rows(elem):
         cards = [c for c in (row.get("cards", []) or []) if isinstance(c, dict)]
         dashed_opt = row.get("style") == "dashed_opt"
         classes = ["flow-row"]
-        if row.get("group") in ("blue", "teal"):
+        # 分组底色类：键名即分组名（gov_red 归位后为 red/gray；未定义分组
+        # 名的主题走 CSS 变量缺省，背景自然回退透明，与历史行为一致）
+        if row.get("group") in ("blue", "teal", "red", "gray"):
             classes.append(f'g-{row["group"]}')
         if dashed_opt:
             classes.append("dashed-opt")
@@ -619,13 +680,22 @@ def render_pptd(elem, x, y, w, theme_name=None):
     elif st == "decision":
         nodes, edges, alt_edges, vb_w, vb_h = _layout_decision(elem)
     elif st == "sequence":
-        nodes, edges, vb_w, vb_h = _layout_sequence(elem)
+        # 与 render_html 同理：decision 步骤带 alt_next 时走 decision 布线
+        if any(isinstance(s, dict) and s.get("type") == "decision" and s.get("alt_next")
+               for s in (elem.get("steps", []) or [])):
+            nodes, edges, alt_edges, vb_w, vb_h = _layout_decision(elem)
+        else:
+            nodes, edges, vb_w, vb_h = _layout_sequence(elem)
     else:
         raise NotImplementedError(f"flow/{st} 未实现")
     sc = pe.PptdScaler(x, y, w, vb_w)
     elems = []
-    for name, lx, ly, lw, lh in lane_rects or []:
-        elems.extend(pe.lane(f"ln-{name}", sc, lx, ly, lw, lh, name))
+    for rect in lane_rects or []:
+        name, lx, ly, lw, lh = rect[:5]
+        li = rect[5] if len(rect) > 5 else 0
+        elems.extend(pe.lane(f"ln-{name}", sc, lx, ly, lw, lh, name,
+                             tint="gray" if li % 2 == 0 else "white",
+                             strip=theme.LAYER_COLORS[li % len(theme.LAYER_COLORS)]))
     for name, rx, ry, rw, rh, tint in col_rects or []:
         elems.extend(pe.lane(f"col-{name}", sc, rx, ry, rw, rh, name,
                              tint="green" if tint == "green" else "gray"))
@@ -634,7 +704,7 @@ def render_pptd(elem, x, y, w, theme_name=None):
         a, b = node_map.get(ai), node_map.get(bi)
         if not a or not b:
             continue
-        if st == "decision" and a["type"] == "decision" and not note:
+        if (st == "decision" or alt_edges) and a["type"] == "decision" and not note:
             note = "是"
         elems.extend(_pptd_arrow(sc, f"ar-{ai}-{bi}", a, b, dashed, note, slot=ei))
     for ai, bi, blabel in alt_edges:
@@ -642,14 +712,35 @@ def render_pptd(elem, x, y, w, theme_name=None):
         if not a or not b:
             continue
         aw = a.get("w", NODE_W)
-        ax, ay = a["x"] + aw / 2, a["y"] + a.get("h", NODE_H) / 2 + 55
+        ax = a["x"] + aw / 2
         bx_t = b["x"] + b.get("w", NODE_W) / 2
-        by_t = b["y"] + b.get("h", NODE_H) + 30
-        elems.append(pe.connector(f"alt-{ai}-{bi}", sc.px(ax), sc.py(ay),
-                                  sc.px(bx_t), sc.py(by_t), kind="bentConnector3",
-                                  color=theme.ORANGE, dash=True))
+        b_bot = b["y"] + b.get("h", NODE_H)
+        if bi < ai:
+            # 回游虚线（v1.5，与 HTML 同几何）：三段 straightConnector1（§4.6
+            # 连接线路由规范），菱形底尖 → 走廊水平回游 → 入目标底缘
+            ay0 = a["y"] + a.get("h", NODE_H) / 2 + 55  # 菱形底尖
+            corridor = max(ay0, b_bot) + 42
+            elems.append(pe.connector(f"alt-{ai}-{bi}-1", sc.px(ax), sc.py(ay0),
+                                      sc.px(ax), sc.py(corridor),
+                                      color=theme.ORANGE, dash=True))
+            elems.append(pe.connector(f"alt-{ai}-{bi}-2", sc.px(ax), sc.py(corridor),
+                                      sc.px(bx_t), sc.py(corridor),
+                                      color=theme.ORANGE, dash=True))
+            elems.append(pe.connector(f"alt-{ai}-{bi}-3", sc.px(bx_t), sc.py(corridor),
+                                      sc.px(bx_t), sc.py(b_bot + 2),
+                                      color=theme.ORANGE, dash=True,
+                                      arrow=("none", "stealth")))
+            label_y = corridor + 4
+        else:
+            # 否分支（前向）：菱形底部 -> bentConnector3 -> 目标底部
+            ay = a["y"] + a.get("h", NODE_H) / 2 + 55
+            by_t = b_bot + 30
+            elems.append(pe.connector(f"alt-{ai}-{bi}", sc.px(ax), sc.py(ay),
+                                      sc.px(bx_t), sc.py(by_t), kind="bentConnector3",
+                                      color=theme.ORANGE, dash=True))
+            label_y = max(ay, by_t) + 6
         elems.append(pe.text(f"alt-{ai}-{bi}-l",
-                             [sc.px((ax + bx_t) / 2 - 30), sc.py(max(ay, by_t) + 6), sc.len(60), sc.len(18)],
+                             [sc.px((ax + bx_t) / 2 - 30), sc.py(label_y), sc.len(60), sc.len(18)],
                              blabel, font_size=max(9, sc.len(12)), color=theme.ORANGE,
                              bold=True))
     if gate:
@@ -708,8 +799,20 @@ def _pptd_arrow(sc, eid, a, b, dashed, note, slot=0):
     color = theme.TEAL if doc_b else (theme.GREEN if dashed else theme.BLUE)
     elems = []
     if doc_b:
-        elems.append(pe.connector(eid, sc.px(ax), sc.py(a["y"] + ah),
-                                  sc.px(bx), sc.py(b["y"]),
+        # doc 挂接：绕行走廊（出底 → 下 → 水平 → 上 → 入底），不穿中间节点盒；
+        # x 偏移 +12px 避免与主链 r0/r1 同走廊重合，入点止于 doc 底边
+        gap_y = max(a["y"] + ah, b["y"] + bh) + 24
+        axo, bxo = ax + 12, bx + 12
+        elems.append(pe.connector(f"{eid}-r0", sc.px(axo), sc.py(a["y"] + ah),
+                                  sc.px(axo), sc.py(gap_y),
+                                  arrow=("none", "none"), color=color, width=1.2,
+                                  dash=True))
+        elems.append(pe.connector(f"{eid}-r1", sc.px(axo), sc.py(gap_y),
+                                  sc.px(bxo), sc.py(gap_y),
+                                  arrow=("none", "none"), color=color, width=1.2,
+                                  dash=True))
+        elems.append(pe.connector(f"{eid}-r2", sc.px(bxo), sc.py(gap_y),
+                                  sc.px(bxo), sc.py(b["y"] + bh),
                                   arrow=("none", "none"), color=color, width=1.2,
                                   dash=True))
         return elems
@@ -717,7 +820,7 @@ def _pptd_arrow(sc, eid, a, b, dashed, note, slot=0):
         # 前向（含少量重叠）：右缘中点 → 左缘中点，直线
         x1, x2 = a["x"] + aw, b["x"]
         elems.append(pe.connector(eid, sc.px(x1), sc.py(ay), sc.px(x2), sc.py(by),
-                                  color=color, dash=dashed, width=1.25,
+                                  color=color, dash=dashed, width=1.75,
                                   arrow=("none", "stealth")))
         if note:
             note_fs = max(8, sc.len(11))
@@ -739,15 +842,15 @@ def _pptd_arrow(sc, eid, a, b, dashed, note, slot=0):
         elems.append(pe.connector(f"{eid}-r0", sc.px(acx_out), sc.py(a["y"] + ah),
                                   sc.px(acx_out), sc.py(gap_y),
                                   arrow=("none", "none"), color=color,
-                                  dash=dashed, width=1.25))
+                                  dash=dashed, width=1.75))
         elems.append(pe.connector(f"{eid}-r1", sc.px(acx_out), sc.py(gap_y),
                                   sc.px(bcx_in), sc.py(gap_y),
                                   arrow=("none", "none"), color=color,
-                                  dash=dashed, width=1.25))
+                                  dash=dashed, width=1.75))
         elems.append(pe.connector(f"{eid}-r2", sc.px(bcx_in), sc.py(gap_y),
                                   sc.px(bcx_in), sc.py(b["y"] + bh),
                                   arrow=("none", "stealth"), color=color,
-                                  dash=dashed, width=1.25))
+                                  dash=dashed, width=1.75))
         if note:
             note_fs = max(8, sc.len(11))
             note_w = sc.len(160)
@@ -770,7 +873,7 @@ def _pptd_arrow(sc, eid, a, b, dashed, note, slot=0):
             # 中轴对齐：一条直线
             elems.append(pe.connector(eid, sc.px(acx), sc.py(y_out),
                                       sc.px(bcx), sc.py(y_in),
-                                      color=color, dash=dashed, width=1.25,
+                                      color=color, dash=dashed, width=1.75,
                                       arrow=("none", "stealth")))
         else:
             # 走廊错位：缝隙中线按 slot 错开 ±12px，多条边共用缝隙时水平段不重叠；
@@ -783,15 +886,15 @@ def _pptd_arrow(sc, eid, a, b, dashed, note, slot=0):
             elems.append(pe.connector(f"{eid}-r0", sc.px(acx_out), sc.py(y_out),
                                       sc.px(acx_out), sc.py(mid_y),
                                       arrow=("none", "none"), color=color,
-                                      dash=dashed, width=1.25))
+                                      dash=dashed, width=1.75))
             elems.append(pe.connector(f"{eid}-r1", sc.px(acx_out), sc.py(mid_y),
                                       sc.px(bcx_in), sc.py(mid_y),
                                       arrow=("none", "none"), color=color,
-                                      dash=dashed, width=1.25))
+                                      dash=dashed, width=1.75))
             elems.append(pe.connector(f"{eid}-r2", sc.px(bcx_in), sc.py(mid_y),
                                       sc.px(bcx_in), sc.py(y_in),
                                       arrow=("none", "stealth"), color=color,
-                                      dash=dashed, width=1.25))
+                                      dash=dashed, width=1.75))
         if note:
             note_fs = max(8, sc.len(11))
             note_w = sc.len(160)

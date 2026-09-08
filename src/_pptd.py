@@ -191,6 +191,33 @@ def default_shots_dir(pptx_path):
     return os.path.join(os.path.dirname(os.path.abspath(pptx_path)), f"_shots_{base}")
 
 
+def _kill_process_tree(pid):
+    """杀进程树：Windows 用 taskkill /T（含 COM 拉起的孙进程 POWERPNT.EXE）；
+    其他平台只杀主进程。超时清理专用，失败静默（finally 语义）。"""
+    if os.name == "nt":
+        subprocess.run(["taskkill", "/PID", str(pid), "/T", "/F"],
+                       capture_output=True)
+    else:
+        try:
+            os.kill(pid, 9)
+        except OSError:
+            pass
+
+
+def _verify_ps1_readback(ps1_path, expected):
+    """P3 加固（2026-09-06 安全审查）：临时 .ps1 写入后回读比对，内容一致才允许执行。
+
+    `-ExecutionPolicy Bypass` 放大了临时脚本在写入与执行之间被替换的后果；
+    mkdtemp 目录隔离之外再加一道内容校验，回读不一致/不可读一律视为篡改，
+    返回 False 由调用方大声失败拒绝执行。
+    """
+    try:
+        with open(ps1_path, "r", encoding="utf-8") as f:
+            return f.read() == expected
+    except OSError:
+        return False
+
+
 def export_shots(pptx_path, out_dir):
     """COM 逐页导出 PNG 截图（1280x720），供目检。
 
@@ -211,15 +238,30 @@ def export_shots(pptx_path, out_dir):
         shutil.copy2(pptx_path, ascii_pptx)
         with open(ps1_path, "w", encoding="utf-8") as f:
             f.write(_EXPORT_PS1)
+        # P3 加固（2026-09-06 安全审查）：Bypass 执行前回读比对，防临时脚本被替换
+        if not _verify_ps1_readback(ps1_path, _EXPORT_PS1):
+            print("[截图] 临时导出脚本回读校验失败（内容与写入不一致，疑似被篡改），拒绝执行")
+            return False
 
-        proc = subprocess.run(
+        # Popen 而非 run：超时后要拿 pid 杀整棵进程树（run 只杀 pwsh 主进程，
+        # 孙进程 POWERPNT.EXE 残留；TimeoutExpired 曾裸 traceback）
+        proc = subprocess.Popen(
             [pwsh, "-NoProfile", "-ExecutionPolicy", "Bypass",
              "-File", ps1_path, "-Pptx", ascii_pptx, "-OutDir", ascii_png],
-            capture_output=True, text=True, encoding="utf-8", errors="replace",
-            timeout=300,
+            stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+            text=True, encoding="utf-8", errors="replace",
         )
-        out = (proc.stdout or "") + (proc.stderr or "")
-        if out.strip():
+        try:
+            out, _ = proc.communicate(timeout=300)
+        except subprocess.TimeoutExpired:
+            _kill_process_tree(proc.pid)
+            try:
+                proc.communicate(timeout=15)  # 收割残余输出，防僵尸
+            except Exception:  # noqa: BLE001
+                pass
+            print("[截图] 导出超时（300s），已终止导出进程树（含 POWERPNT）")
+            return False
+        if out and out.strip():
             print(out.rstrip())
         if proc.returncode != 0:
             print("[截图] COM 导出失败（本机是否安装了 PowerPoint？）")

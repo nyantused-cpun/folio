@@ -2,6 +2,35 @@
 
 > 版本线说明：本仓库记录**对外发布线**（Folio），与内部工作区版本线（售前助手 v3.x）相互独立、不对齐。只有值得对外说的事才升版本。
 
+## [2.0.0] - 2026-09-08
+
+v1.0.2 之后 16 天内部演进的整体对齐版（同源对齐，一次性发布）。内核与主线仓库同源：**90 个 Python 模块 / 87 个命令 / 191 个测试文件**，与内部版共享同一条缺陷修复与测试基线。
+
+### 破坏性变更（附迁移指南，见 docs/MIGRATION_v2.0.md）
+
+- **主题体系并轨**：默认视觉从旧 `style` 双轨迁到 6 套主题令牌体系；spec 里旧的 `style: enterprise/tech/education/gov` 自动映射到新主题（`enterprise→corporate_navy` 等），加载时打印迁移提示；`syzygit` VI 主题收编为正式主题。
+- **`insight` / `feedback` / `skill` 三个命令下线**（主线已于内部版退役）。
+- **spec 协议对齐**：与内部版 spec 重新互认；`narrative_schema` 带出。
+
+### 新增（内核能力面）
+
+- **37 种 diagram 图形**整包带出（含 `_renderer/diagram/` 子包：architecture/flow/matrix/relationship/chevron 族与 pptd 发射器拆分），配 gold 基线截图回归。
+- **审查链升级**：`--screenshot` 截图对抗审视（三秒测试主门）、`--parallel` 并行对抗、`--incremental` 增量审查（页级 sha1 快照+变更页全文+每 3 轮强制全量）、预算熔断统一走 token 账。
+- **育种登记闭环**（`breed` 命令族）：crafted 页渲染链自动登记候选 pattern，量化门槛（≥2 客户确认+14 天稳定期）+ 季度审计。
+- **交付门**（`_review_gate`）：crafted 页产物未过 review 禁止直出交付（deliver --resume 强制拦截）。
+- **脱敏扫描**（`_verify_desens`）：客户名/内网路径/邮箱等 7 类正则全库扫描报告。
+- **audit 体系扩容**：`--mode track/debt/drift/cost/behavior` 等观测面 + 体量棘轮（cap 防反弹）。
+
+### 修复
+
+- **compact P0 修复**、**confirm sidecar 全链**（SHA-256 防篡改门禁）、**BM25 增强**（bm25_seat/查询改写/事实守卫）、`_context`/`_session` 同款缺陷对齐修复。
+- 观察项 TTL 治理、telemetry 轮转、测试卫生（条件 pop 等批次修复随同源带入）。
+
+### 测试
+
+- 测试文件 69 → 191；Python 3.12 全量绿（folio 侧 pytest 基线 + 主仓移植面）。
+- 发布面脱敏：源码与测试客户名 0 命中（17 词强制门），示例知识卡为虚构数据（蓝海集团）。
+
 ## [Unreleased] - 2026-08-20
 
 ### 新增

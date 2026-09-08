@@ -11,7 +11,7 @@
 
 每次操作：
   1. 操作前自动 .versions/ 快照（复用 _backup.backup_before_generate）
-  2. 操作后调 validate_element / validate_spec 类型化校验
+  2. 操作后调 validate_element 类型化校验（元素级；validate_spec 全量校验未接入）
   3. 写回 spec.yml（yaml.safe_dump，保留 confirmed 等顶层字段）
 
 借鉴 DataFlow-Harness 论文（arxiv 2607.16617）的 typed incremental mutations--
@@ -160,6 +160,12 @@ def add_element(spec_path, page_id, element, index=None):
         return {"ok": False, "errors": errors, "element_index": None}
 
     elements = page.get("elements", [])
+    # P3 口径统一：update_element/delete_element 对负索引一律报「越界」，
+    # add_element 曾放行负索引走 list.insert（-1 = 倒数第二位），语义与兄弟
+    # 操作不一致且易埋错位隐患——统一拒绝。
+    if index is not None and index < 0:
+        return {"ok": False, "errors": [f"index {index} 越界（负索引不支持）"],
+                "element_index": None}
     if index is None or index >= len(elements):
         elements.append(element)
         index = len(elements) - 1

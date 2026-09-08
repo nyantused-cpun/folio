@@ -13,6 +13,9 @@ import yaml
 
 @pytest.fixture()
 def render(tmp_path):
+    # 保存/条件还原 _PRESALES_CLI_INVOKED（S6 同款）：无条件 pop 会误删
+    # 外层（套件级/conftest 级）预设，造成套件级污染。
+    saved = os.environ.get("_PRESALES_CLI_INVOKED")
     os.environ["_PRESALES_CLI_INVOKED"] = "1"
     out_dir = os.path.join("output", "通用", "layout_v2_test")
 
@@ -35,7 +38,10 @@ def render(tmp_path):
                 shutil.rmtree(out_dir)
 
     yield _render
-    os.environ.pop("_PRESALES_CLI_INVOKED", None)
+    if saved is None:
+        os.environ.pop("_PRESALES_CLI_INVOKED", None)
+    else:
+        os.environ["_PRESALES_CLI_INVOKED"] = saved
 
 
 def test_v2_page_skeleton(render):
@@ -50,8 +56,8 @@ def test_v2_page_skeleton(render):
     assert ".v2-page" in html  # 骨架 CSS 注入
 
 
-def test_free_flow_page_unchanged(render):
-    """自由流页（无 layout / 旧值）：h2 页标题 + 无 wrapper（F9 零 diff）。"""
+def test_free_flow_page_wrapped_in_page_shell(render):
+    """自由流页（无 layout / 旧值）：h2 页标题 + page-shell 页面卡片（有页边界）。"""
     for layout in (None, "title_body", "blueprint"):
         page = {"id": "p1", "title": "旧页面",
                 "elements": [{"type": "text", "content": "正文"}]}
@@ -59,6 +65,7 @@ def test_free_flow_page_unchanged(render):
             page["layout"] = layout
         html = render({"pages": [page]})
         assert "<h2>旧页面</h2>" in html
+        assert '<section class="page-shell"' in html
         assert 'class="v2-page"' not in html
 
 
@@ -72,6 +79,7 @@ def test_mixed_spec(render):
         ],
     })
     assert '<section class="v2-page" id="p1">' in html
+    assert '<section class="page-shell" id="p2">' in html
     assert "<h2>旧页</h2>" in html
 
 
@@ -96,7 +104,7 @@ def test_topnav_anchor_reachable(render):
                  {"type": "action_title", "segments": [{"t": "谢谢"}]},
                  {"type": "info_cards", "cards": [{"title": "联系人",
                                                    "items": ["张"]}]},
-                 {"type": "topnav", "brand": "瓴寓国际"},
+                 {"type": "topnav", "brand": "蓝海国际"},
              ]},
         ],
     })
@@ -106,6 +114,8 @@ def test_topnav_anchor_reachable(render):
 
 def test_layout_warnings_in_report(render, tmp_path):
     """P 系必需构件缺失/乱序进 report.warnings（T2 schema 经 Renderer 收集）。"""
+    # 保存/条件还原，同 S6 先例（无条件 pop 会误删外层预设）
+    saved = os.environ.get("_PRESALES_CLI_INVOKED")
     os.environ["_PRESALES_CLI_INVOKED"] = "1"
     try:
         from _renderer import Renderer
@@ -125,4 +135,7 @@ def test_layout_warnings_in_report(render, tmp_path):
         text = "\n".join(r.report.warnings)
         assert "legend_bar" in text  # 必需构件缺失（error 经 report 收集）
     finally:
-        os.environ.pop("_PRESALES_CLI_INVOKED", None)
+        if saved is None:
+            os.environ.pop("_PRESALES_CLI_INVOKED", None)
+        else:
+            os.environ["_PRESALES_CLI_INVOKED"] = saved

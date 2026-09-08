@@ -10,8 +10,8 @@ spec：
   root: {name, desc, children: [{name, desc, children: [...]}]}
 """
 
-from . import theme
-from .theme import _esc
+from .. import theme
+from ..theme import _esc
 from . import pptd_emit as pe
 
 NODE_W, NODE_H = 190, 56
@@ -243,7 +243,8 @@ def _er_pptd(elem, x, y, w):
         if not a or not b:
             continue
         rtype = rel.get("type", "one_to_many")
-        if rel.get("label"):
+        # 图例带只服务稠密模式：稀疏（≤4 条）逐边标签已呈现，再收图例即双重呈现
+        if not rich and rel.get("label"):
             legend_items.append(f"{rel.get('from', '')} → {rel.get('to', '')}：{rel['label']}")
         if a.get("row", 0) != b.get("row", 0):
             # 跨行肘形：上行框底中点 → 行间通道 → 下行框顶中点（三段原生连接符）
@@ -302,6 +303,9 @@ def _er_pptd(elem, x, y, w):
         tx = sc.px(b["x"] + b["w"] / 2)
         ty = sc.py(a["y"])
         wy = ty - sc.len(24) - (ri % 4) * sc.len(22)
+        # 走廊下限钳位：首行框（布局 y=90）× ri%4=3 时走廊抵 viewBox y=0，
+        # 标签胶囊（中心对齐走廊、上探 17）冲出画布——钳回顶部安全线内
+        wy = max(wy, sc.py(20))
         elems.append(pe.connector(f"er{ri}-w0", sx, ty, sx, wy,
                                   arrow=("none", "none"), color=theme.TEXT_STRONG, width=1.5))
         elems.append(pe.connector(f"er{ri}-w1", sx, wy, tx, wy,
@@ -516,10 +520,31 @@ def _df_pptd(elem, x, y, w):
 #     cross_4a_reconcile / automation_table
 # ---------------------------------------------------------------------------
 
+def _vc_ramp():
+    """value_chain chevron 六段色带（蓝族深→浅 + 绿族收尾示意增值方向）。
+
+    P3-4 语义改造（R3-3）：原 6 个硬编码 hex（含色彩批旧绿 #2F7D5F/#3D9070，
+    S6 Wave2 登记的唯一 gold stale）改为主题令牌现场派生——蓝族锚
+    blue/blue_mid 槽、绿族锚 green 槽，深/浅/中间档经 mix() 派生（比例取
+    0.01 网格步长，色值落在回归闭包内）。主题切换三端跟随：gov_red 下
+    green 槽经 diagram_overrides 自动换金系、蓝族跟随枣红主色，无需新增
+    overrides 登记。派生比例对应的默认主题实测值：
+    0.22→#00286E / 0.50→#004898 / 0.12→#358F50（consulting_kpmg）。
+    """
+    return [
+        theme.mix(theme.BLUE, theme.BLACK, 0.22),      # 深蓝端点（增值起点）
+        theme.BLUE,
+        theme.mix(theme.BLUE, theme.BLUE_MID, 0.50),   # 蓝中过渡档
+        theme.BLUE_MID,
+        theme.GREEN,                                   # 主题绿（增值方向）
+        theme.mix(theme.GREEN, theme.WHITE, 0.12),     # 绿浅档收尾（白字可读）
+    ]
+
+
 def _vc_html(elem):
     primary = elem.get("primary", []) or []
     support = elem.get("support", []) or []
-    blues = ["#14496B", "#1B5E8A", "#2A6E9C", "#4A7FA5", "#2F7D5F", "#3D9070"]
+    ramp = _vc_ramp()
     parts = []
     if support:
         sup = "".join(f'<div style="flex:1;background:{theme.GREEN_LIGHT};color:{theme.GREEN};font-weight:700;'
@@ -528,7 +553,7 @@ def _vc_html(elem):
         parts.append(f'<div style="display:flex;gap:8px;margin-bottom:8px;">{sup}</div>')
     pv = []
     for i, p in enumerate(primary):
-        c = blues[i % len(blues)]
+        c = ramp[i % len(ramp)]
         clip = "polygon(0 0, calc(100% - 20px) 0, 100% 50%, calc(100% - 20px) 100%, 0 100%);" if i == 0 else \
                "polygon(0 0, calc(100% - 20px) 0, 100% 50%, calc(100% - 20px) 100%, 0 100%, 20px 50%);"
         pv.append(f'<div style="flex:1;color:{theme.WHITE};font-weight:700;font-size:14px;text-align:center;'
@@ -541,7 +566,7 @@ def _vc_html(elem):
 def _vc_pptd(elem, x, y, w):
     primary = elem.get("primary", []) or []
     support = elem.get("support", []) or []
-    blues = ["#14496B", "#1B5E8A", "#2A6E9C", "#4A7FA5", "#2F7D5F", "#3D9070"]
+    ramp = _vc_ramp()
     sc = pe.PptdScaler(x, y, w)
     elems = []
     cy = 0.0
@@ -558,7 +583,7 @@ def _vc_pptd(elem, x, y, w):
     n = len(primary)
     pw = (1200 - 4 * (n - 1)) / max(1, n)
     for i, p in enumerate(primary):
-        c = blues[i % len(blues)]
+        c = ramp[i % len(ramp)]
         px = sc.px(i * (pw + 4))
         elems.append(pe.shape(f"vc-p{i}", [px, y + sc.len(cy), sc.len(pw), sc.len(56)], "chevron",
                               fill=c))
@@ -600,9 +625,13 @@ def _bct_pptd(elem, x, y, w):
     elems = []
     cy = 0.0
     for gi, g in enumerate(groups):
-        children = g.get("children", []) or []
+        if not isinstance(g, dict):
+            continue
+        children = [c for c in (g.get("children", []) or []) if isinstance(c, dict)]
         row_h = 44.0
-        group_h = len(children) * (row_h + 8) - 8
+        # 空 children 兜底：len*(row_h+8)-8 算出负高（_snap_bounds 兜成 1px 碎条）
+        # ——钳到单行组名高，与 HTML 端空组仍渲染组名块对齐
+        group_h = max(len(children) * (row_h + 8) - 8, row_h)
         elems.append(pe.shape(f"bct-g{gi}", [x, y + sc.len(cy), sc.len(170), sc.len(group_h)],
                               "roundRect", fill=theme.BLUE, adjustments=[8000]))
         elems.append(pe.text(f"bct-g{gi}-t", [x, y + sc.len(cy), sc.len(170), sc.len(group_h)],
@@ -621,7 +650,8 @@ def _bct_pptd(elem, x, y, w):
             elems.append(pe.connector(f"bct-g{gi}-c{ci}-lnk", sc.px(388), sc.py(ry + row_h / 2),
                                       sc.px(416), sc.py(ry + row_h / 2),
                                       arrow=("none", "none"), color=theme.BORDER_STRONG))
-            items = "  ".join(c.get("items", []) or [])
+            # items 类型守卫：非字符串（数字/字典等脏数据）str() 化，join 直调即崩
+            items = "  ".join(str(i) for i in (c.get("items", []) or []))
             elems.append(pe.text(f"bct-g{gi}-c{ci}-i", [sc.px(424), y + sc.len(ry), w - sc.len(424), sc.len(row_h)],
                                  items, font_size=max(8, sc.len(11)), color=theme.GREEN,
                                  align=("left", "middle")))

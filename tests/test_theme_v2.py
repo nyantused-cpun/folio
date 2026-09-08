@@ -14,15 +14,17 @@ from _renderer.diagram import theme as dg_theme
 
 # ---- get_theme ----
 
-def test_get_theme_default_is_legacy():
-    assert dg_theme.get_theme() is dg_theme.THEMES["legacy_bluegreen"]
-    assert dg_theme.get_theme(None) is dg_theme.THEMES["legacy_bluegreen"]
-    assert dg_theme.get_theme("") is dg_theme.THEMES["legacy_bluegreen"]
+def test_get_theme_default_is_consulting():
+    assert dg_theme.get_theme() is dg_theme.THEMES["consulting_kpmg"]
+    assert dg_theme.get_theme(None) is dg_theme.THEMES["consulting_kpmg"]
+    assert dg_theme.get_theme("") is dg_theme.THEMES["consulting_kpmg"]
 
 
 def test_get_theme_valid_names():
-    assert set(dg_theme.THEMES) == {"legacy_bluegreen", "consulting_kpmg",
-                                    "corporate_navy", "product_charcoal"}
+    assert set(dg_theme.THEMES) == {
+        "legacy_bluegreen", "consulting_kpmg", "corporate_navy",
+        "product_charcoal", "weaver_blue", "gov_red", "syzygit",
+    }
     assert dg_theme.get_theme("consulting_kpmg")["primary"] == "#00338D"
 
 
@@ -39,8 +41,10 @@ def test_kpmg_tokens_frozen():
     t = dg_theme.THEMES["consulting_kpmg"]
     assert t["primary"] == "#00338D"
     assert t["primary_dark"] == "#051C2C"
-    assert t["primary_mid"] == "#3D6AA8"
-    assert t["accent"] == "#FFE600"
+    assert t["primary_mid"] == "#005EB8"   # R-4：KPMG Medium Blue
+    assert t["accent"] == "#F3C13A"        # R-4：降饱和金（仅深底/描边用）
+    assert t["on_dark"] == {"text": "#FFFFFF", "accent": "#1192E8",
+                            "muted": "#A8C0DC"}  # R-4 深底变体
     assert t["roles"] == {"biz": "#00338D", "legal": "#E11D48", "fin": "#0D9488",
                           "sys": "#7C3AED", "ext": "#EA580C"}
     # 三态提饱和 + 缺口去灰改红（2026-08-13 配色升级）
@@ -58,17 +62,17 @@ def test_kpmg_tokens_frozen():
 def test_legacy_tokens_match_v12_constants():
     """legacy_bluegreen 原样收编 v1.2 蓝绿（F9：老 spec 视觉不变）。"""
     t = dg_theme.THEMES["legacy_bluegreen"]
-    assert t["primary"] == dg_theme.BLUE
-    assert t["primary_mid"] == dg_theme.BLUE_MID
-    assert t["accent"] == dg_theme.ORANGE          # 旧三态色保留（仅 legacy）
-    assert t["tri"]["part"]["border"] == dg_theme.ORANGE
-    assert t["tri"]["gap"]["border"] == dg_theme.GRAY
-    assert t["tri"]["lit"]["border"] == dg_theme.GREEN
-    assert t["groups"] == {"blue": dg_theme.BLUE_LIGHT, "teal": dg_theme.TEAL_LIGHT}
-    assert t["surface"]["card"] == dg_theme.CARD
-    assert t["surface"]["border"] == dg_theme.BORDER
-    assert t["text"]["primary"] == dg_theme.TEXT
-    assert t["text"]["tertiary"] == dg_theme.TEXT_SUB
+    assert t["primary"] == "#1B5E8A"
+    assert t["primary_mid"] == "#4A7FA5"
+    assert t["accent"] == "#D69E2E"          # 旧三态色保留（仅 legacy）
+    assert t["tri"]["part"]["border"] == "#D69E2E"
+    assert t["tri"]["gap"]["border"] == "#A0AEC0"
+    assert t["tri"]["lit"]["border"] == "#2F7D5F"
+    assert t["groups"] == {"blue": "#EDF2F7", "teal": "#EDF6F6"}
+    assert t["surface"]["card"] == "#FFFFFF"
+    assert t["surface"]["border"] == "#E2E8F0"
+    assert t["text"]["primary"] == "#1A1A1A"
+    assert t["text"]["tertiary"] == "#718096"
 
 
 def test_corporate_navy_tokens_frozen():
@@ -97,42 +101,60 @@ def test_product_charcoal_tokens_frozen():
     assert t["surface"]["bg_soft"] == "#F7F6F2"  # 暖纸 cream
 
 
+# R-4 可选槽（仅个别主题登记，.get 发射，缺省零影响）与分组键名
+#（gov_red 归位 red/gray）：同构校验对这两类豁免，其余键严格同构
+# 增补：diagram_overrides（gov_red 主题级图形盘覆盖，resolve_theme .get 应用）
+# 增补（S8-B C-E4）：qa 语义槽（默认官方绿，gov_red 金系覆写，.get 发射）
+OPTIONAL_TOP_KEYS = {"on_dark", "brand_green", "navy_deep", "diagram_overrides",
+                     "qa"}
+
+
+def _theme_shape(d, prefix=""):
+    keys = set()
+    for k, v in d.items():
+        if not prefix and k in OPTIONAL_TOP_KEYS:
+            continue
+        if prefix == "groups.":
+            keys.add("groups.*")  # 分组键名随主题语义归位，只校验槽位数
+            continue
+        keys.add(f"{prefix}{k}")
+        if isinstance(v, dict):
+            keys |= _theme_shape(v, f"{prefix}{k}.")
+    return keys
+
+
 def test_all_themes_structurally_isomorphic():
-    """全部主题核心键结构同构（_meta 为可选扩展段，豁免）。"""
-    def shape(d, prefix=""):
-        keys = set()
-        for k, v in d.items():
-            if k == "_meta":
-                continue
-            keys.add(f"{prefix}{k}")
-            if isinstance(v, dict):
-                keys |= shape(v, f"{prefix}{k}.")
-        return keys
-    ref = shape(dg_theme.THEMES["legacy_bluegreen"])
-    for name in ("consulting_kpmg", "corporate_navy", "product_charcoal"):
-        assert shape(dg_theme.THEMES[name]) == ref, f"{name} 与 legacy 键结构不同构"
+    """全部主题核心键结构同构（_meta/可选槽/分组键名豁免）。"""
+    ref = _theme_shape(dg_theme.THEMES["legacy_bluegreen"])
+    for name in ("consulting_kpmg", "corporate_navy", "product_charcoal",
+                 "syzygit", "weaver_blue", "gov_red"):
+        assert _theme_shape(dg_theme.THEMES[name]) == ref, f"{name} 与 legacy 键结构不同构"
 
 
-def test_themes_meta_registered():
-    """每主题可携带 _meta 设计规范段（可选，渲染层暂不消费）。"""
+def test_themes_meta_removed():
+    """_meta 死注册已删除（Step 1：登记但渲染不消费）。"""
     for name in ("corporate_navy", "product_charcoal"):
-        meta = dg_theme.THEMES[name].get("_meta")
-        assert meta is not None, f"{name} 缺 _meta 设计规范段"
-        assert meta["spacing"], f"{name} 缺 spacing token"
-        assert meta["radii"], f"{name} 缺 radii token"
+        assert "_meta" not in dg_theme.THEMES[name], f"{name} 仍含 _meta 死注册"
 
 
 def test_themes_structurally_isomorphic():
-    """两主题键结构同构（渲染层按键取色，缺键即炸——同构是硬约束）。"""
-    def shape(d, prefix=""):
-        keys = set()
-        for k, v in d.items():
-            keys.add(f"{prefix}{k}")
-            if isinstance(v, dict):
-                keys |= shape(v, f"{prefix}{k}.")
-        return keys
-    assert shape(dg_theme.THEMES["legacy_bluegreen"]) == \
-        shape(dg_theme.THEMES["consulting_kpmg"])
+    """全部主题键结构同构（渲染层按键取色，缺键即炸——同构是硬约束）。
+
+    豁免两类（R-4）：可选槽（on_dark/brand_green/navy_deep，.get 发射）
+    与 groups 键名（gov_red 归位 red/gray——消费端已泛化为按键名分发）。
+    """
+    ref = _theme_shape(dg_theme.THEMES["legacy_bluegreen"])
+    for name in ("consulting_kpmg", "corporate_navy", "product_charcoal",
+                 "syzygit", "weaver_blue", "gov_red"):
+        assert _theme_shape(dg_theme.THEMES[name]) == ref, name
+    # 分组槽位数的硬性不变量：每主题恰好 2 个分组底色，且均为合法 hex
+    import re
+    hex_re = re.compile(r"^#[0-9a-fA-F]{6}$")
+    for name, t in dg_theme.THEMES.items():
+        groups = t["groups"]
+        assert len(groups) == 2, f"{name} groups 槽位数 != 2"
+        for gcolor in groups.values():
+            assert hex_re.match(gcolor), f"{name} groups 值非法: {gcolor}"
 
 
 # ---- theme_tokens_css ----
@@ -141,18 +163,20 @@ def test_tokens_css_root_block():
     css = dg_theme.theme_tokens_css("consulting_kpmg")
     assert css.startswith(":root {")
     assert css.rstrip().endswith("}")
-    for var in ("--t-primary:#00338D", "--t-accent:#FFE600",
+    for var in ("--t-primary:#00338D", "--t-accent:#F3C13A",
                 "--t-role-legal:#E11D48", "--t-lit-border:#059669",
                 "--t-part-bg:#FFF7ED", "--t-gap-text:#B91C1C",
                 "--t-text-primary:#0F172A", "--t-bg-soft:#F8FAFC",
                 "--t-hero-from:#051C2C", "--t-hero-to:#00338D",
-                "--t-group-blue:", "--t-group-teal:"):
+                "--t-group-blue:", "--t-group-teal:",
+                "--t-ondark-text:#FFFFFF", "--t-ondark-accent:#1192E8",
+                "--t-ondark-muted:#A8C0DC"):
         assert var in css
 
 
-def test_tokens_css_default_legacy_namespace_isolated():
-    css = dg_theme.theme_tokens_css()  # 缺省 legacy
-    assert "--t-primary:#1B5E8A" in css
+def test_tokens_css_default_consulting_namespace_isolated():
+    css = dg_theme.theme_tokens_css()  # 缺省 consulting_kpmg
+    assert "--t-primary:#00338D" in css
     # 与既有 19 槽变量命名空间隔离（--blue 等不出现在 tokens 块）
     for line in css.splitlines():
         assert "--blue:" not in line and "--green:" not in line

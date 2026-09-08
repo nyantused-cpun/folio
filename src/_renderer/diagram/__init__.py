@@ -1,14 +1,14 @@
 # -*- coding: utf-8 -*-
 """diagram 渲染分发器：subtype -> 具体渲染器（render_html / render_pptd）。
 
-- 27 种子类型已全部实现（flow 5 / architecture 6 / matrix 5 / timeline 2 /
-  relationship 9），见 schema.DIAGRAM_SCHEMA 与 dev plan 2026-07-19。
+- 子类型全集以 schema.DIAGRAM_SCHEMA 为单一事实源（此处不写数量，
+  防注释与实现漂移）；测试 test_all_schema_subtypes_implemented 钉死覆盖。
 - 未注册 subtype 或任何异常降级为占位卡（dev plan §11.2：不阻断整篇生成，保留标题+desc）。
 - product_intro_placeholder 也在这里渲染（HTML 占位卡 / pptd 占位块）。
 """
 
-from . import theme
-from .theme import _esc
+from .. import theme
+from ..theme import _esc
 from . import pptd_emit as pe
 from .. import schema
 from ..spacing import INSET_X
@@ -20,16 +20,16 @@ def _register():
     """惰性装载 P0 渲染器（避免循环 import）。"""
     if _MODULES:
         return
-    from . import flow, architecture, matrix, timeline, relationship
-    # flow_rows：v2.0 第 28 种子类型（T2 注册分发，T4 落渲染实现；
-    # flow.py 入口未加分支前，渲染走异常降级占位卡——显式降级不静默）
+    from . import flow, architecture, matrix, timeline, relationship, chart
+    # flow_rows：v2.0 引入的子类型，flow.py 已落渲染实现，正常注册分发。
     for st in ("sequence", "swimlane", "cross_system", "parallel", "decision",
                "flow_rows"):
         _MODULES[("flow", st)] = flow
     for st in ("4a", "layered", "integration", "biz_overview", "deployment",
-               "biz_it_mapping", "platform_hub", "pyramid"):
+               "biz_it_mapping", "platform_hub", "pyramid", "infra"):
         _MODULES[("architecture", st)] = architecture
-    for st in ("fit_gap", "capability_map", "raci", "crud", "cbm", "quadrant"):
+    for st in ("fit_gap", "capability_map", "raci", "crud", "cbm", "quadrant",
+               "harvey_balls"):
         _MODULES[("matrix", st)] = matrix
     for st in ("horizontal", "vertical", "module_gantt", "milestone_gantt"):
         _MODULES[("timeline", st)] = timeline
@@ -38,6 +38,8 @@ def _register():
                "process_service_doc_mapping", "cross_4a_reconcile",
                "automation_table"):
         _MODULES[("relationship", st)] = relationship
+    for st in ("bar", "waterfall"):
+        _MODULES[("chart", st)] = chart
 
 
 def _fallback_html(elem, reason=""):
@@ -73,12 +75,17 @@ def _fallback_pptd(elem, x, y, w, reason=""):
 def _wrap_exhibit(elem, html):
     """exhibit 图框包装（v2.0 §5.5）：编号 + 标题 + 来源行，全 diagram 可用。
 
-    无 exhibit/source 字段时原样返回（零开销）。CSS 在 page_chrome。
+    无 exhibit 字段时原样返回（零开销）。CSS 在 page_chrome。
     """
     ex = elem.get("exhibit")
     if not isinstance(ex, dict):
         ex = {}
-    source = elem.get("source", "")
+    # #56（B6 Wave3）契约收编：溯源字符串只认 exhibit.source——顶层 source
+    # 保留给 integration 端点 mapping（schema 必填 dict），语义撞车就此消除；
+    # B2#23 的顶层 isinstance 守卫随顶层读取一并退役（非字符串仍不渲染）
+    source = ex.get("source", "")
+    if not isinstance(source, str):
+        source = ""
     if not ex and not source:
         return html
     num = _esc(ex.get("num", ""))
@@ -153,7 +160,8 @@ def _slot_notes_html(elem):
 
 
 def _wrap_slots(elem, html):
-    """diagram 附件槽位包装：stats（图上）+ legend/notes（图下），与图同框成组合体。
+    """diagram 附件槽位包装：stats/legend/notes 均在图下（HTML 槽位 div 排在图后、
+    CSS 无重排，pptd 侧 y 从图底推进，双端一致），与图同框成组合体。
 
     无任何槽位字段时原样返回（零开销，基线零 diff）。槽位 div 与 section.diagram
     同处 .dg-slot-wrap 内，CSS 在 page_chrome。capability_map 的 stats 由图内

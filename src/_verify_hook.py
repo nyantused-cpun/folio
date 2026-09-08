@@ -6,7 +6,7 @@ import sys
 import json
 from datetime import datetime
 
-from _paths import LOGS_DIR, TASK_HISTORY
+from _paths import CLIENTS_DIR, LOGS_DIR, TASK_HISTORY
 
 
 def _now():
@@ -27,43 +27,83 @@ def write_log(message):
         f.write(f"[{_now()}] {message}\n")
 
 
-def update_task_history(path, ok, file_type):
-    if not os.path.exists(TASK_HISTORY):
-        write_log("TASK_HISTORY 不存在，跳过更新")
+def update_task_history(path, ok, file_type, client_name=None):
+    """更新 task_history：客户锁（F0-8）+ 全局 task_history 锁（P1-15/D1）。
+
+    client_name 提供时按客户目录取客户锁；task_history 本身是全客户共享文件，
+    一律另取全局锁 .task_history.lock（save_session 同款），锁序恒为
+    客户锁→全局锁，防 verify × save 跨客户并发写坏 JSON。
+    """
+    lock_dir = None
+    lock_fd = None
+    th_fd = None
+    if client_name:
+        # #48/D2：按名解析支持 _internal/ 内部账本目录回退（锁位与 save_session 同址，
+        # 避免为已迁移账本在顶层复活同名目录）
+        from _paths import client_dir as _resolve_client_dir
+        lock_dir = _resolve_client_dir(client_name, clients_dir=CLIENTS_DIR)
+        if not os.path.isdir(lock_dir):
+            os.makedirs(lock_dir, exist_ok=True)
+        from _save_lock import acquire_save_lock, release_save_lock
+        lock_fd = acquire_save_lock(lock_dir)
+        if lock_fd is None:
+            write_log(f"TASK_HISTORY 获取保存锁失败: {lock_dir}")
+            # P3 留痕：静默放弃会让 audit 溯源把本文件误报为「绕过 CLI」直写
+            print(f"[warn] 保存锁获取失败（{lock_dir}），本次 verify 结果未写入 task_history；"
+                  "audit 溯源可能将此文件误报为绕过 CLI", file=sys.stderr)
+            return
+    from _save_lock import acquire_save_lock, release_save_lock
+    th_fd = acquire_save_lock(LOGS_DIR, lock_name=".task_history.lock")
+    if th_fd is None:
+        write_log("TASK_HISTORY 全局锁获取失败（30s 超时），跳过更新（防并发写坏）")
+        # P3 留痕：同上，降级可以，但必须让调用方看得见
+        print("[warn] task_history 全局锁获取失败（30s 超时），本次 verify 结果未写入 task_history；"
+              "audit 溯源可能将此文件误报为绕过 CLI", file=sys.stderr)
+        if lock_fd is not None:
+            release_save_lock(lock_dir, lock_fd)
         return
     try:
-        with open(TASK_HISTORY, "r", encoding="utf-8") as f:
-            history = json.load(f)
-    except Exception:
-        write_log("TASK_HISTORY 解析失败，跳过更新")
-        return
-
-    # P1-2：兼容 dict 格式（旧版 {"tasks": [...]}），避免 AttributeError
-    if isinstance(history, dict):
-        if isinstance(history.get("tasks"), list):
-            history = history["tasks"]
-        else:
-            write_log("TASK_HISTORY 格式无法识别（dict 无 tasks 字段），跳过更新")
+        if not os.path.exists(TASK_HISTORY):
+            write_log("TASK_HISTORY 不存在，跳过更新")
+            return
+        try:
+            with open(TASK_HISTORY, "r", encoding="utf-8") as f:
+                history = json.load(f)
+        except Exception:
+            write_log("TASK_HISTORY 解析失败，跳过更新")
             return
 
-    if not isinstance(history, list):
-        return
+        # P1-2：兼容 dict 格式（旧版 {"tasks": [...]}），避免 AttributeError
+        if isinstance(history, dict):
+            if isinstance(history.get("tasks"), list):
+                history = history["tasks"]
+            else:
+                write_log("TASK_HISTORY 格式无法识别（dict 无 tasks 字段），跳过更新")
+                return
 
-    if not history:
-        history.append({"date": _date(), "project": "verify-only", "verify": {}})
+        if not isinstance(history, list):
+            return
 
-    latest = history[-1]
-    if not isinstance(latest, dict):
-        write_log("TASK_HISTORY 最后一条记录非 dict，跳过更新")
-        return
-    verify_status = latest.get("verify", {})
-    norm_path = os.path.normcase(os.path.normpath(path))
-    verify_status[norm_path] = {"type": file_type, "ok": ok, "date": _date()}
-    latest["verify"] = verify_status
+        if not history:
+            history.append({"date": _date(), "project": "verify-only", "verify": {}})
 
-    with open(TASK_HISTORY, "w", encoding="utf-8") as f:
-        json.dump(history, f, ensure_ascii=False, indent=2)
-    write_log(f"TASK_HISTORY 已更新: {path} -> {'PASS' if ok else 'FAIL'}")
+        latest = history[-1]
+        if not isinstance(latest, dict):
+            write_log("TASK_HISTORY 最后一条记录非 dict，跳过更新")
+            return
+        verify_status = latest.get("verify", {})
+        norm_path = os.path.normcase(os.path.normpath(path))
+        verify_status[norm_path] = {"type": file_type, "ok": ok, "date": _date()}
+        latest["verify"] = verify_status
+
+        with open(TASK_HISTORY, "w", encoding="utf-8") as f:
+            json.dump(history, f, ensure_ascii=False, indent=2)
+        write_log(f"TASK_HISTORY 已更新: {path} -> {'PASS' if ok else 'FAIL'}")
+    finally:
+        if lock_fd is not None:
+            release_save_lock(lock_dir, lock_fd)
+        if th_fd is not None:
+            release_save_lock(LOGS_DIR, th_fd, lock_name=".task_history.lock")
 
 
 def _print_result(ok, msg, file_type):
@@ -152,20 +192,29 @@ def _auto_snippet_capture(path, file_type):
         write_log(f"片段自动入库失败: {e}")
 
 
-def run_single(path, client_name=None, render_report=None):
+def run_single(path, client_name=None, render_report=None, return_blocked=False,
+               density_gate="verify"):
     """验证单个文件：L1 格式 + L3 主题覆盖检查（+ 可选渲染报告消费，§6.3）。
+
+    density_gate（S8-C）：密度检查门档（"verify" 单视口 / "deliver" 全视口+截图
+    存档），透传 auto_verify -> verify_html -> check_density_html；默认 verify
+    保持独立 html-build/verify 命令现状行为，仅 deliver 编排传 "deliver"。
 
     返回 ok（bool）。L3 覆盖检查失败不阻断 ok（只警告），
     但 blocked_coverage 字段记录缺失主题供调用方决策。
+
+    return_blocked=True 时返回 (ok, blocked_coverage)：blocked_coverage 是
+    缺失主题列表 + 渲染降级明细，兼容旧调用方（默认仍返回 bool）。
 
     render_report（_renderer.elements.RenderReport，可选，缺省行为不变）：
     - skipped 非空 → 结果 FAIL，原因列出被跳过元素（页面/序号/类型/原因）。
       只有元素级 skip（未知类型等）触发 FAIL；schema 校验进的 warnings
       不影响结果。
-    - degraded 非空 → 不降级结果，降级明细并入警告部分打印。
+    - degraded 非空 → 不降级结果，降级明细并入警告部分打印，同时计入
+      blocked_coverage。
     """
     from _verify import auto_verify
-    ok, msg = auto_verify(path, client_name or "")
+    ok, msg = auto_verify(path, client_name or "", density_gate=density_gate)
     ext = os.path.splitext(path)[1].lower().lstrip(".")
     file_type = "html" if ext in ("html", "htm") else ext
 
@@ -184,7 +233,7 @@ def run_single(path, client_name=None, render_report=None):
     for item in degraded:
         print(f"  [warn] [降级] {item.get('page')} elements[{item.get('index')}] "
               f"{item.get('type')} -> {item.get('target')}: {item.get('message')}")
-    update_task_history(path, ok, file_type)
+    update_task_history(path, ok, file_type, client_name=client_name)
 
     # L3 主题覆盖检查（仅 HTML，且有客户名时）
     coverage_missing = []
@@ -205,9 +254,23 @@ def run_single(path, client_name=None, render_report=None):
         except Exception as e:
             write_log(f"L3 覆盖检查失败: {e}")
 
+    # F0-6：blocked_coverage = 缺失主题 + 渲染降级明细（供调用方决策）
+    blocked_coverage = list(coverage_missing)
+    for item in degraded:
+        blocked_coverage.append(item)
+
     # 验证通过后自动入库片段
     if ok:
         _auto_snippet_capture(path, file_type)
+
+    # S9-2d：crafted×无 review PASS 记录 → warn 提示（独立 build 不阻断产出，
+    # 阻断交付在 _review_gate.deliver_gate / cmd_deliver --resume；机制互补非债）
+    if ok and file_type == "html":
+        from _review_gate import warn_crafted_without_review
+        warn_crafted_without_review(path)
+
+    if return_blocked:
+        return ok, blocked_coverage
     return ok
 
 
@@ -230,25 +293,32 @@ def run_all(paths_dict):
     return all_ok
 
 
-if __name__ == "__main__":
-    if len(sys.argv) < 2:
+def _main(argv):
+    """CLI 入口：按验证结果透传 exit code（P3：曾忽略返回值恒 exit 0，
+    verify FAIL 被包装成成功，调用方无从感知）。"""
+    if len(argv) < 2:
         print("生成后验证钩子（验证 + 日志 + task_history）")
         print("用法:")
         print("  python _verify_hook.py <file_path>                  验证单个文件")
         print("  python _verify_hook.py --all <pptx> <html> <docx>   验证全部")
-        sys.exit(0)
+        return 0
 
     write_log("=== VERIFY HOOK START ===")
-    arg1 = sys.argv[1]
+    arg1 = argv[1]
 
-    if arg1 == "--all" and len(sys.argv) >= 4:
+    if arg1 == "--all" and len(argv) >= 4:
         paths = {}
-        args = sys.argv[2:]
+        args = argv[2:]
         for i, key in enumerate(["pptx", "html", "docx"]):
             if i < len(args):
                 paths[key] = args[i]
-        run_all(paths)
+        ok = run_all(paths)
     else:
-        run_single(arg1)
+        ok = run_single(arg1)
 
     write_log("=== VERIFY HOOK END ===")
+    return 0 if ok else 1
+
+
+if __name__ == "__main__":
+    sys.exit(_main(sys.argv))

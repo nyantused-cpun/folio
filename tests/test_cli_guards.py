@@ -13,12 +13,6 @@ class TestPathGuard:
         from _paths import OUTPUT_DIR
         assert os.path.basename(OUTPUT_DIR) == 'output'
 
-    def test_ppt_workspace_allowed(self):
-        """ppt_workspace 目录应该存在。"""
-        from _paths import PPT_WORKSPACE
-        os.makedirs(PPT_WORKSPACE, exist_ok=True)
-        assert os.path.exists(PPT_WORKSPACE)
-
 
 class TestThemeGuard:
     """测试主题守卫。"""
@@ -96,16 +90,26 @@ class TestConfirmedGate:
 
 
 class TestSkillSentinel:
-    """生成前 skill 哨兵门禁（REQUIRE_SKILL_SENTINEL，默认关）。"""
+    """生成前 skill 哨兵门禁（REQUIRE_SKILL_SENTINEL，阶段 4-6 起默认开）。"""
 
-    def test_sentinel_off_passes(self, tmp_path, monkeypatch):
-        """开关未设/关 -> 未读也不拦（默认行为，不影响正常流程）。"""
+    def test_sentinel_default_on_blocks_missing(self, tmp_path, monkeypatch):
+        """开关未设 -> 默认开，未读即拦（4-6 拍板翻转）。"""
         monkeypatch.delenv("REQUIRE_SKILL_SENTINEL", raising=False)
+        monkeypatch.setattr("_paths.SKILL_READ_DIR", str(tmp_path / "skill_read"))
+        from _renderer import RenderBlockedError
         from _cli_guards import require_skill_read
-        require_skill_read(["definitely-not-loaded-skill"])  # 不抛即通过
+        with pytest.raises(RenderBlockedError):
+            require_skill_read(["definitely-not-loaded-skill"])
+
+    def test_sentinel_explicit_off_passes(self, tmp_path, monkeypatch):
+        """开关显式 false/0/no/off -> 关闭，未读也放行（应急排障路径）。"""
+        for off in ("false", "0", "no", "off"):
+            monkeypatch.setenv("REQUIRE_SKILL_SENTINEL", off)
+            from _cli_guards import require_skill_read
+            require_skill_read(["definitely-not-loaded-skill"])  # 不抛即通过
 
     def test_sentinel_on_blocks_missing(self, tmp_path, monkeypatch):
-        """开关开 + 未读 -> 抛 RenderBlockedError。"""
+        """开关显式开 + 未读 -> 抛 RenderBlockedError。"""
         monkeypatch.setenv("REQUIRE_SKILL_SENTINEL", "true")
         monkeypatch.setattr("_paths.SKILL_READ_DIR", str(tmp_path / "skill_read"))
         from _renderer import RenderBlockedError
@@ -123,8 +127,17 @@ class TestSkillSentinel:
         require_skill_read(["delivery-pipeline"])  # 不抛即通过
         assert (read_dir / "delivery-pipeline.json").exists()
 
-    def test_required_gen_skills_includes_presentation(self):
-        """B-2：presentation-content-design 已进生成前必读清单（4 个）。"""
-        from _cli_guards import REQUIRED_GEN_SKILLS
-        assert "presentation-content-design" in REQUIRED_GEN_SKILLS
-        assert len(REQUIRED_GEN_SKILLS) == 4
+    def test_sentinel_default_on_passes_when_loaded(self, tmp_path, monkeypatch):
+        """默认开下，已 load-skill -> 放行（正常生成路径）。"""
+        monkeypatch.delenv("REQUIRE_SKILL_SENTINEL", raising=False)
+        from _cli_guards import mark_skill_read, require_skill_read
+        read_dir = tmp_path / "skill_read"
+        monkeypatch.setattr("_paths.SKILL_READ_DIR", str(read_dir))
+        mark_skill_read("delivery-pipeline")
+        require_skill_read(["delivery-pipeline"])  # 不抛即通过
+
+    def test_required_gen_skills_single_source(self):
+        """P0-2：生成前强制 3 个，按需 2 个独立维护。"""
+        from _cli_guards import REQUIRED_GEN_SKILLS, OPTIONAL_GEN_SKILLS
+        assert REQUIRED_GEN_SKILLS == ["delivery-pipeline", "spec-writing-guide", "visual-craft-guide"]
+        assert OPTIONAL_GEN_SKILLS == ["de-ai-style", "presentation-content-design"]

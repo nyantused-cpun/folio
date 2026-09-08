@@ -309,8 +309,8 @@ class TestReportAggregation:
         assert targets == [("architecture_4a", "html"), ("diagram", "docx")]
         # §6.2 起 Renderer init 做全量 schema 校验：本 spec 3 个非法元素
         # （arch_4a 空 layers / diagram 缺 diagram_type / tree 未知 type）
-        # 各进 1 条 warning，不再静默
-        assert "跳过 2 元素 / 降级 2 元素 / 警告 3 条" in r.report.summary()
+        # 各进 1 条 warning；Step 5 追加 architecture_4a deprecated 聚合警告
+        assert "跳过 2 元素 / 降级 2 元素 / 警告 4 条" in r.report.summary()
 
     def test_pptd_report(self, tmp_path):
         spec_path = _write_spec(tmp_path, self._PAGES)

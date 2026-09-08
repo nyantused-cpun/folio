@@ -3,11 +3,16 @@
 支持：加载/合并/展开文本/对比差异/异议提醒。"""
 import os
 import json
+import re
 import yaml
 
 from _paths import SCRIPT_DIR, CLIENTS_DIR
 
 GLOBAL_ALIASES_PATH = os.path.join(SCRIPT_DIR, "_knowledge", "me", "aliases-global.yml")
+
+# 别名类型词表（#49④ aliases.md 退役后仍供 aliases-suggest 分组输出用；
+# 事实源 = aliases.yml，不再生成人读 aliases.md）
+ALIAS_TYPE_SECTIONS = ("公司全称", "简称", "品牌名", "系统名", "关键人")
 
 
 def _load_yaml(path):
@@ -63,6 +68,81 @@ def load_client(client_name):
     return merged
 
 
+def _existing_alias_set(aliases):
+    """把现有别名 {标准词: [别名...]} 打平成单一集合，建议去重用。"""
+    known = set()
+    if not aliases:
+        return known
+    for k, v in aliases.items():
+        known.add(k)
+        if isinstance(v, list):
+            known.update(v)
+        elif v:
+            known.add(v)
+    return known
+
+
+def suggest_aliases(text, existing_aliases=None):
+    """从会话/材料文本中提取疑似别名候选（确定性启发式，不依赖 LLM）。
+
+    返回 [{"type", "term", "reason"}, ...]；只输出建议，不写任何文件。
+
+    启发式（刻意保守）：
+    - 公司全称：以公司/集团/科技/技术/研究院/学校/教育局等结尾的长名词
+    - 系统名：以系统/平台/门户等结尾或 CRM/ERP/MES 等缩写组合
+    - 简称：出现在「简称/又称/别称/大家叫/俗称」附近的 2-6 字名词
+    - 关键人：出现在「关键人/负责人/联系人/王总/李老师」等人物称呼附近的中文名
+    - 品牌名：引号内或「品牌」附近的 2-8 字名词
+    """
+    if not text:
+        return []
+    known = _existing_alias_set(existing_aliases)
+    candidates = []
+    seen = set()
+
+    def add(term, type_, reason):
+        if not term:
+            return
+        term = term.strip()
+        if len(term) < 2 or term in known or term in seen:
+            return
+        seen.add(term)
+        candidates.append({"type": type_, "term": term, "reason": reason})
+
+    # 公司全称：常见企业/机构后缀
+    for m in re.findall(
+        r"[\u4e00-\u9fffA-Za-z0-9（）()（）]{2,30}(?:股份有限?公司|集团有限公司?|科技(?:股份)?有限?公司|技术(?:有限)?公司|研究院|研究中心|学校|教育局|创新中心|投资有限公司)",
+        text,
+    ):
+        add(m, "公司全称", "含企业/机构后缀，疑似客户全称")
+
+    # 系统名：中文名 + 系统/平台/门户，或独立英文缩写
+    for m in re.findall(r"[\u4e00-\u9fffA-Za-z0-9]{1,20}(?:系统|平台|门户|小程序|APP|应用系统)", text):
+        add(m, "系统名", "含系统/平台/门户等系统类后缀")
+    for m in re.findall(r"\b(?:CRM|ERP|MES|OA|SCM|MDM|HR|WMS|EAS)\b", text, re.IGNORECASE):
+        add(m.upper(), "系统名", "系统类英文缩写")
+
+    # 简称：显式上下文
+    for m in re.findall(r"([\u4e00-\u9fffA-Za-z0-9]{2,8})\s*(?:简称|又称|别称|俗称|大家叫|也叫)[:：为是]?([\u4e00-\u9fffA-Za-z0-9]{2,12})", text):
+        add(m[1].strip(), "简称", "紧随「简称/别称」等提示词")
+        add(m[0].strip(), "公司全称", "「简称」前的指称")
+
+    # 关键人：人物称呼附近
+    for m in re.findall(r"([\u4e00-\u9fff]{2,4})\s*(?:总|老师|经理|主任|部长|局长|副总裁|董事长|CEO|CTO)", text):
+        add(m + ("总" if m[-1] not in "总老师" else ""), "关键人", "人物称呼后缀")
+    for m in re.findall(r"(?:关键人|负责人|联系人|主要对接人)[:：]?\s*([\u4e00-\u9fff]{2,4})", text):
+        add(m, "关键人", "出现在关键人/负责人字段")
+
+    # 品牌名：引号/书名号内，或“品牌”附近
+    for m in re.findall(r"[「“‘]([\u4e00-\u9fffA-Za-z0-9]{2,12})[」”’]", text):
+        add(m, "品牌名", "引号内疑似品牌/名称")
+    for m in re.findall(r"([\u4e00-\u9fffA-Za-z0-9]{2,12})\s*(?:品牌|子品牌)", text):
+        add(m, "品牌名", "含「品牌」提示词")
+
+    return candidates
+
+
+
 def _load_base_aliases(source):
     """加载继承源：'全局' → 全局别名，其他 → 指定客户别名。"""
     if source == "全局":
@@ -90,6 +170,22 @@ def expand_text(text, aliases):
     if additions:
         return text + " " + " ".join(additions)
     return text
+
+
+def normalize_query_with_aliases(query, client_name=None, aliases=None, use_aliases=True):
+    """统一查询归一化：使用别名时把 别名/全称 展开（复用 expand_text）。
+
+    - use_aliases=False：原样返回，不展开
+    - aliases 显式传入时不加载客户文件（便于纯函数测试）
+    - client_name 存在且未传 aliases 时自动 load_client
+    """
+    if not use_aliases or not query:
+        return query or ""
+    if aliases is None:
+        if not client_name:
+            return query or ""
+        aliases = load_client(client_name)
+    return expand_text(query, aliases)
 
 
 def diff_clients(client_a, client_b):
@@ -187,7 +283,9 @@ def detect_client_in_query(query):
     if not os.path.isdir(CLIENTS_DIR):
         return None
     clients = _list_clients()
-    for client in clients:
+    # P3：按客户名长度降序匹配——存在前缀客户名（如「蓝海」/「蓝海v2」）时，
+    # 目录序可能让短名先命中吞掉长名；与 _recall._detect_client_from_path 同口径
+    for client in sorted(clients, key=len, reverse=True):
         if client in query:
             return client
         client_aliases = get_client_aliases(client)
@@ -231,11 +329,9 @@ def print_alias_reminder(target_client, prev_client=None):
 
 
 def _list_clients():
-    """列出所有客户目录名（排除 _ 开头）。"""
-    if not os.path.isdir(CLIENTS_DIR):
-        return []
-    return [d for d in os.listdir(CLIENTS_DIR)
-            if os.path.isdir(os.path.join(CLIENTS_DIR, d)) and not d.startswith("_")]
+    """列出所有客户目录名（排除 _ 开头，收口 _paths.list_client_dirs）。"""
+    from _paths import list_client_dirs
+    return list_client_dirs(clients_dir=CLIENTS_DIR)
 
 
 def export_to_excel(path):

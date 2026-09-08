@@ -1,11 +1,13 @@
 # -*- coding: utf-8 -*-
 """能力目录 schema 定义与校验（语义库·事实层）。
 
-叶子模块（仿 _graph.py，无内部依赖）。edge 声明仿 pygraft relation_info：
+叶子模块（仿 _graph.py，仅依赖 _paths 单一数据源）。edge 声明仿 pygraft relation_info：
 domain/range/inverse/transitive/functional。
 """
 import os
 import json
+
+from _paths import SCRIPT_DIR
 
 
 __all__ = [
@@ -21,7 +23,10 @@ REQUIRED_LINK_FIELDS = ["name", "domain", "range", "cardinality", "inverse", "tr
 CARDINALITIES = {"ONE_TO_ONE", "ONE_TO_MANY", "MANY_TO_ONE", "MANY_TO_MANY"}
 VALID_LEVELS = {"APP", "ABB", "function"}
 OBJECT_TYPES = {"CapabilityModule", "CapabilityFunction"}
-DEFAULT_CATALOG_PATH = os.path.join("_knowledge", "capability_catalog", "能力目录_E9标准_v1.json")
+# 绝对路径（_paths 单一数据源拼 SCRIPT_DIR）：旧写法相对路径依赖 cwd，
+# 换目录调用即「能力目录不存在」，违反路径常量统一纪律
+DEFAULT_CATALOG_PATH = os.path.join(
+    SCRIPT_DIR, "_knowledge", "capability_catalog", "能力目录_E9标准_v1.json")
 
 
 def _validate_link_type(link):

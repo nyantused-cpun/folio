@@ -16,9 +16,9 @@
 >
 > 有相关链接或想贡献，欢迎提 Issue / PR / Discussion。
 
-> **English TL;DR** — Folio is a DSH-native material-generation engine for consultants: 15 schema-validated `folio_*` tools, session-protocol auto-save, an L0 guard, and a swappable methodology-pack system. Zero API keys to start (L0); one embedding key unlocks semantic recall (L1). Requirements: Windows 10/11, PowerShell, Python ≥ 3.10 — **Node.js not required**. See the [English product brief](docs/product-brief_v4.0_en.md), or open the bilingual demo outputs in the [v1.0.2 release](https://github.com/nyantused-cpun/folio/releases/tag/v1.0.2). **Help wanted: Word layout, Excel formatting/formulas, Linux/mac ports.**
+> **English TL;DR** — Folio is a host-agnostic CLI material-generation engine for consultants (87 commands, 37 diagram types), with an optional DSH enhancement layer: 15 schema-validated `folio_*` tools, session-protocol auto-save, an L0 guard, and a swappable methodology-pack system. Zero API keys to start (L0); one embedding key unlocks semantic recall (L1). Requirements: Windows 10/11, PowerShell, Python ≥ 3.10 — **Node.js not required**. See the [English product brief](docs/product-brief_v4.0_en.md), or open the bilingual demo outputs in the [v2.0.0 release](https://github.com/nyantused-cpun/folio/releases/tag/v2.0.0). **Help wanted: Word layout, Excel formatting/formulas, Linux/mac ports.**
 
-> **材料生成引擎 + 可组合方法论包，首发深度适配 DSH。**
+> **材料生成引擎 + 可组合方法论包——CLI 内核宿主无关，DSH 插件层深度增强。**
 > Folio = 对开本/作品集：把客户扔进来的材料，装订成能送达的汇报材料。
 
 Folio 是给 AI 宿主（DeepSeek Harness / Trae / Kimi 等）外挂的**长程任务执行引擎**，特化于一件事：从客户材料到咨询/汇报交付物的全链路——接入材料 → 建立记忆 → 应用方法论 → 生成产出 → 守住质量。
@@ -104,13 +104,13 @@ HTML / DOCX / 报价三种格式零外部依赖，装完即用。**PPT 转换**�
 folio/
 ├── _cli.py        # 根级 CLI 转发入口（`python _cli.py <命令>`，实现见 src/）
 ├── .env.example   # 环境配置模板（install.ps1 会自动复制为根 .env；留空即 L0）
-├── src/          # 内核（63 个 CLI 子命令，含 3 个已废弃兼容入口 + 渲染器 + 检索/记忆/质量链）
+├── src/          # 内核（87 个 CLI 子命令 + 90 个模块：37 种 diagram/审查链/育种闭环/audit 观测面）
 ├── skills/       # 11 个方法论 skill（含 packs-authoring 创作指南）
 ├── plugins/      # DSH 插件层：folio-tools（15 个原生工具 + L0 守卫子入口）+ folio-events（会话协议，preset 挂载）
 ├── preset/       # 兰亭 agent preset 模板（install-folio-plugins.ps1 安装时落盘/替换占位符）
 ├── setup/        # 一键安装脚本（install.ps1 内核 + install-folio-plugins.ps1 插件层）
 ├── docs/         # 定位 / 能力引导 / usage 快速上手教程
-└── tests/        # 测试套件（61 个文件；基线含客户材料已裁，见下）
+└── tests/        # 测试套件（191 个文件，与内部生产线同源）
 ```
 
 ## 测试
@@ -127,9 +127,9 @@ folio/
 
 ## 文档
 
-- [产品说明 v4.0（DSH 原生版）](docs/兰亭_产品说明_v4.0.md)：它是什么、怎么装、为什么选 DSH——15 个原生工具 + 会话协议自动执行 + 换方法论不换引擎
+- [产品说明 v4.0（DSH 原生版）](docs/兰亭_产品说明_v4.0.md)：v4.0 历史快照——它是什么、怎么装、为什么选 DSH；最新技术状态见[技术白皮书 v5.0](docs/兰亭_技术白皮书_v5.0.md)
 - [Product Brief v4.0 (English)](docs/product-brief_v4.0_en.md)：same content in English
-- [技术白皮书 v4.0（DSH 原生版）](docs/兰亭_技术白皮书_v4.0.md)：工具管线、事件机制、记忆双轨、已知限制如实说
+- [技术白皮书 v5.0（DSH 原生版）](docs/兰亭_技术白皮书_v5.0.md)：工具管线、事件机制、记忆单轨、防线与生产线收敛现状、已知限制如实说
 - [产品定位与三卖点](docs/产品定位与三卖点_2026-08-15.md)：定位纲领、五段价值链、命名族
 - [能力配置引导](docs/能力配置引导_v1_2026-08-15.md)：6 个能力槽位怎么配、不配会怎样、外部怎么补位
 
@@ -202,7 +202,8 @@ pwsh .\setup\install-community-plugins.ps1 -Verify
 
 ## 状态与路线
 
-- **v1.0.2（当前，2026-08-16）**：CI 流水线 + 社区友好基建（Issue/PR 模板、dev 依赖、真实仓库地址）+ 运行时目录去宿主化（`.trae` → `.folio`）+ 中英双语示例产出（HTML/PPTX）。变更见 [CHANGELOG.md](CHANGELOG.md)，示例见 [GitHub Release v1.0.2](https://github.com/nyantused-cpun/folio/releases/tag/v1.0.2)。
+- **v2.0.0（当前，2026-09-08）**：同源对齐大版本——37 种 diagram 整包、审查链升级（截图对抗/并行/增量）、育种闭环、交付门、主题体系并轨（迁移见 [docs/MIGRATION_v2.0.md](docs/MIGRATION_v2.0.md)）。变更见 [CHANGELOG.md](CHANGELOG.md)，示例见 [GitHub Release v2.0.0](https://github.com/nyantused-cpun/folio/releases/tag/v2.0.0)。
+- **v1.0.2（2026-08-16）**：CI 流水线 + 社区友好基建（Issue/PR 模板、dev 依赖、真实仓库地址）+ 运行时目录去宿主化（`.trae` → `.folio`）+ 中英双语示例产出（HTML/PPTX）。
 - **v1.0.1**：guard 作用域隔离 + 插件包名 @nyantused/folio-dsh-* + preset 入仓。
 - **v1.0.0**：首个正式发布——五段价值链全链路 + DSH 深度适配 + LLM host 模式（0 key 起步）+ 安装脚本/自检。
 - **v1.1 优先补全（开源后第一波）**

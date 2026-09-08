@@ -39,7 +39,7 @@ def test_v2_elements_valid():
          "items": [{"swatch": "lit", "label": "已点亮"},
                    {"swatch": "role_biz", "label": "业务"}]})
     _ok({"type": "qa_block", "items": [{"q": "为什么", "a": "因为"}]})
-    _ok({"type": "topnav", "brand": "瓴寓国际", "brand_sub": "私有化 OA 平台"})
+    _ok({"type": "topnav", "brand": "蓝海国际", "brand_sub": "私有化 OA 平台"})
 
 
 # ---- v2 元素：必填与枚举 ----
@@ -106,7 +106,7 @@ def test_flow_rows_errors():
     assert any("role" in e and "声明" in e for e in errs)
     # group / style / arrow 非法值
     assert any("group" in e for e in validate_element(
-        _flow_rows(rows=[{"group": "red", "cards": [{"label": "x"}]}])))
+        _flow_rows(rows=[{"group": "purple", "cards": [{"label": "x"}]}])))
     assert any("style" in e for e in validate_element(
         _flow_rows(rows=[{"style": "dashed", "cards": [{"label": "x"}]}])))
     assert any("arrow" in e for e in validate_element(
@@ -169,6 +169,10 @@ def test_hex_guard_only_for_v2_spec():
     # 老 spec 元素内 color 字段 hex（存量 main_visual 形态）不报
     assert validate_spec({"pages": [{"elements": [
         {"type": "text", "content": "x", "color": "#1f6feb"}]}]}) == []
+    # v2 spec 的 evidence 子树豁免：证据原文引用可含 hex（2026-09-03 探针误报修复）
+    assert validate_spec({"theme": "consulting_kpmg", "pages": [
+        {"id": "p1", "elements": [{"type": "text", "content": "x"}],
+         "evidence": [{"source": "材料原文提及主色 #d54 系列"}]}]}) == []
 
 
 # ---- P01-P11 版式目录 ----
@@ -181,19 +185,21 @@ def test_layout_unknown():
 
 
 def test_layout_required_components():
-    # P05 缺 legend_bar → error（§13.1-4 验收场景）
+    # P05 缺 legend_bar → warning（目录制：选型提示，不再 error 阻断）
     page = {"layout": "P05", "elements": [
         {"type": "section_tag", "label": "流程"},
         {"type": "action_title", "segments": [{"t": "合同流程 8 步"}]},
         {"type": "diagram", "diagram_type": "flow", "subtype": "flow_rows",
          "title": "x", "rows": [{"cards": [{"label": "a"}]}]},
     ]}
-    errs = validate_layout_errors(page)
-    assert any("legend_bar" in e for e in errs)
-    # 补齐后零错误
+    assert validate_layout_errors(page) == []
+    warns = validate_layout_warnings(page)
+    assert any("legend_bar" in w for w in warns)
+    # 补齐后无缺失提示
     page["elements"].append({"type": "legend_bar",
                              "items": [{"swatch": "lit", "label": "已点亮"}]})
     assert validate_layout_errors(page) == []
+    assert not any("legend_bar" in w for w in validate_layout_warnings(page))
     # P10 二选一：table 或 info_cards 任一满足
     assert validate_layout_errors({"layout": "P10", "elements": [
         {"type": "section_tag", "label": "x"},
@@ -258,6 +264,15 @@ def test_normalize_v2():
                  "logo": "", "logo_position": ""}
 
 
+def test_callout_block_num_default():
+    """存量 callout_block 未写 num 时自动补 01/02…，校验不报缺 num。"""
+    _, n = proto.normalize_element({"type": "callout_block", "points": [
+        {"title": "a"}, {"title": "b"}]})
+    assert [p["num"] for p in n["points"]] == ["01", "02"]
+    assert validate_element({"type": "callout_block", "points": [
+        {"title": "a"}]}) == []
+
+
 def test_empty_payload_v2():
     assert proto.is_empty_payload("hero", proto.normalize_hero({}))
     assert not proto.is_empty_payload(
@@ -282,37 +297,93 @@ def test_capabilities_v2():
 
 def test_degrade_text_v2():
     assert "封面横幅" in proto.degrade_text("hero", {"title": "总览"}, "docx")
-    assert "页首导航" in proto.degrade_text("topnav", {"brand": "瓴寓"}, "pptd")
+    assert "页首导航" in proto.degrade_text("topnav", {"brand": "蓝海"}, "pptd")
     assert "图例条" in proto.degrade_text("legend_bar", {}, "pptd")
 
 
 def test_page_layouts_frozen_names():
-    """P01-P16 命名冻结（F10 + v3.0 T5 扩展，无 P13：与 P02 章节页重叠）。"""
-    assert sorted(PAGE_LAYOUTS) == [f"P{i:02d}" for i in range(1, 17)
+    """P01-P17 命名冻结（F10 + v3.0 T5 扩展，无 P13：与 P02 章节页重叠；
+    P17 差距矩阵页为 2026-09-05 批6/C17 扩目录决策新增，decisions.md 在案）。"""
+    assert sorted(PAGE_LAYOUTS) == [f"P{i:02d}" for i in range(1, 18)
                                     if i != 13]
     names = [PAGE_LAYOUTS[p]["name"] for p in sorted(PAGE_LAYOUTS)]
     assert names == ["封面", "章节页", "结论摘要", "痛点矩阵", "流程图页",
                      "架构图页", "对比表页", "能力地图页", "路线图页",
                      "风险与待确认页", "收尾页", "目录页", "双栏对比页",
-                     "优缺点清单页", "CTA 收尾页"]
+                     "优缺点清单页", "CTA 收尾页", "差距矩阵页"]
 
 
-# ---- v3.0 scenario 场景字段（dev_plan_visual_v3_2026-08-11，T3）----
+def test_p17_gap_matrix_layout():
+    """批6（C17/B4b #6）：P17 差距矩阵页——必需 matrix 图、单图容量、合法不报错。"""
+    page = {"layout": "P17", "elements": [
+        {"type": "section_tag", "index": "SECTION 4", "label": "差距分析"},
+        {"type": "action_title", "segments": [{"t": "现状与目标存在 3 项关键差距"}]},
+        {"type": "diagram", "diagram_type": "matrix", "subtype": "fit_gap",
+         "title": "差距二维矩阵", "requirements": ["统一门户"],
+         "products": ["当前 IT 水平"],
+         "cells": [{"req": "统一门户", "product": "当前 IT 水平",
+                    "match": "gap", "note": "无门户"}]},
+    ]}
+    assert validate_layout_errors(page) == []
+    assert validate_layout_warnings(page) == []
+    # 缺 diagram(matrix) → 缺件 warning（不阻断）
+    warns = validate_layout_warnings({"layout": "P17", "elements": []})
+    assert any("P17" in w and "matrix" in w for w in warns)
+    # 双 diagram → 单图容量 warning
+    two = dict(page)
+    two["elements"] = page["elements"] + [page["elements"][2]]
+    assert any("单图" in w for w in validate_layout_warnings(two))
 
-def test_scenario_valid():
-    assert validate_spec({"pages": [], "scenario": "report"}) == []
-    assert validate_spec({"pages": [], "scenario": "product_intro"}) == []
+
+# ---- v3.0 scenario 场景字段（Step 2 已废弃，迁移错误）----
+
+def test_scenario_migration_error():
+    for v in ("report", "product_intro", "training", "pitch"):
+        errs = validate_spec({"pages": [], "scenario": v})
+        assert any("scenario" in e and "已废弃" in e for e in errs), v
 
 
-def test_scenario_invalid():
-    errs = validate_spec({"pages": [], "scenario": "pitch"})
-    assert any("scenario" in e for e in errs)
+def test_style_migration_error():
+    errs = validate_spec({"pages": [], "style": "gov"})
+    assert any("style" in e and "theme: gov_red" in e for e in errs)
+    errs = validate_spec({"pages": [], "style": "enterprise"})
+    assert any("theme: corporate_navy" in e for e in errs)
 
 
-def test_scenario_default_is_report():
-    """缺省 scenario=report（汇报为主场景）。"""
-    errs = validate_spec({"pages": []})
-    assert errs == []
+def test_absent_scenario_and_style_clean():
+    assert validate_spec({"pages": []}) == []
+
+
+# ---- S8 Wave A 新元素 ----
+
+def test_screenshot_valid_and_errors():
+    _ok({"type": "screenshot", "src": "refs/x.png"})
+    errs = validate_element({"type": "screenshot"})
+    assert any("src" in e for e in errs)
+    errs = validate_element({"type": "screenshot", "src": "x.png",
+                             "alignment": "right"})
+    assert any("alignment" in e for e in errs)
+    errs = validate_element({"type": "screenshot", "src": "x.png",
+                             "annotations": [{"x": 1, "y": 2}]})
+    assert any("annotations" in e for e in errs)
+
+
+def test_raw_html_valid_and_errors():
+    _ok({"type": "raw_html", "content": "<div>定制</div>"})
+    errs = validate_element({"type": "raw_html"})
+    assert any("content" in e for e in errs)
+
+
+def test_raw_html_hex_exempt():
+    # raw_html content 子树不受 hex 防线约束
+    assert validate_spec({"theme": "consulting_kpmg", "pages": [
+        {"id": "p1", "elements": [
+            {"type": "raw_html", "content": "<div style='color:#FF5733;'>x</div>"}]}]}) == []
+    # 其他元素仍受约束
+    errs = validate_spec({"theme": "consulting_kpmg", "pages": [
+        {"id": "p1", "elements": [
+            {"type": "text", "content": "色值 #FF5733"}]}]})
+    assert any("hex" in e for e in errs)
 
 
 # ---- v3.0 P12/P14/P15/P16 版式（dev_plan_visual_v3_2026-08-11，T5）----
@@ -329,8 +400,9 @@ def test_layout_p12_toc_requires_heading():
 def test_layout_p12_missing_required():
     page = {"layout": "P12",
             "elements": [{"type": "section_tag", "label": "目录"}]}
-    errs = validate_layout_errors(page)
-    assert any("toc_cards" in e for e in errs)
+    assert validate_layout_errors(page) == []
+    warns = validate_layout_warnings(page)
+    assert any("toc_cards" in w for w in warns)
 
 
 def test_layout_p14_duo_compare_requires_two():
@@ -353,3 +425,15 @@ def test_layout_p15_p16_required():
             "elements": [{"type": "action_title", "segments": [{"t": "下一步"}]},
                          {"type": "cta_block", "title": "联系我们", "button": "预约演示"}]}
     assert validate_layout_errors(page) == []
+
+
+def test_spec_hex_split_module_pinned():
+    """S8 棘轮拆小回归：_validate_spec_hex 迁 _renderer/_spec_hex 后
+    schema 仍可从原路径取用，且行为不变（hex 拦截 + raw_html 豁免）。"""
+    from _renderer import _spec_hex, schema
+    assert schema._validate_spec_hex is _spec_hex._validate_spec_hex
+    bad = {"theme": "consulting_kpmg",
+           "pages": [{"id": "p1", "layout": "P15",
+                      "elements": [{"type": "section_tag",
+                                    "label": "x", "color": "#FF0000"}]}]}
+    assert any("hex" in e for e in schema.validate_spec(bad))

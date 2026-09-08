@@ -1,8 +1,4 @@
 # -*- coding: utf-8 -*-
-
-import pytest
-
-pytestmark = pytest.mark.internal
 """行为路径测试：_renderer/__init__.py、_cli.py、_cli_generate.py。
 
 优先覆盖：
@@ -40,6 +36,17 @@ def _cli_env():
             os.environ["_PRESALES_CLI_INVOKED"] = saved
 
 
+def _write_sidecar(spec_path):
+    """为 confirmed spec 写合法 sidecar（Step 6 事件化门禁）。"""
+    import hashlib
+    import json
+    digest = hashlib.sha256(open(spec_path, "rb").read()).hexdigest()
+    sidecar = os.path.splitext(spec_path)[0] + ".confirm.json"
+    with open(sidecar, "w", encoding="utf-8") as f:
+        json.dump({"spec_sha256": digest, "confirmed_at": "test",
+                   "host": "test", "client": ""}, f)
+
+
 def _write_spec(tmp_path, pages=None, confirmed=True, **extra):
     """写一份 spec 到 tmp_path，返回路径字符串。"""
     spec = {
@@ -51,6 +58,8 @@ def _write_spec(tmp_path, pages=None, confirmed=True, **extra):
     spec.update(extra)
     spec_path = tmp_path / "spec.yml"
     spec_path.write_text(yaml.safe_dump(spec, allow_unicode=True), encoding="utf-8")
+    if confirmed:
+        _write_sidecar(str(spec_path))
     return str(spec_path)
 
 
@@ -78,9 +87,10 @@ def _mock_generate_pipeline(monkeypatch):
     monkeypatch.setattr(_cli_generate, "_run_pre_check",
                         lambda client_name=None: {"ok": True})
     monkeypatch.setattr(_cli_generate, "_run_post_check", lambda *a, **k: None)
-    monkeypatch.setattr(_cli_generate, "_auto_review", lambda *a, **k: None)
+    monkeypatch.setattr(_cli_generate, "_auto_review", lambda *a, **k: {"verdict": "PASS", "issues": [], "summary": "ok"})
     monkeypatch.setattr("_renderer.html_editor_injector.inject", lambda *a, **k: None)
-    monkeypatch.setattr("_verify_hook.run_single", lambda *a, **k: True)
+    # F3-2 起 html-build/docx-build 以 return_blocked=True 消费 blocked_coverage
+    monkeypatch.setattr("_verify_hook.run_single", lambda *a, **k: (True, []))
 
 
 OUT_DIR = os.path.join("output", "通用", "_test_behavior_paths")
@@ -263,11 +273,13 @@ class TestCliCommandRouting:
         assert "已废弃" in out
         assert "compact" in out
 
-    def test_deprecated_handoff_shows_replacement(self, monkeypatch, capsys):
-        """handoff 废弃提示包含替代命令 session-start。"""
-        code = _run_main(["_cli.py", "handoff", "客户"], monkeypatch)
-        assert code == 1
-        assert "session-start" in capsys.readouterr().out
+    def test_handoff_dead_code_removed(self, monkeypatch):
+        """F0-10：handoff 死代码/废弃别名已删除，不再进入废弃拦截。"""
+        import _cli
+        import _session
+        assert "handoff" not in _cli._DEPRECATED
+        assert not hasattr(_session, "generate_handoff_packet")
+        assert not hasattr(_session, "check_handoff_packet")
 
     def test_no_command_prints_help_exits_0(self, monkeypatch):
         """无子命令时打印帮助并 exit 0。"""
@@ -285,14 +297,22 @@ class TestCliCommandRouting:
         """main() 执行时设置 _PRESALES_CLI_INVOKED=1。"""
         import _cli
         monkeypatch.setattr(sys, "argv", ["_cli.py", "status"])
+        # 需先清空再验证 main() 置位；结束时保存/条件还原（S6 同款），
+        # 避免无条件 pop 误删外层（套件级）预设。
+        saved = os.environ.get("_PRESALES_CLI_INVOKED")
         os.environ.pop("_PRESALES_CLI_INVOKED", None)
-        # status 可能正常退出或无 SystemExit
         try:
-            _cli.main()
-        except SystemExit:
-            pass
-        assert os.environ.get("_PRESALES_CLI_INVOKED") == "1"
-        os.environ.pop("_PRESALES_CLI_INVOKED", None)
+            # status 可能正常退出或无 SystemExit
+            try:
+                _cli.main()
+            except SystemExit:
+                pass
+            assert os.environ.get("_PRESALES_CLI_INVOKED") == "1"
+        finally:
+            if saved is None:
+                os.environ.pop("_PRESALES_CLI_INVOKED", None)
+            else:
+                os.environ["_PRESALES_CLI_INVOKED"] = saved
 
     def test_file_not_found_exception_handled(self, monkeypatch, capsys):
         """命令内部抛 FileNotFoundError 被兜底为友好提示 + exit 1。"""
@@ -372,14 +392,14 @@ class TestCliGenerateConfirmedFlow:
         assert "生成内容。" in html
 
     def test_html_build_unconfirmed_blocked(self, monkeypatch, tmp_path, out_dir):
-        """confirmed=false 的 spec 被 confirmed 门阻断，无产出。"""
+        """confirmed=false 的 spec 被 confirmed 门阻断，无产出（守卫 exit 2）。"""
         _mock_generate_pipeline(monkeypatch)
         spec_path = _write_spec(tmp_path, pages=[], confirmed=False)
         out_html = os.path.join(out_dir, "blocked.html")
         code = _run_main(
             ["_cli.py", "html-build", spec_path, out_html, "--html-only"],
             monkeypatch)
-        assert code == 1
+        assert code == 2
         assert not os.path.exists(out_html)
 
     def test_html_build_html_only_skips_pptd(self, monkeypatch, tmp_path, out_dir):
@@ -493,3 +513,35 @@ class TestCliGenerateHelpers:
                         message="边距偏小", severity="warning")]
         result = _cli_generate._run_layout_lint(issues)
         assert result is True
+
+
+# ============================================================
+# P1-9（D5）：未知主题名回退入口归一
+# ============================================================
+class TestUnknownThemeFallback:
+    """未知主题名端到端不崩：v2_theme_name 落 _resolve_style 结果
+    （曾落裸 spec 值，theme_tokens_css→get_theme raise 炸 html-build）；
+    get_theme 的 raise 保留作双保险。"""
+
+    def test_unknown_theme_renders_and_falls_back(self, tmp_path, out_dir):
+        from _renderer import Renderer
+        spec_path = _write_spec(
+            tmp_path,
+            pages=[{"id": "p01", "title": "概述",
+                    "elements": [{"type": "text", "content": "正文。"}]}],
+            theme="不存在的主题xyz")
+        r = Renderer(spec_path)
+        assert r.v2_theme_name == "consulting_kpmg"
+        out = os.path.join(out_dir, "unknown_theme.html")
+        r.render_html(out)  # 曾在此崩溃
+        assert os.path.exists(out)
+
+    def test_get_theme_still_raises_for_unknown(self):
+        """双保险语义不变：get_theme 直接遇未知名仍 raise。"""
+        from _renderer.theme import get_theme
+        with pytest.raises(ValueError):
+            get_theme("不存在的主题xyz")
+
+
+# v2.0 同源对齐（2026-09-08）：依赖主仓工作区契约/真实数据，发布面标记 internal 不随 CI 跑
+pytestmark = pytest.mark.internal

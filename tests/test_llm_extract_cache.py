@@ -13,10 +13,18 @@ import pytest
 import _outline_to_spec
 from _outline_to_spec import extract_section_content
 
+# B3 P1-13 缓存门接线后：图形 role（pain_points→cross_system）的结果必须过
+# _diagram_data_from_result 校验才入缓存，fake 载荷按合法 cross_system 形状构造
 _FAKE_RESP = ('{"title": "提取标题", "content": "正文",'
-              ' "key_points": ["要点"], "data": [], "source_quote": ""}')
+              ' "key_points": ["要点"], "data": [], "source_quote": "",'
+              ' "systems": [{"name": "系统A"}, {"name": "系统B"}],'
+              ' "steps": [{"label": "步骤1", "system": "系统A"},'
+              ' {"label": "步骤2", "system": "系统B"}]}')
 _FAKE_RESULT = {"title": "提取标题", "content": "正文",
-                "key_points": ["要点"], "data": [], "source_quote": ""}
+                "key_points": ["要点"], "data": [], "source_quote": "",
+                "systems": [{"name": "系统A"}, {"name": "系统B"}],
+                "steps": [{"label": "步骤1", "system": "系统A"},
+                          {"label": "步骤2", "system": "系统B"}]}
 
 
 @pytest.fixture
@@ -77,7 +85,7 @@ class TestExtractCache:
     def test_prompt_version_bump_triggers_refetch(self, cache_env, monkeypatch):
         extract_section_content(_section(), "材料" * 1000)
         assert cache_env["n"] == 1
-        monkeypatch.setattr(_outline_to_spec, "PROMPT_VERSION", "v2")
+        monkeypatch.setattr(_outline_to_spec, "PROMPT_VERSION", "v3")
         extract_section_content(_section(), "材料" * 1000)
         assert cache_env["n"] == 2
 

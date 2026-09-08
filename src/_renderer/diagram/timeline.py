@@ -7,9 +7,23 @@ pptd：阶段卡 roundRect + chevron 原生形状连接。
 spec：milestones: [{label, date, desc}]
 """
 
-from . import theme
-from .theme import _esc
+from .. import theme
+from ..theme import _esc
 from . import pptd_emit as pe
+
+# ---- 版心钳位（P1-V1，视觉二轮 2026-09-06）----
+# gantt 是唯一固定 px 绝对定位的 HTML 图形（其余 subtype 走 svg width:100%
+# 自缩放），容器按 1200 满幅写死即横向越界：实渲染目检 p17 module_gantt 任务条
+# / p34 milestone_gantt W4 列头超页容器右边线 70px（列头右缘 1188 − 页壳内容
+# 右界 1118）。修法对齐 pptd_emit._snap_bounds 同款语义——在几何唯一出口集中
+# 钳位一次，不在各 subtype 散落。版心右界 = body 1200 − 页壳 border 2 + padding
+# 80 − section border 2 + padding 56 = 1060（实测 dg-body 1060.4，4px 网格对齐）；
+# 跨列任务条 start/span 双向钳位（负 start 压左标签列、start+span 超列数冲出
+# 右界），bar 右边界恒 ≤ gx1。pptd 侧经 PptdScaler(viewbox_w=W) 满幅换算，
+# 双端同几何（flow.py 传 vb_w 同款）。
+_GANTT_W = 1060.0
+_GANTT_X0 = 210.0
+_GANTT_X1 = _GANTT_W - 10.0  # 右缘留 10（原 1200 坐标系 gx1=1190 同款留边）
 
 
 def _vertical_html(elem):
@@ -40,7 +54,7 @@ def _mg_tones():
 
 
 def _mg_geometry(elem):
-    """module_gantt 布局几何（HTML/pptd 共用，viewBox 1200 宽坐标系）。
+    """module_gantt 布局几何（HTML/pptd 共用，viewBox 版心宽坐标系，见 _GANTT_W）。
 
     结构：markers 行（红三角+上线点）→ 季度表头（深色条）→ 域行
     （左标签块 + 编号 chip 按列落格堆叠）。
@@ -49,7 +63,7 @@ def _mg_geometry(elem):
     groups = elem.get("groups", []) or []
     markers = elem.get("markers", []) or []
     label_w = 190.0
-    gx0, gx1 = 210.0, 1190.0
+    gx0, gx1 = _GANTT_X0, _GANTT_X1
     n = max(1, len(cols))
     col_w = (gx1 - gx0) / n
     markers_h = 42.0 if markers else 0.0
@@ -69,7 +83,7 @@ def _mg_geometry(elem):
         rows.append({"spec": g, "stacks": stacks, "y": y, "h": rh})
         y += rh + row_gap
     H = y - row_gap + 4
-    return {"W": 1200.0, "H": H, "columns": [str(c) for c in cols],
+    return {"W": _GANTT_W, "H": H, "columns": [str(c) for c in cols],
             "markers": markers, "label_w": label_w, "gx0": gx0, "col_w": col_w,
             "n": n, "markers_h": markers_h, "header_h": header_h,
             "chip_h": chip_h, "chip_gap": chip_gap, "pad_t": pad_t, "rows": rows}
@@ -124,8 +138,10 @@ def _module_gantt_html(elem):
 
 def _vertical_pptd(elem, x, y, w):
     ms = elem.get("milestones", []) or []
-    sc = pe.PptdScaler(x, y, w)
     n = len(ms)
+    if not n:
+        return [], 0  # 空守卫对齐 horizontal：否则竖轴 total = -gap 算出负高形状
+    sc = pe.PptdScaler(x, y, w)
     card_h, gap = 74.0, 14.0
     elems = []
     # 竖轴
@@ -157,10 +173,10 @@ def _vertical_pptd(elem, x, y, w):
 
 
 def _module_gantt_pptd(elem, x, y, w):
-    """module_gantt pptd：与 HTML 同几何（viewBox 1200 宽 -> 内容区）。
+    """module_gantt pptd：与 HTML 同几何（viewBox 版心宽 -> 内容区）。
     红三角用原生 triangle 形状 flipV，chip/标签块实底同色，全原生零图像。"""
-    sc = pe.PptdScaler(x, y, w)
     g = _mg_geometry(elem)
+    sc = pe.PptdScaler(x, y, w, g["W"])
     tones = _mg_tones()
     gx0, col_w, n = g["gx0"], g["col_w"], g["n"]
     elems = []
@@ -215,8 +231,26 @@ def _module_gantt_pptd(elem, x, y, w):
     return elems, sc.len(g["H"])
 
 
+def _mg_dep_index(dep, rows):
+    """deps 引用解析：兼容整数索引与任务名引用。
+
+    spec 用任务名写依赖（如 deps: [需求调研]），此前双端直接 int(dep)，
+    中文名抛 ValueError → pptd 侧 fallback 框报错、HTML 侧甘特图渲染失败。
+    返回行索引；解析不到返回 -1（调用方跳过）。
+    """
+    if isinstance(dep, int):
+        return dep
+    s = str(dep).strip()
+    if s.isdigit():
+        return int(s)
+    for row in rows:
+        if row["task"].get("name") == s:
+            return row["index"]
+    return -1
+
+
 def _msg_geometry(elem):
-    """milestone_gantt 布局几何（HTML/pptd 共用，viewBox 1200 宽）。
+    """milestone_gantt 布局几何（HTML/pptd 共用，viewBox 版心宽坐标系，见 _GANTT_W）。
 
     结构：markers 行 → 列表头 → 任务行（左标签 + bar 跨列 start~start+span）。
     """
@@ -224,7 +258,7 @@ def _msg_geometry(elem):
     tasks = [t for t in (elem.get("tasks", []) or []) if isinstance(t, dict)]
     markers = elem.get("markers", []) or []
     label_w = 190.0
-    gx0, gx1 = 210.0, 1190.0
+    gx0, gx1 = _GANTT_X0, _GANTT_X1
     n = max(1, len(cols))
     col_w = (gx1 - gx0) / n
     markers_h = 42.0 if markers else 0.0
@@ -236,13 +270,17 @@ def _msg_geometry(elem):
     for i, t in enumerate(tasks):
         start = int(t.get("start", 0))
         span = max(1, int(t.get("span", 1)))
+        # 越界钳位（P1-V1）：负 start 压进左标签列、start+span 超列数冲出
+        # 版心右界（schema 只 warn 任务数不限跨列），均钳回网格内
+        start = min(max(start, 0), n - 1)
+        span = min(span, n - start)
         rows.append({"task": t, "index": i, "y": y,
                      "bar_x": gx0 + start * col_w + 4,
                      "bar_w": span * col_w - 8,
                      "tone": t.get("tone", "blue")})
         y += row_h + row_gap
     H = y - row_gap + 4
-    return {"W": 1200.0, "H": H, "columns": [str(c) for c in cols],
+    return {"W": _GANTT_W, "H": H, "columns": [str(c) for c in cols],
             "markers": markers, "label_w": label_w, "gx0": gx0, "col_w": col_w,
             "n": n, "markers_h": markers_h, "header_h": header_h,
             "row_h": row_h, "bar_h": bar_h, "rows": rows}
@@ -291,7 +329,7 @@ def _milestone_gantt_html(elem):
     deps = []
     for r in g["rows"]:
         for dep in (r["task"].get("deps", []) or []):
-            dep = int(dep)
+            dep = _mg_dep_index(dep, g["rows"])
             if 0 <= dep < len(g["rows"]) and dep != r["index"]:
                 drow = g["rows"][dep]
                 deps.append((drow["bar_x"] + drow["bar_w"], drow["y"] + g["row_h"] / 2,
@@ -312,8 +350,8 @@ def _milestone_gantt_html(elem):
 
 def _milestone_gantt_pptd(elem, x, y, w):
     """milestone_gantt pptd：markers + 列表头 + 任务标签 + bar 跨列 + 依赖箭头。"""
-    sc = pe.PptdScaler(x, y, w)
     g = _msg_geometry(elem)
+    sc = pe.PptdScaler(x, y, w, g["W"])
     tones = _mg_tones()
     gx0, col_w, n = g["gx0"], g["col_w"], g["n"]
     elems = []
@@ -356,7 +394,7 @@ def _milestone_gantt_pptd(elem, x, y, w):
                              color=theme.WHITE, bold=True, align=("left", "middle"), wrap=False))
     for r in g["rows"]:
         for dep in (r["task"].get("deps", []) or []):
-            dep = int(dep)
+            dep = _mg_dep_index(dep, g["rows"])
             if 0 <= dep < len(g["rows"]) and dep != r["index"]:
                 drow = g["rows"][dep]
                 x1 = sc.px(drow["bar_x"] + drow["bar_w"])

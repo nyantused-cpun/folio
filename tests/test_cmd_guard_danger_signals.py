@@ -1,8 +1,4 @@
 # -*- coding: utf-8 -*-
-
-import pytest
-
-pytestmark = pytest.mark.internal
 """pretool_cmd_guard 危险信号判定 + ask 记忆（2026-08-11 增强）的回归测试。
 
 场景：
@@ -69,21 +65,21 @@ class TestDangerSignals:
 
     def test_direct_deliverable_write_denied(self, guard):
         g, proj = guard
-        _mk_script(proj, "b.py", "open(r'output/蓝海集团/方案_v1.html', 'w').write('x')\n")
+        _mk_script(proj, "b.py", "open(r'output/蓝海/方案_v1.html', 'w').write('x')\n")
         decision, reason = g._check_command("python b.py")
         assert decision == "deny"
         assert "产出物" in reason
 
     def test_pptx_deliverable_write_denied(self, guard):
         g, proj = guard
-        _mk_script(proj, "b2.py", "open(r'output/蓝海集团/方案_v1.pptx', 'wb').write(b'x')\n")
+        _mk_script(proj, "b2.py", "open(r'output/蓝海/方案_v1.pptx', 'wb').write(b'x')\n")
         decision, reason = g._check_command("python b2.py")
         assert decision == "deny"
         assert "产出物" in reason
 
     def test_shutil_move_to_deliverable_denied(self, guard):
         g, proj = guard
-        _mk_script(proj, "g.py", "shutil.move('output/蓝海集团/方案_v1.html', '.versions/')\n")
+        _mk_script(proj, "g.py", "shutil.move('output/蓝海/方案_v1.html', '.versions/')\n")
         decision, reason = g._check_command("python g.py")
         assert decision == "deny"
         assert "产出物" in reason
@@ -91,13 +87,13 @@ class TestDangerSignals:
     def test_path_reference_in_comment_allowed(self, guard):
         """归档/读取脚本：仅引用产出物路径（无写操作）不误伤。"""
         g, proj = guard
-        _mk_script(proj, "f.py", "# 输出到 output/蓝海集团/方案_v1.html 供人工核对\nprint('ok')\n")
+        _mk_script(proj, "f.py", "# 输出到 output/蓝海/方案_v1.html 供人工核对\nprint('ok')\n")
         decision, _ = g._check_command("python f.py")
         assert decision == "allow"
 
     def test_intermediate_page_write_allowed(self, guard):
         g, proj = guard
-        _mk_script(proj, "c.py", "open(r'output/蓝海集团/方案_v1/pages/06.page', 'w').write('x')\n")
+        _mk_script(proj, "c.py", "open(r'output/蓝海/方案_v1/pages/06.page', 'w').write('x')\n")
         decision, _ = g._check_command("python c.py")
         assert decision == "allow"
 
@@ -130,3 +126,7 @@ class TestAskMemory:
         g.ASK_TTL = -1  # 过期 -> 再次 ask
         decision, _ = g._check_command("python ghost.py")
         assert decision == "ask"
+
+
+# v2.0 同源对齐（2026-09-08）：依赖主仓工作区契约/真实数据，发布面标记 internal 不随 CI 跑
+pytestmark = pytest.mark.internal

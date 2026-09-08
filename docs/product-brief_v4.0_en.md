@@ -84,7 +84,8 @@ Three selling points:
 
 - **v1.0 released** (2026-08-15): skills + guard + install script
 - **P1 landed** (2026-08-15): 15 tools + event plugin
-- **v1.0.2 released** (2026-08-16): CI pipeline, contributor-friendly infrastructure, bilingual demo outputs, English-localized skills
+- **v2.0.0 released** (2026-09-08): same-source alignment major release — 37 diagram types, upgraded review chain (screenshot-adversarial / parallel / incremental), breeding loop, delivery gate, theme consolidation (migration guide: docs/MIGRATION_v2.0.md)
+- **v1.0.2** (2026-08-16): CI pipeline, contributor-friendly infrastructure, bilingual demo outputs, English-localized skills
 - **v1.2 planned**: Lanting mode v2 + graph projection
 - **v1.3 planned**: sidebar panel + Packs manager
 

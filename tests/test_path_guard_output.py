@@ -1,8 +1,4 @@
 # -*- coding: utf-8 -*-
-
-import pytest
-
-pytestmark = pytest.mark.internal
 """pretool_path_guard output/** 细分（2026-08-11）的回归测试。
 
 - 最终交付物（.html/.pptx/.docx/.xlsx）-> deny（须走 CLI 生成）
@@ -53,31 +49,35 @@ def _check(guard, rel):
 
 class TestOutputDeliverableDenied:
     def test_top_level_html_denied(self, guard):
-        decision, _ = _check(guard, "output/蓝海集团/方案_v1.html")
+        decision, _ = _check(guard, "output/蓝海/方案_v1.html")
         assert decision == "deny"
 
     def test_nested_pptx_denied(self, guard):
-        decision, _ = _check(guard, "output/蓝海集团/方案_v1/方案_v1.pptx")
+        decision, _ = _check(guard, "output/蓝海/方案_v1/方案_v1.pptx")
         assert decision == "deny"
 
     def test_top_level_xlsx_denied(self, guard):
-        decision, _ = _check(guard, "output/蓝海集团/需求清单_v1.xlsx")
+        decision, _ = _check(guard, "output/蓝海/需求清单_v1.xlsx")
         assert decision == "deny"
 
 
 class TestOutputIntermediateAllowed:
     def test_page_intermediate_allowed(self, guard):
-        decision, _ = _check(guard, "output/蓝海集团/方案_v14/pages/06_process.page")
+        decision, _ = _check(guard, "output/蓝海/方案_v14/pages/06_process.page")
         assert decision == "allow"
 
     def test_spec_yml_allowed(self, guard):
-        decision, _ = _check(guard, "output/蓝海集团/蓝海集团_方案_spec.yml")
+        decision, _ = _check(guard, "output/蓝海/蓝海_方案_spec.yml")
         assert decision == "allow"
 
     def test_figures_dir_allowed(self, guard):
-        decision, _ = _check(guard, "output/蓝海集团/figures/01_流程.html")
+        decision, _ = _check(guard, "output/蓝海/figures/01_流程.html")
         assert decision == "allow"
 
     def test_assets_dir_allowed(self, guard):
-        decision, _ = _check(guard, "output/蓝海集团/方案_v1/_assets/editor.js")
+        decision, _ = _check(guard, "output/蓝海/方案_v1/_assets/editor.js")
         assert decision == "allow"
+
+
+# v2.0 同源对齐（2026-09-08）：依赖主仓工作区契约/真实数据，发布面标记 internal 不随 CI 跑
+pytestmark = pytest.mark.internal

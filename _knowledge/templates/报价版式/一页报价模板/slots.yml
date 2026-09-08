@@ -1,0 +1,21 @@
+template: 一页报价模板
+
+global_slots:
+  client: {cell: C2}
+  date: {cell: G2}
+  valid_until: {cell: C3}
+  version: {cell: G3}
+
+summary:
+  row_map:
+    implementation: 7
+  total_row: 8
+
+sections:
+  implementation:
+    data_start: 11
+    total_row: 17
+    use_formula: true
+
+payment:
+  data_start: 20

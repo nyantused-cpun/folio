@@ -1,9 +1,8 @@
 # -*- coding: utf-8 -*-
 import os
 import re
+import sys
 import math
-
-SCRIPT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # 仓库根
 
 MIN_PPTX_SIZE = 5 * 1024
 MIN_HTML_SIZE = 500
@@ -12,7 +11,26 @@ MIN_XLSX_SIZE = 1 * 1024
 MIN_YAML_SIZE = 50
 
 # L4: 去 AI 痕迹（单一数据源：_paths.py）
-from _paths import BANNED_WORDS, BANNED_PHRASES
+from _paths import BANNED_PHRASES, BANNED_WORDS, SCRIPT_DIR
+
+# P4-S3 拆分（2026-09-05）：spec 观察/检查类函数群迁 _verify_checks。
+# 此处 re-import 保持既有引用面可达（tests/test_narrative_consistency.py、
+# tests/test_verify_step5_6.py、tests/test_diagram_opportunity.py 等
+# 经 _verify 引用这些符号），verify_spec_layout_data 内消费面不变。
+# 到期复审：tests monkeypatch 面迁移至真源后退役（复审点：下一大批次开工前）。——2026-09-07 复审：tests 仍经此面打桩（test_b3_cli_face/test_m1_f0/test_recall_eval/test_verify_render_report 等），保留；退役点顺延至 monkeypatch 面迁移完成。
+# 退役计划（S6 2026-09-07 注记）：tests 全部改为直引 _verify_checks 真源后删除
+# 本 re-import 块；跟踪锚点 docs/发版稳定版_S3S4_实施报告_2026-09-07.md 遗留项
+# 「check_diagram_level 打印面接线等」（本块图级符号接线见下）。
+from _verify_checks import (
+    check_capability_map_system_name_as_chip, check_diagram_level,
+    check_diagram_opportunity, check_graphic_balance,
+    check_narrative_consistency, check_question_binding,
+    check_shell_repetition, check_stage_density,
+    check_type_role_consistency, verify_analysis_md,
+)
+# S0 棘轮处置（2026-09-07）：check_evidence_ledger 再拆 _verify_evidence，
+# 同面 re-import，_verify 引用面不变。
+from _verify_evidence import check_evidence_ledger
 
 
 def verify_pptx(path):
@@ -38,7 +56,7 @@ def verify_pptx(path):
     return True, f"OK ({slide_count} 页, {size} bytes)"
 
 
-def verify_html(path):
+def verify_html(path, density_gate="verify"):
     if not os.path.exists(path):
         return False, f"文件不存在: {path}"
     if not (path.lower().endswith(".html") or path.lower().endswith(".htm")):
@@ -71,15 +89,51 @@ def verify_html(path):
         return False, "未检测到任何 CSS 样式引用"
 
     msg = f"OK ({size} bytes)"
-    # 美学观察（D-120，观察模式不阻断）：渲染后几何美学检查
-    # （重叠/字号层级/溢出/大空白/对比度）；playwright 不可用时静默跳过
+    # Step 3：style 机械扫描 + 占位符残留（只报不阻断）
+    try:
+        from _style_guard import check as style_check
+        style_issues = style_check(content)
+        if style_issues:
+            # C-C1：severity 贯通——warn（语境层）与 block（硬禁）分级标注
+            msg += " | style: " + "; ".join(
+                f"{i['name']}×{i['count']}"
+                + ("(warn)" if i.get("severity") == "warn" else "")
+                for i in style_issues[:5])
+    except Exception as e:
+        # P3：扫描降级需留痕——曾静默 pass，style 扫描停用无人知晓（漏检去 AI 化）
+        print(f"[warn] style 机械扫描失败（降级跳过，不阻断）: {e}", file=sys.stderr)
+    ph = check_placeholder_residual(content)
+    if ph:
+        msg += " | " + "; ".join(ph)
+    # C-E5：截图脱敏提醒（warn 级，不阻断）
+    sd = _warn_screenshot_desensitization(html_text=content)
+    if sd:
+        msg += " | " + "; ".join(sd)
+    # 美学观察（D-120，观察模式不阻断）：渲染后几何美学检查 升级条件: 标准页待误报率数据在案后逐维升 warn（盘点#2）
+    # （重叠/字号层级/溢出/大空白/对比度）；playwright 不可用时显式标注降级
     try:
         from _density import check_density_html
-        findings = check_density_html(path) or []
+        findings = check_density_html(path, gate=density_gate) or []
         real = [f for f in findings
                 if not f.startswith(("playwright", "密度检查执行失败"))]
+        # #43：降级显式标注——曾静默过滤，输出面与「通过」无异（佯动误导）
+        skipped = len(findings) - len(real)
+        if skipped and not real:
+            msg += " | 美学观察：playwright 不可用未执行（显式降级，非通过）"
         if real:
             msg += f" | 美学观察 {len(real)} 条: " + "; ".join(real[:3])
+    except Exception:
+        pass
+    # I-7 S15 域禁令观察（机械子集，不阻断）：命中在 msg 标注供人工复核
+    try:
+        import re as _re
+        from _domain_guard import check_domain_bans
+        _body = _re.sub(r"<[^>]+>", " ", content)
+        _body = _re.sub(r"\s+", " ", _body)
+        bans = check_domain_bans(_body)
+        if bans:
+            msg += " | 域禁令 " + "; ".join(
+                f"{b['id']}({b['source']})" for b in bans[:5])
     except Exception:
         pass
     return True, msg
@@ -133,7 +187,7 @@ def check_ai_traces(path):
 
     三项检查：
     1. burstiness（句子长度方差，AI 文本方差低）
-    2. 禁用词（赋能/抓手/闭环...）
+    2. 禁用词（BANNED_WORDS 硬 5 词，单一数据源在 _paths.py）
     3. 模板句式（综上所述/总而言之...）
 
     返回 (pass: bool, issues: list[str])
@@ -295,8 +349,17 @@ def verify_yaml(path):
 
     # v2.0 版式维（§10）：spec 文件（含 pages）追加 6 条版式检查
     if isinstance(data, dict) and isinstance(data.get("pages"), list):
-        lay_ok, lay_errors, lay_warnings = verify_spec_layout_data(data)
+        lay_ok, lay_errors, lay_warnings = verify_spec_layout_data(
+            data, spec_path=path)
         msg = f"OK ({type(data).__name__}, {size} bytes)"
+        # S6（2026-09-07）：图级 verify 摘要上打印面（C-F1 遗留接线）。与
+        # deliver receipt 同口径（_verify_diagram.check_diagram_level 聚合，
+        # 规则单点在 schema）；errors/warnings 与版式维同规则集，此处只做
+        # 计数摘要展示，不重复阻断/不重复展开明细。
+        dl = check_diagram_level(data)
+        if dl["diagrams"]:
+            msg += (f" | 图级校验 {dl['diagrams']} 图"
+                    f"（错误 {len(dl['errors'])} / 警告 {len(dl['warnings'])}）")
         if lay_warnings:
             msg += f" | 版式警告 {len(lay_warnings)} 条: " + "; ".join(lay_warnings[:3])
         if lay_errors:
@@ -316,165 +379,54 @@ _QUANT_WORDS = ("%", "翻倍", "倍", "降至", "提升", "提高", "降低", "�
                 "增长", "覆盖", "节约", "缩短", "万", "亿")
 
 
-def check_type_role_consistency(spec):
-    """A-2 散值字号统计（观察模式）：扫描全 spec 元素的 fontSize 散值。
+_PLACEHOLDER_RE = re.compile(
+    r"Services (One|Two|Three)|lorem ipsum|Nullam|Lorem|占位|"
+    r"\bTODO(?:示例文字)?\b|待补充|待定",  # C-A4：词边界，独立 TODO/TODO:xxx 均命中、todoxxx 不误报
+    re.IGNORECASE,
+)
 
-    同一 spec 内同一散值字号出现 >2 次 → 提示收敛为 type_roles 角色。
-    只报告不阻断（观察模式，exit code 不变）。
-    """
-    from collections import Counter
-    counts = Counter()
-    for page in spec.get("pages", []) or []:
-        if not isinstance(page, dict):
-            continue
-        for elem in page.get("elements", []) or []:
-            if not isinstance(elem, dict):
-                continue
-            fs = elem.get("fontSize")
-            if isinstance(fs, (int, float)) and not isinstance(fs, bool):
-                counts[fs] += 1
-    return [f"[观察] 散值字号 {fs} 出现 {n} 次，建议收敛为 type_roles 角色"
-            for fs, n in sorted(counts.items()) if n > 2]
+# C-E5 脱敏提醒外迁 _verify_desens（S8-B 棘轮拆小）；re-export 保持引用面
+from _verify_desens import _warn_screenshot_desensitization  # noqa: F401
 
 
-def check_shell_repetition(spec):
-    """A-3 反同壳检查（观察模式）：相邻 ≥3 页 layout + 构件指纹相同 → [观察]。
-
-    指纹 = layout + 构件类型序列 + diagram subtype 序列（文案内容不参与）。
-    只报告不阻断（观察模式，exit code 不变）。
-    """
-    pages = [p for p in spec.get("pages", []) or [] if isinstance(p, dict)]
-    fingerprints = []
-    for p in pages:
-        layout = p.get("layout", "")
-        types, subtypes = [], []
-        for e in p.get("elements", []) or []:
-            if not isinstance(e, dict):
-                continue
-            types.append(e.get("type", ""))
-            if e.get("type") == "diagram":
-                subtypes.append(f"{e.get('diagram_type', '')}/{e.get('subtype', '')}")
-        fingerprints.append((layout, tuple(types), tuple(subtypes)))
-
-    msgs = []
-    i, n = 0, len(fingerprints)
-    while i < n:
-        j = i
-        while j < n and fingerprints[j] == fingerprints[i]:
-            j += 1
-        if j - i >= 3:
-            layout, types, subtypes = fingerprints[i]
-            parts = [layout] if layout else ["无版式"]
-            if types:
-                parts.append("构件:" + "+".join(types))
-            if subtypes:
-                parts.append("图:" + "+".join(subtypes))
-            msgs.append(f"[观察] 页面 {i + 1}-{j} 构图壳重复（{'；'.join(parts)}）")
-        i = j
-    return msgs
+def check_placeholder_residual(text):
+    """占位符残留扫描（Step 3 质检收口）：命中即 [warn]。"""
+    hits = sorted({m.group(0) for m in _PLACEHOLDER_RE.finditer(text)})
+    return [f"占位符残留：{', '.join(hits)}"] if hits else []
 
 
-def check_evidence_ledger(spec):
-    """B-3 证据台账编号唯一性（观察模式）：num 非空且重复 → [观察]。
-
-    只报告不阻断（观察模式，exit code 不变）。
-    """
-    from collections import Counter
-    msgs = []
-    for pi, page in enumerate(spec.get("pages", []) or []):
-        if not isinstance(page, dict):
-            continue
-        for ei, elem in enumerate(page.get("elements", []) or []):
-            if not isinstance(elem, dict) or elem.get("type") != "evidence_ledger":
-                continue
-            nums = [it.get("num", "") for it in elem.get("items", []) or []
-                    if isinstance(it, dict) and it.get("num")]
-            dup = [n for n, c in Counter(nums).items() if c > 1]
-            if dup:
-                msgs.append(f"[观察] pages[{pi}].elements[{ei}]: "
-                            f"evidence_ledger 证据编号重复 {', '.join(dup)}")
-    return msgs
-
-
-# D-122：构图母板 → 期望构件特征（讲法观察：声明了母板但页面构件不匹配）
-_COMPOSITION_HINTS = {
-    "full_claim": ("hero/action_title 类大标题构件", {"hero", "action_title"}),
-    "editorial_columns": ("图文穿插类（info_cards/pullquote）",
-                          {"info_cards", "pullquote", "view_cards"}),
-    "architecture_board": ("diagram architecture 类图", None),
-    "evidence_ledger": ("证据结构（evidence_ledger/info_cards）",
-                        {"evidence_ledger", "info_cards"}),
-    "flow_spine": ("diagram flow 类流程图", None),
-    "scenario_sequence": ("多段 section_tag/action_title 序列",
-                          {"section_tag", "action_title"}),
-    "data_narrative": ("数据元素（stat_cards/kpi_cards/table）",
-                       {"stat_cards", "kpi_cards", "table"}),
-    "product_simulation": ("仿真元素（simulation 组件）", {"simulation"}),
-    "timeline_gantt": ("diagram timeline 类（module_gantt/milestone_gantt）", None),
-    "comparison_matrix": ("对比类（table/fit_gap/cbm/raci/crud/quadrant）",
-                          {"table", "diagram", "qa_block"}),
-    "decision_board": ("决策类（callout_block/决策图）", {"callout_block", "diagram"}),
-    "capability_graph": ("能力图（capability_map/platform_hub）", None),
-}
-
-# diagram 类母板的 subtype 命中表
-_COMPOSITION_DIAGRAM_SUBTYPES = {
-    "architecture_board": ("4a", "layered", "integration", "biz_overview",
-                           "deployment", "platform_hub", "pyramid"),
-    "flow_spine": ("sequence", "swimlane", "cross_system", "parallel",
-                   "decision", "flow_rows"),
-    "timeline_gantt": ("horizontal", "vertical", "module_gantt", "milestone_gantt"),
-    "capability_graph": ("capability_map", "platform_hub"),
-}
+def verify_style_scan(path):
+    """verify --only style 作用域：纯 style 机械扫描 + 占位符残留，不跑 Playwright。"""
+    if not os.path.exists(path):
+        return False, f"文件不存在: {path}"
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            content = f.read()
+    except Exception as e:
+        return False, f"无法读取文件: {e}"
+    parts = []
+    try:
+        from _style_guard import check as style_check
+        issues = style_check(content)
+        if issues:
+            # C-C1：severity 贯通——warn（语境层）与 block（硬禁）分级标注
+            parts.append("style: " + "; ".join(
+                f"{i['name']}×{i['count']}"
+                + ("(warn)" if i.get("severity") == "warn" else "")
+                for i in issues[:5]))
+    except Exception as e:
+        parts.append(f"style 扫描失败: {e}")
+    ph = check_placeholder_residual(content)
+    if ph:
+        parts.extend(ph)
+    return True, (f"OK（style+占位符扫描，{len(parts)} 条警告）"
+                  + (" | " + "; ".join(parts) if parts else ""))
 
 
-def check_composition_fit(spec):
-    """D-122 讲法观察：页面声明 composition 母板后，构件是否匹配母板预期。
-
-    只报告不阻断（观察模式）：declared 母板但页面构件不匹配 → [观察] 提示。
-    目的：把「该对比矩阵的用了卡片墙」这类讲法错误从靠 AI 自觉变成机械提示。
-    """
-    msgs = []
-    for pi, page in enumerate(spec.get("pages", []) or []):
-        if not isinstance(page, dict):
-            continue
-        comp = page.get("composition")
-        if not comp:
-            continue
-        if isinstance(comp, str):
-            comp = [comp]
-        elem_types = set()
-        subtypes = set()
-        for e in page.get("elements", []) or []:
-            if not isinstance(e, dict):
-                continue
-            elem_types.add(e.get("type", ""))
-            if e.get("type") == "diagram":
-                subtypes.add(e.get("subtype", ""))
-        for c in comp:
-            hint, type_set = _COMPOSITION_HINTS.get(c, ("", None))
-            if hint == "":
-                continue  # 非法枚举由 schema error 报，观察项不重复
-            if type_set is None:
-                want = set(_COMPOSITION_DIAGRAM_SUBTYPES.get(c, ()))
-                hit = bool(subtypes & want)
-                if not hit:
-                    msgs.append(
-                        f"[观察] pages[{pi}] 声明 {c} 母板但无对应图 subtype "
-                        f"（期望 {'/'.join(want)}，实际 {'/'.join(sorted(subtypes)) or '无'}）")
-            else:
-                hit = bool(elem_types & type_set)
-                if not hit:
-                    msgs.append(
-                        f"[观察] pages[{pi}] 声明 {c} 母板但缺 {hint} "
-                        f"（现有构件：{'+'.join(sorted(elem_types)) or '无'}）")
-    return msgs
-
-
-def verify_spec_layout_data(spec):
+def verify_spec_layout_data(spec, spec_path=None):
     """spec 版式维 6 条检查（§10）。返回 (ok, errors, warnings)。
 
-    1 版式合法（error）：layout ∈ P01-P11 ∪ 旧值白名单 + 必需构件齐全
+    1 版式合法（error）：layout ∈ P01-P16（无 P13）∪ 旧值白名单 + 必需构件齐全
       ——schema.validate_layout_errors 复核（单点在 schema，此处不重复实现）
     2 主题合法（error）：theme ∈ THEMES + v2 spec 无 hex 字面量
       ——schema._validate_doc_theme / _validate_spec_hex 复核
@@ -489,8 +441,13 @@ def verify_spec_layout_data(spec):
     from _renderer import schema as _schema
     errors, warnings = [], []
 
+    # C-E5：截图脱敏提醒（warn 级，不阻断）
+    warnings.extend(_warn_screenshot_desensitization(spec=spec))
+
     # 检查 1 + 2（schema 复核：版式/theme/hex 的 error 全集）
     errors.extend(_schema.validate_spec(spec))
+    # P1：capability_map 系统名不能当芯片
+    errors.extend(check_capability_map_system_name_as_chip(spec))
 
     for pi, page in enumerate(spec.get("pages", []) or []):
         if not isinstance(page, dict):
@@ -567,11 +524,33 @@ def verify_spec_layout_data(spec):
                             "（Kimi 禁 AI 经典配色，§10 检查 9）")
 
     # A-2 散值字号观察 + A-3 反同壳观察 + B-3 证据编号重复观察
-    # + D-122 讲法观察（观察模式）
+    # + D-122 讲法观察 + 图形平衡观察（观察模式）升级条件: review 第 5 维与机检 proxy 对账一次（S11 后）再定转正/维持（盘点#7）
     warnings.extend(check_type_role_consistency(spec))
     warnings.extend(check_shell_repetition(spec))
     warnings.extend(check_evidence_ledger(spec))
-    warnings.extend(check_composition_fit(spec))
+    warnings.extend(check_question_binding(spec))
+    warnings.extend(check_graphic_balance(spec))
+    # 条目 2-4 叙事一致性（0c：页面集合/页数预算升 error，其余只报不判）
+    # + 条目 2-7 stage 密度（D-a=A，只报不判）
+    _narr = check_narrative_consistency(spec, spec_path=spec_path)
+    if isinstance(_narr, tuple) and len(_narr) == 2:
+        errors.extend(_narr[0])
+        warnings.extend(_narr[1])
+    else:
+        warnings.extend(_narr)
+    # S8-A 2×3 合规矩阵（crafted 定制页轨）：weaver×crafted 特批门（error）
+    # + 每 deck ≤2 页（观察），与叙事一致性同门汇聚（单点 narrative_schema）
+    try:
+        from _renderer.narrative_schema import check_compliance_matrix
+        _mx_errors, _mx_warnings = check_compliance_matrix(
+            spec, spec_path=spec_path)
+    except Exception:
+        _mx_errors, _mx_warnings = [], ["[观察] 合规矩阵检查异常，跳过"]
+    errors.extend(_mx_errors)
+    warnings.extend(_mx_warnings)
+    warnings.extend(check_stage_density(spec))
+    # 条目 3-5「可用而未用」观察（观察级，永不阻断）TTL(2026-12-31): 季度评审——持续为空的检查面销号（盘点#8）
+    warnings.extend(check_diagram_opportunity(spec))
 
     return len(errors) == 0, errors, warnings
 
@@ -600,12 +579,22 @@ def verify_all(paths_dict):
     return all_ok, results
 
 
-def auto_verify(path, client_name=""):
+def auto_verify(path, client_name="", density_gate="verify"):
     ext = os.path.splitext(path)[1].lower()
     if ext == ".pptx":
         return verify_pptx(path)
     elif ext in (".html", ".htm"):
-        return verify_html(path)
+        ok, msg = verify_html(path, density_gate=density_gate)
+        if client_name:  # I-3 A5：keynote 线集合核对（不阻断）
+            try:
+                import re as _re
+                with open(path, "r", encoding="utf-8") as _f:
+                    _body = _re.sub(r"\s+", " ", _re.sub(r"<[^>]+>", " ", _f.read()))
+                from _domain_guard import keynote_observe_for_text
+                msg += keynote_observe_for_text(_body, client_name=client_name)
+            except Exception:
+                pass
+        return ok, msg
     elif ext == ".docx":
         return verify_docx(path, client_name)
     elif ext == ".xlsx":
@@ -632,7 +621,21 @@ def auto_verify(path, client_name=""):
                            + "; ".join(lay_errors[:3]))
         return ok, msg
     elif ext in (".yml", ".yaml"):
-        return verify_yaml(path)
+        ok, msg = verify_yaml(path)
+        if ok and client_name:  # I-3 A5：spec 线集合核对（不阻断）
+            try:
+                with open(path, "r", encoding="utf-8") as _f:
+                    _text = _f.read()
+                from _domain_guard import keynote_observe_for_text
+                msg += keynote_observe_for_text(_text, client_name=client_name)
+            except Exception:
+                pass
+        return ok, msg
+    elif ext == ".md":  # I-3 批3 B4：三区表结构校验（观察级，不阻断）升级条件: analysis md 全量覆盖后试升 error（盘点#11）
+        res = verify_analysis_md(path)
+        if res is not None:
+            return res
+        return False, f"不支持的文件类型: {ext}"
     else:
         return False, f"不支持的文件类型: {ext}"
 
@@ -711,7 +714,7 @@ def verify_pptd_deck(deck_dir):
             continue
         elements = (page or {}).get("elements", []) or []
         pname = os.path.basename(pf)
-        # D-2 图形白名单（观察模式）：shape preset / connector kind / diagram 无图像化
+        # D-2 图形白名单（只报不阻断）：shape preset / connector kind / diagram 无图像化
         warnings.extend(_diagram_shape_whitelist_warnings(elements, pname))
         connectors = [e for e in elements
                       if e.get("elementType") == "shape"
@@ -747,8 +750,8 @@ def verify_pptd_deck(deck_dir):
 
 
 def _diagram_shape_whitelist_warnings(elements, pname):
-    """D-2 图形白名单（观察模式）：shape 名在注册 preset/connector 表内、
-    diagram 区域无图像化。只报告不阻断（§2/§8 观察模式纪律）。
+    """D-2 图形白名单（观察模式）：shape 名在注册 preset/connector 表内、TTL(2026-12-31): 季度评审转正/销号（盘点表未登记，随下轮盘点补录）
+    diagram 区域无图像化。只报告不阻断。
 
     白名单单点来源 = _pptd_convert 的 _SHAPE_NAME_MAP / _CONNECTOR_MAP
     （转换器支持什么就允许什么，方言层与转换层不分叉）。

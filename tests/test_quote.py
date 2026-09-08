@@ -61,14 +61,12 @@ class TestQuoteRender:
         qd.summary_total = 20000
         return qd
 
-    def test_load_quote_style_all_styles(self):
-        """styles.json 全部风格都能加载（fonts 为纯字符串的回归）。"""
-        import json
-        from _paths import STYLES_PATH
+    def test_load_quote_style_all_themes(self):
+        """THEMES 全部主题都能加载。"""
+        from _renderer.theme import THEMES
         from _quote_html import _load_quote_style
-        with open(STYLES_PATH, encoding="utf-8") as f:
-            names = list(json.load(f))
-        assert names, "styles.json 为空"
+        names = list(THEMES)
+        assert names
         for name in names:
             style = _load_quote_style(name)
             assert style["font"]
@@ -82,3 +80,55 @@ class TestQuoteRender:
         assert "测试报价方案" in html
         assert "模块A" in html
         assert "¥20,000" in html
+
+
+class TestQuoteDiscountFormula:
+    """P1-1：公式模式 F 列写折后单价，=F*G 与汇总区/HTML（item.amount）同口径。
+    曾 F 列写原价，discount≠1 时 Excel 合计偏高。"""
+
+    def _fill(self, item):
+        import openpyxl
+        from openpyxl.styles import Font
+        from _quote_engine import ExcelRenderer
+        from _quote_data import Section
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        sec = Section("模块费用", ["编号", "名称", "描述", "单价", "数量", "金额"])
+        sec.items = [item]
+        r = ExcelRenderer()
+        r._f_data = Font(name="Arial", size=9)
+        r._f_bold = Font(name="Arial", size=9, bold=True)
+        r._f_red = Font(name="Arial", size=9, color="FF0000")
+        r._fill_section(ws, sec, {"data_start": 5, "total_row": 10,
+                                  "use_formula": True, "data_end": 9})
+        return ws
+
+    def test_discounted_price_in_formula_col(self):
+        from _quote_data import Item
+        # 原价 100 × 折扣 0.5 × 数量 2 = item.amount 100
+        it = Item(index=1, name="模块A", unit_price=100, discount=0.5,
+                  quantity=2, amount=100)
+        ws = self._fill(it)
+        f = ws.cell(row=5, column=6).value   # F 单价
+        g = ws.cell(row=5, column=7).value   # G 数量
+        h = ws.cell(row=5, column=8).value   # H 公式
+        assert f == 50                        # 折后单价
+        assert g == 2
+        assert h == "=F5*G5"
+        assert round(f * g, 2) == it.amount   # 公式语义 == 汇总区/HTML 口径
+
+    def test_gift_row_price_unchanged(self):
+        from _quote_data import Item
+        it = Item(index=1, name="赠品", unit_price=100, discount=0,
+                  quantity=3, amount=0, is_gift=True)
+        ws = self._fill(it)
+        assert ws.cell(row=5, column=6).value == 100   # 原价展示不变
+        assert ws.cell(row=5, column=7).value == 0     # 数量列 0
+        assert ws.cell(row=5, column=8).value == "=F5*G5"  # 金额仍为 0
+
+    def test_full_discount_equals_amount(self):
+        from _quote_data import Item
+        it = Item(index=1, name="模块B", unit_price=8000, discount=1,
+                  quantity=1, amount=8000)
+        ws = self._fill(it)
+        assert ws.cell(row=5, column=6).value == 8000  # 无折扣 = 原价

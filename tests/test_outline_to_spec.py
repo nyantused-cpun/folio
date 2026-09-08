@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import pytest
 """outline-to-spec 产出合法性回归测试（P0：tree/phases 曾产出三端不识别的元素）。"""
 
 import os
@@ -30,20 +31,25 @@ def _fake_section():
     return {"section": "总体蓝图", "children": ["子节1", "子节2"]}
 
 
+def _role_section(role):
+    """带 role 的假章节（§3-6 起 build_elements 按 role 构造元素）。"""
+    return {"section": "总体蓝图", "role": role, "children": ["子节1", "子节2"]}
+
+
 class TestBuildElementsLegal:
-    """所有 layout 产出的元素 type 必须全部落在 KNOWN_ELEMENT_TYPES。"""
+    """所有 role 产出的元素 type 必须全部落在 KNOWN_ELEMENT_TYPES。"""
 
     def test_all_layouts_produce_known_types(self):
-        for layout in set(ROLE_LAYOUT.values()):
-            elements = build_elements(layout, _fake_result(), _fake_section())
-            assert elements, f"layout={layout} 产出为空"
+        for role in ROLE_LAYOUT:
+            elements = build_elements(_fake_result(), _role_section(role))
+            assert elements, f"role={role} 产出为空"
             for elem in elements:
                 assert elem.get("type") in KNOWN_ELEMENT_TYPES, \
-                    f"layout={layout} 产出非法元素 type={elem.get('type')}"
+                    f"role={role} 产出非法元素 type={elem.get('type')}"
 
     def test_tree_layout_keeps_content(self):
-        """tree（架构章节）改产 text+cards 后内容不丢。"""
-        elements = build_elements("tree", _fake_result(), _fake_section())
+        """架构 role（原 tree 分支）改产 text+cards 后内容不丢。"""
+        elements = build_elements(_fake_result(), _role_section("blueprint"))
         types = [e["type"] for e in elements]
         assert "cards" in types
         cards = next(e for e in elements if e["type"] == "cards")
@@ -51,9 +57,9 @@ class TestBuildElementsLegal:
         assert "要点一" in titles
 
     def test_phases_uses_canonical_fields(self):
-        """phases 产出正典 name/desc 字段（三端可读）。"""
-        elements = build_elements("phases", _fake_result(), _fake_section())
-        phases = elements[0]["phases"]
+        """implementation role（原 phases 分支）产出正典 name/desc 字段（三端可读）。"""
+        elements = build_elements(_fake_result(), _role_section("implementation"))
+        phases = next(e for e in elements if e["type"] == "phases")["phases"]
         assert phases, "phases 为空"
         for ph in phases:
             assert ph.get("name"), f"phase 缺 name: {ph}"
@@ -64,10 +70,43 @@ class TestBuildElementsLegal:
     def test_empty_result_still_legal(self):
         """LLM 返回空时也不能产出非法元素。"""
         empty = {"key_points": [], "content": "", "data": []}
-        for layout in set(ROLE_LAYOUT.values()):
-            elements = build_elements(layout, empty, _fake_section())
+        for role in ROLE_LAYOUT:
+            elements = build_elements(empty, _role_section(role))
             for elem in elements:
                 assert elem.get("type") in KNOWN_ELEMENT_TYPES
+
+
+class TestRoleLayoutBatch6:
+    """批6（2026-09-05，C17）：ROLE_LAYOUT 旧 layout 债清零 + M3 欠账补键 +
+    消费点受控版式兜底。"""
+
+    def test_no_legacy_values(self):
+        """ROLE_LAYOUT 全部值为受控 P 码，不再产出 LEGACY 旧值。"""
+        from _renderer.schema import LEGACY_LAYOUTS, PAGE_LAYOUTS
+        for role, layout in ROLE_LAYOUT.items():
+            assert layout in PAGE_LAYOUTS, f"role={role} 非受控版式: {layout}"
+            assert layout not in LEGACY_LAYOUTS, f"role={role} 仍是旧值: {layout}"
+
+    def test_migrated_legacy_debt(self):
+        """requirement/scope/terms 三处旧值债迁移（理由见 _diagram_extract 行内注释）。"""
+        assert ROLE_LAYOUT["requirement"] == "P03"   # 摘要页（非清单表）
+        assert ROLE_LAYOUT["scope"] == "P14"         # 范围内/外双栏对比
+        assert ROLE_LAYOUT["terms"] == "P07"         # 条款×内容表
+
+    def test_m3_debt_keys_added(self):
+        """gap_analysis/roadmap/governance 补键；gap_analysis 指向批6 新增 P17。"""
+        assert ROLE_LAYOUT["gap_analysis"] == "P17"
+        assert ROLE_LAYOUT["roadmap"] == "P09"
+        assert ROLE_LAYOUT["governance"] == "P07"
+
+    def test_consumer_fallback_is_controlled(self):
+        """消费点兜底从旧值 title_body 改受控版式 P03（源码 pin，防回退）。"""
+        repo = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        with open(os.path.join(repo, "_outline_to_spec.py"),
+                  encoding="utf-8") as f:
+            src = f.read()
+        assert 'ROLE_LAYOUT.get(role, "P03")' in src
+        assert 'ROLE_LAYOUT.get(role, "title_body")' not in src
 
 
 class TestLlmFailurePlaceholder:
@@ -90,7 +129,7 @@ class TestLlmFailurePlaceholder:
         }
         monkeypatch.setattr(_outline_to_spec, "load_outline", lambda scene: outline)
         monkeypatch.setattr(_outline_to_spec, "read_materials",
-                            lambda paths, client_name="": "材料文本")
+                            lambda paths, client_name="", allow_outside=False: "材料文本")
         monkeypatch.setattr(_outline_to_spec, "_recall_evidence", lambda *a, **k: [])
         monkeypatch.setattr(_outline_to_spec, "extract_section_content", extract_fn)
 
@@ -143,8 +182,101 @@ class TestLlmFailurePlaceholder:
         assert "客户痛点" in out and "提取失败" in out
 
 
+class TestRecallEvidencePlain:
+    """召回结果混入 numpy 标量时必须转原生 str。
+
+    真实故障（DSH 实测 2026-09-01）：_session.recall 返回 np.str_ 的 path 字段，
+    被 yaml.dump 序列化成 !!python/object 标签，spec 的 evidence 段无法被
+    verify 的 safe_load 解析 → outline-to-spec 生成后自动 verify FAIL、exit 1。
+    """
+
+    def test_numpy_values_coerced_to_plain_str(self, monkeypatch):
+        import numpy as np
+        import _outline_to_spec
+        import _session
+
+        def _fake_recall(*a, **k):
+            return [{"path": np.str_("D:\\kb\\client\\context.md#s1"),
+                     "snippet": np.str_("片段文本"),
+                     "parent_context": None},
+                    {"path": "D:\\kb\\refs\\x.xlsx#r1",
+                     "snippet": np.float64(0.98),
+                     "parent_context": np.str_("父级上下文")}]
+
+        monkeypatch.setattr(_session, "recall", _fake_recall)
+        evs = _outline_to_spec._recall_evidence("费控", "蓝海集团")
+        assert len(evs) == 2
+        for ev in evs:
+            for v in ev.values():
+                assert isinstance(v, str), f"evidence 字段非原生 str: {type(v)}"
+        out = yaml.dump(evs, allow_unicode=True)
+        assert "python/object" not in out
+        yaml.safe_load(out)  # 必须可安全解析
+
+    def test_missing_fields_keep_fallbacks(self, monkeypatch):
+        import _outline_to_spec
+        import _session
+
+        def _fake_recall(*a, **k):
+            return [{}]
+
+        monkeypatch.setattr(_session, "recall", _fake_recall)
+        evs = _outline_to_spec._recall_evidence("费控", "蓝海集团")
+        assert evs == [{"source": "?", "snippet": "", "parent_context": ""}]
+
+
+class TestSpecThemeMigration:
+    """schema Step 2：spec 草稿必须直接产出 v2 theme 主题名，不写已废弃的 style 字段。
+
+    真实故障（DSH 实测 2026-09-01）：outline-to-spec 生成 spec 带 style: tech，
+    生成后自动 verify 报"style 已废弃，请改为 theme"→ exit 1。
+    """
+
+    def _build_spec(self, tmp_path, monkeypatch, client_name):
+        import _outline_to_spec
+        outline = {
+            "scene": "测试场景",
+            "structure": [
+                {"section": "客户痛点", "role": "pain_points", "children": []},
+            ],
+        }
+        monkeypatch.setattr(_outline_to_spec, "load_outline", lambda scene: outline)
+        monkeypatch.setattr(_outline_to_spec, "read_materials",
+                            lambda paths, client_name="", allow_outside=False: "材料文本")
+        monkeypatch.setattr(_outline_to_spec, "_recall_evidence", lambda *a, **k: [])
+        monkeypatch.setattr(
+            _outline_to_spec, "extract_section_content",
+            lambda *a, **k: {"title": "t", "content": "c", "key_points": [], "data": []})
+        from _renderer import SCRIPT_DIR
+        out_dir = os.path.join(SCRIPT_DIR, "output", "通用", "_ots_test")
+        os.makedirs(out_dir, exist_ok=True)
+        out = os.path.join(out_dir, "spec.yml")
+        try:
+            _outline_to_spec.build_spec_from_outline(
+                "测试场景", ["dummy.txt"], client_name=client_name, output_path=out)
+            with open(out, encoding="utf-8") as f:
+                return yaml.safe_load(f)
+        finally:
+            shutil.rmtree(out_dir, ignore_errors=True)
+
+    def test_spec_has_v2_theme_not_legacy_style(self, tmp_path, monkeypatch):
+        from _renderer.theme import THEMES
+        spec = self._build_spec(tmp_path, monkeypatch, client_name="蓝海集团")
+        assert "theme" in spec
+        assert "style" not in spec
+        assert spec["theme"] in THEMES
+
+    def test_legacy_style_names_map_to_v2_themes(self, monkeypatch):
+        import _outline_to_spec
+        from _renderer.theme import LEGACY_STYLE_TO_THEME
+        for legacy, expected in LEGACY_STYLE_TO_THEME.items():
+            monkeypatch.setattr(_outline_to_spec, "_infer_style_from_client",
+                                lambda name, legacy=legacy: legacy)
+            assert _outline_to_spec._spec_theme_for_client("任意客户") == expected
+
+
 class TestTreeDiagram:
-    """§七 2.7：架构类章节（tree layout）LLM 返回合法 layers 时产 diagram 元素。"""
+    """§七 2.7：架构类 role（原 tree 分支）LLM 返回合法 layers 时产 diagram 元素。"""
 
     def _result_with_layers(self):
         result = _fake_result()
@@ -152,7 +284,7 @@ class TestTreeDiagram:
         return result
 
     def test_layers_produce_diagram_and_pass_schema(self):
-        elements = build_elements("tree", self._result_with_layers(), _fake_section())
+        elements = build_elements(self._result_with_layers(), _role_section("blueprint"))
         types = [e["type"] for e in elements]
         assert "diagram" in types
         diagram = next(e for e in elements if e["type"] == "diagram")
@@ -168,7 +300,7 @@ class TestTreeDiagram:
         """有 content 时 diagram 前插 text 摘要（前 200 字）。"""
         result = self._result_with_layers()
         result["content"] = "摘" * 300
-        elements = build_elements("tree", result, _fake_section())
+        elements = build_elements(result, _role_section("blueprint"))
         assert elements[0]["type"] == "text"
         assert elements[0]["content"] == "摘" * 200
         assert elements[1]["type"] == "diagram"
@@ -176,12 +308,12 @@ class TestTreeDiagram:
     def test_no_content_skips_summary_text(self):
         result = self._result_with_layers()
         result["content"] = ""
-        elements = build_elements("tree", result, _fake_section())
+        elements = build_elements(result, _role_section("blueprint"))
         assert [e["type"] for e in elements] == ["diagram"]
 
     def test_missing_layers_falls_back_to_cards(self):
         """无 layers → 现有 text+cards 回退路径不变。"""
-        elements = build_elements("tree", _fake_result(), _fake_section())
+        elements = build_elements(_fake_result(), _role_section("blueprint"))
         types = [e["type"] for e in elements]
         assert "diagram" not in types
         assert "cards" in types
@@ -200,12 +332,314 @@ class TestTreeDiagram:
         for bad in bad_variants:
             result = _fake_result()
             result.update(bad)
-            elements = build_elements("tree", result, _fake_section())
+            elements = build_elements(result, _role_section("blueprint"))
             types = [e["type"] for e in elements]
             assert "diagram" not in types, f"坏 layers 未回退: {bad}"
             assert "cards" in types, f"回退路径缺 cards: {bad}"
             for i, elem in enumerate(elements):
                 assert validate_element(elem, index=i) == []
+
+
+class TestRoleDiagramBuild:
+    """非架构 diagram 角色：LLM 返回合法结构化字段时也应产 diagram。"""
+
+    def _section(self, role):
+        return {"section": "章节名", "role": role, "children": []}
+
+    def test_gap_analysis_produces_fit_gap(self):
+        result = _fake_result()
+        result.update({
+            "requirements": ["建设目标 A", "建设目标 B"],
+            "products": ["当前 IT 水平"],
+            "cells": [
+                {"req": "建设目标 A", "product": "当前 IT 水平",
+                 "match": "gap", "note": "缺口"},
+                {"req": "建设目标 B", "product": "当前 IT 水平",
+                 "match": "fit", "note": "已满足"},
+            ],
+        })
+        elements = build_elements(result, self._section("gap_analysis"))
+        diagram = next(e for e in elements if e.get("type") == "diagram")
+        assert diagram["diagram_type"] == "matrix"
+        assert diagram["subtype"] == "fit_gap"
+        assert diagram["requirements"] == ["建设目标 A", "建设目标 B"]
+        assert validate_element(diagram, index=0) == []
+
+    def test_implementation_produces_timeline(self):
+        result = _fake_result()
+        result["milestones"] = [
+            {"label": "一期", "date": "8月", "desc": "范围+交付物"},
+            {"label": "二期", "date": "10月", "desc": "上线验收"},
+        ]
+        elements = build_elements(result, self._section("implementation"))
+        diagram = next(e for e in elements if e.get("type") == "diagram")
+        assert diagram["type"] == "diagram"
+        assert diagram["diagram_type"] == "timeline"
+        assert diagram["subtype"] == "horizontal"
+        assert len(diagram["milestones"]) == 2
+        assert validate_element(diagram, index=0) == []
+
+    def test_pain_points_produces_cross_system(self):
+        result = _fake_result()
+        result.update({
+            "systems": [{"name": "OA"}, {"name": "ERP"}],
+            "steps": [
+                {"label": "① 提单", "system": "OA", "note": "断点"},
+                {"label": "② 入账", "system": "ERP", "note": "", "async": True},
+            ],
+        })
+        elements = build_elements(result, self._section("pain_points"))
+        diagram = next(e for e in elements if e.get("type") == "diagram")
+        assert diagram["type"] == "diagram"
+        assert diagram["diagram_type"] == "flow"
+        assert diagram["subtype"] == "cross_system"
+        assert len(diagram["systems"]) == 2
+        assert len(diagram["steps"]) == 2
+        assert validate_element(diagram, index=0) == []
+
+    def test_governance_produces_raci(self):
+        result = _fake_result()
+        result.update({
+            "roles": ["甲方", "乙方"],
+            "tasks": [
+                {"name": "需求调研",
+                 "assignments": [{"role": "甲方", "type": "A"},
+                                 {"role": "乙方", "type": "R"}]},
+                {"name": "方案设计",
+                 "assignments": [{"role": "甲方", "type": "C"},
+                                 {"role": "乙方", "type": "R"}]},
+            ],
+        })
+        elements = build_elements(result, self._section("governance"))
+        diagram = next(e for e in elements if e.get("type") == "diagram")
+        assert diagram["type"] == "diagram"
+        assert diagram["diagram_type"] == "matrix"
+        assert diagram["subtype"] == "raci"
+        assert validate_element(diagram, index=0) == []
+
+    def test_missing_structured_data_falls_back(self):
+        """图形角色但 LLM 没给结构化数据 → 继续走 text/cards，不硬造图。"""
+        elements = build_elements(_fake_result(),
+                                  self._section("gap_analysis"))
+        assert all(e.get("type") != "diagram" for e in elements)
+        assert elements
+
+
+class TestNewRoleDiagramBuild:
+    """§3-4 新增 role → diagram 映射：cbm/quadrant/value_chain/org_tree。"""
+
+    def _section(self, role):
+        return {"section": "章节名", "role": role, "children": []}
+
+    def _diagram(self, role, extra):
+        result = _fake_result()
+        result.update(extra)
+        elements = build_elements(result, self._section(role))
+        diagram = next(e for e in elements if e.get("type") == "diagram")
+        assert validate_element(diagram, index=0) == []
+        return diagram
+
+    def test_solution_overview_produces_cbm(self):
+        d = self._diagram("solution_overview", {"rows": [
+            {"level": "决策战略",
+             "capabilities": [{"name": "战略规划", "heat": "strong"},
+                              {"name": "风险预警", "heat": "weak"}]},
+            {"level": "管理运营", "capabilities": [{"name": "供应链"}]},
+        ]})
+        assert (d["diagram_type"], d["subtype"]) == ("matrix", "cbm")
+        assert d["rows"][0]["capabilities"][0]["heat"] == "strong"
+
+    def test_issues_produces_quadrant(self):
+        d = self._diagram("issues", {
+            "axes": {"x": "紧急度", "y": "影响面"},
+            "quads": [{"title": "高影响·高紧急", "items": ["核心系统宕机"]},
+                      {"title": "高影响·低紧急", "items": []},
+                      {"title": "低影响·高紧急", "items": ["报表偶发延迟"]},
+                      {"title": "低影响·低紧急", "items": []}],
+        })
+        assert (d["diagram_type"], d["subtype"]) == ("matrix", "quadrant")
+        assert len(d["quads"]) == 4
+
+    def test_value_produces_value_chain(self):
+        d = self._diagram("value", {
+            "primary": ["研发", "生产", "销售"],
+            "support": ["IT", "财务"],
+        })
+        assert (d["diagram_type"], d["subtype"]) == ("relationship", "value_chain")
+        assert d["primary"] == ["研发", "生产", "销售"]
+
+    def test_service_produces_org_tree(self):
+        d = self._diagram("service", {"root": {
+            "name": "服务总监", "desc": "整体保障",
+            "children": [{"name": "服务台 ×2", "desc": "响应/分派"},
+                         {"name": "专家组", "desc": "二线支持"}],
+        }})
+        assert (d["diagram_type"], d["subtype"]) == ("relationship", "org_tree")
+        assert d["root"]["children"][0]["name"] == "服务台 ×2"
+
+    def test_new_roles_bad_data_fall_back(self):
+        """新映射 role 结构化数据非法 → 回退不产图。"""
+        bad = [
+            ("solution_overview", {"rows": [{"level": "决策战略"}]}),      # 缺 capabilities
+            ("issues", {"axes": {"x": "紧急"}, "quads": [{"items": []}]}),  # quad 缺 title
+            ("value", {"primary": []}),                                    # 空主链
+            ("service", {"root": {"desc": "无名"}}),                       # root 缺 name
+        ]
+        for role, extra in bad:
+            result = _fake_result()
+            result.update(extra)
+            elements = build_elements(result, self._section(role))
+            assert all(e.get("type") != "diagram" for e in elements), role
+            assert elements, role
+
+
+class TestM1RoleDiagramBuild:
+    """M1 扩映射：integration/infrastructure/capabilities/data_ownership/
+    swimlane/schedule/data_flow/decision_flow（distinct subtype 9→17）。"""
+
+    def _section(self, role):
+        return {"section": "章节名", "role": role, "children": []}
+
+    def _diagram(self, role, extra):
+        result = _fake_result()
+        result.update(extra)
+        elements = build_elements(result, self._section(role))
+        diagram = next(e for e in elements if e.get("type") == "diagram")
+        assert validate_element(diagram, index=0) == []
+        return diagram
+
+    def test_integration_produces_hub(self):
+        d = self._diagram("integration", {
+            "hub": {"name": "集成平台", "desc": "连接器+编排"},
+            "systems": [{"name": "SAP（RFC）"}, "钉钉"],
+        })
+        assert (d["diagram_type"], d["subtype"]) == ("architecture", "integration")
+        assert d["hub"]["name"] == "集成平台"
+        assert d["systems"][1] == {"name": "钉钉"}
+
+    def test_integration_point_to_point(self):
+        d = self._diagram("integration", {"source": "OA", "target": "ERP"})
+        assert (d["diagram_type"], d["subtype"]) == ("architecture", "integration")
+        assert d["source"] == "OA"
+
+    def test_infrastructure_produces_zones(self):
+        d = self._diagram("infrastructure", {
+            "zones": [
+                {"name": "应用区", "nodes": [{"name": "应用集群", "icon": "container"}]},
+                {"name": "安全接入区", "nodes": [{"name": "防火墙", "icon": "firewall"}]},
+            ],
+            "links": [{"from": "安全接入区.防火墙", "to": "应用区.应用集群"}],
+        })
+        assert (d["diagram_type"], d["subtype"]) == ("architecture", "infra")
+        assert len(d["zones"]) == 2
+        assert d["links"][0]["from"] == "安全接入区.防火墙"
+
+    def test_capabilities_produces_capability_map(self):
+        d = self._diagram("capabilities", {
+            "sections": [
+                {"name": "业务执行层", "capabilities": [
+                    {"name": "销售与订单", "status": "lit", "system": "CRM"},
+                    {"name": "质量追溯", "status": "none"}]},
+            ],
+        })
+        assert (d["diagram_type"], d["subtype"]) == ("matrix", "capability_map")
+        assert d["sections"][0]["capabilities"][0]["status"] == "lit"
+
+    def test_capabilities_bad_status_clamped(self):
+        """非法 status 收敛 none（渲染器按 lit/partial/none 查表，未知值会 KeyError）。"""
+        d = self._diagram("capabilities", {
+            "sections": [{"name": "层",
+                          "capabilities": [{"name": "能力", "status": "已点亮"}]}],
+        })
+        assert d["sections"][0]["capabilities"][0]["status"] == "none"
+
+    def test_data_ownership_produces_crud(self):
+        d = self._diagram("data_ownership", {
+            "docs": ["销售订单", "采购单"],
+            "entities": ["客户", "物料"],
+            "cells": [{"doc": "销售订单", "entity": "客户", "ops": ["C", "R"]}],
+        })
+        assert (d["diagram_type"], d["subtype"]) == ("matrix", "crud")
+        assert d["cells"][0]["ops"] == ["C", "R"]
+
+    def test_swimlane_produces_lanes(self):
+        d = self._diagram("swimlane", {
+            "steps": [
+                {"label": "创建主数据", "lane": "平台", "desc": "录入"},
+                {"label": "SAP 接收", "lane": "SAP", "type": "system"},
+            ],
+        })
+        assert (d["diagram_type"], d["subtype"]) == ("flow", "swimlane")
+        assert [ln["name"] for ln in d["lanes"]] == ["平台", "SAP"]
+
+    def test_swimlane_lanes_derived_from_steps(self):
+        """未给 lanes 时从 steps 派生（schema 必填 lanes 恒有值）。"""
+        d = self._diagram("swimlane", {"steps": [{"label": "审核", "lane": "财务"}]})
+        assert d["lanes"] == [{"name": "财务"}]
+
+    def test_schedule_produces_module_gantt(self):
+        d = self._diagram("schedule", {
+            "columns": ["Q1", "Q2", "Q3", "Q4"],
+            "groups": [{"name": "营销域", "tone": "blue",
+                        "modules": [{"label": "01 线索管理", "col": 0},
+                                    {"label": "02 商机管理", "col": 5}]}],
+        })
+        assert (d["diagram_type"], d["subtype"]) == ("timeline", "module_gantt")
+        assert d["groups"][0]["modules"][1]["col"] == 3  # 越界收敛到末列
+
+    def test_data_flow_produces_nodes_flows(self):
+        d = self._diagram("data_flow", {
+            "nodes": [{"name": "CRM", "type": "source"},
+                      {"name": "MDM", "type": "store"}],
+            "flows": [{"from": "CRM", "to": "MDM", "data": "客户主数据",
+                       "direction": "push"}],
+        })
+        assert (d["diagram_type"], d["subtype"]) == ("relationship", "data_flow")
+        assert d["flows"][0]["direction"] == "push"
+
+    def test_decision_flow_produces_steps(self):
+        d = self._diagram("decision_flow", {
+            "steps": [{"label": "提交申请"},
+                      {"label": "额度充足?", "type": "decision",
+                       "alt_next": "额度调整", "alt_label": "否"},
+                      {"label": "结束", "type": "end"}],
+        })
+        assert (d["diagram_type"], d["subtype"]) == ("flow", "decision")
+        assert d["steps"][1]["alt_next"] == "额度调整"
+
+    def test_m1_roles_bad_data_fall_back(self):
+        """新映射 role 结构化数据非法 → 回退不产图。"""
+        bad = [
+            ("integration", {"hub": {"name": "集成平台"}}),              # 缺 systems
+            ("integration", {"source": "OA"}),                            # 缺 target
+            ("infrastructure", {"zones": [{"name": "应用区"}]}),          # 缺 nodes
+            ("capabilities", {"sections": [{"name": "层"}]}),             # 缺 capabilities
+            ("data_ownership", {"docs": ["订单"], "entities": [],
+                                "cells": []}),                            # 空 entities
+            ("data_ownership", {"docs": ["订单"], "entities": ["客户"],
+                                "cells": [{"doc": "订单", "entity": "客户",
+                                           "ops": ["X"]}]}),              # ops 非法
+            ("swimlane", {"steps": [{"label": "审核"}]}),                 # 缺 lane
+            ("schedule", {"columns": [], "groups": []}),                  # 空列
+            ("data_flow", {"nodes": [{"name": "CRM"}], "flows": []}),     # 空 flows
+            ("decision_flow", {"steps": [{"type": "decision"}]}),         # 缺 label
+        ]
+        for role, extra in bad:
+            result = _fake_result()
+            result.update(extra)
+            elements = build_elements(result, self._section(role))
+            assert all(e.get("type") != "diagram" for e in elements), role
+            assert elements, role
+
+    def test_m1_roles_no_structured_data_falls_back(self):
+        """新 role 无结构化字段时走回退（不硬造图），产出全部合法。"""
+        for role in ("integration", "infrastructure", "capabilities",
+                     "data_ownership", "swimlane", "schedule",
+                     "data_flow", "decision_flow"):
+            elements = build_elements(_fake_result(), self._section(role))
+            assert all(e.get("type") != "diagram" for e in elements), role
+            for i, elem in enumerate(elements):
+                assert validate_element(elem, index=i) == [], role
 
 
 class TestArchPromptLayers:
@@ -240,11 +674,39 @@ class TestArchPromptLayers:
             # 架构章节输出更长，max_tokens 提到 4000（zhipu 思考模式会吃掉 2000 预算）
             assert captured["kwargs"].get("max_tokens") == 4000
 
-    def test_non_arch_role_prompt_no_layers(self, monkeypatch, tmp_path):
-        for role in ("pain_points", "goals", "value", ""):
+    def test_non_graphic_role_prompt_no_layers(self, monkeypatch, tmp_path):
+        for role in ("next_steps", "goals", ""):
             captured = self._capture_prompt(monkeypatch, tmp_path, role)
             assert "layers" not in captured["prompt"], f"role={role} 的 prompt 不应含 layers 要求"
+            assert "【图形化附加要求】" not in captured["prompt"]
             assert captured["kwargs"].get("max_tokens") == 2000
+
+    def test_graphic_role_prompt_has_structured_requirement(self, monkeypatch, tmp_path):
+        """非架构但会产图的角色也必须在 prompt 中追加结构化字段要求。"""
+        for role, needle in (
+            ("gap_analysis", '"requirements"'),
+            ("implementation", '"milestones"'),
+            ("pain_points", '"systems"'),
+            ("governance", '"tasks"'),
+            # §3-4 新增映射
+            ("solution_overview", '"capabilities"'),
+            ("issues", '"quads"'),
+            ("value", '"primary"'),
+            ("service", '"root"'),
+            # M1 扩映射
+            ("integration", '"hub"'),
+            ("infrastructure", '"zones"'),
+            ("capabilities", '"sections"'),
+            ("data_ownership", '"cells"'),
+            ("swimlane", '"lanes"'),
+            ("schedule", '"columns"'),
+            ("data_flow", '"flows"'),
+            ("decision_flow", '"alt_next"'),
+        ):
+            captured = self._capture_prompt(monkeypatch, tmp_path, role)
+            assert "【图形化附加要求】" in captured["prompt"], role
+            assert needle in captured["prompt"], role
+            assert captured["kwargs"].get("max_tokens") == 4000, role
 
 
 class TestGoldSpecInjection:
@@ -277,8 +739,10 @@ class TestGoldSpecInjection:
         monkeypatch.setattr(_cloud_llm, "chat", _fake_chat)
 
         import _outline_to_spec
+        import _diagram_extract
         # gold 库与提取缓存都隔离到 tmp：真实缓存命中会跳过 chat 导致捕获不到 prompt
-        monkeypatch.setattr(_outline_to_spec, "GOLD_SPECS_DIR", str(tmp_path))
+        # （S1 拆分后 GOLD_SPECS_DIR 属主是 _diagram_extract，须 patch 属主模块）
+        monkeypatch.setattr(_diagram_extract, "GOLD_SPECS_DIR", str(tmp_path))
         monkeypatch.setattr(_outline_to_spec, "LLM_EXTRACT_CACHE_PATH",
                             str(tmp_path / "cache.json"))
         if gold_text is not None:
@@ -311,9 +775,9 @@ class TestGoldSpecInjection:
                                         gold_text=None)
         assert "【写法示范】" not in captured["prompt"]
 
-    def test_non_arch_prompt_no_injection_even_with_gold(self, monkeypatch, tmp_path):
-        """非架构章节即使 gold 存在也不注入（不产 diagram 的页不花 token）。"""
-        for role in ("pain_points", "goals", "value", ""):
+    def test_non_graphic_prompt_no_injection_even_with_gold(self, monkeypatch, tmp_path):
+        """不产图角色即使 gold 存在也不注入（不产 diagram 的页不花 token）。"""
+        for role in ("next_steps", "goals", ""):
             captured = self._capture_prompt(monkeypatch, tmp_path, role,
                                             gold_text=self.GOLD)
             assert "【写法示范】" not in captured["prompt"], f"role={role} 不应注入示范"
@@ -338,12 +802,12 @@ class TestGoldSpecInjection:
 
     def test_load_gold_demo_strips_comments_directly(self, monkeypatch, tmp_path):
         """load_gold_demo 单测：行首/缩进 # 注释行都剥除，内容行不动。"""
-        import _outline_to_spec
-        monkeypatch.setattr(_outline_to_spec, "GOLD_SPECS_DIR", str(tmp_path))
+        import _diagram_extract
+        monkeypatch.setattr(_diagram_extract, "GOLD_SPECS_DIR", str(tmp_path))
         (tmp_path / "architecture__layered.yml").write_text(
             "# 头部注释\ntype: diagram\n  # 缩进注释\ntitle: 架构\n",
             encoding="utf-8")
-        demo = _outline_to_spec.load_gold_demo("architecture", "layered")
+        demo = _diagram_extract.load_gold_demo("architecture", "layered")
         assert "注释" not in demo
         assert "type: diagram" in demo
         assert "title: 架构" in demo
@@ -359,3 +823,7 @@ class TestGoldSpecInjection:
         demo = prompt.split("不要抄内容：\n", 1)[1].split("\n---", 1)[0]
         assert _outline_to_spec._est_tokens(demo) <= (
             _outline_to_spec.GOLD_DEMO_MAX_TOKENS + 20)
+
+
+# v2.0 同源对齐（2026-09-08）：依赖主仓工作区契约/内部数据/DSH 插件 npm 面，发布面标记 internal 不随 CI 跑
+pytestmark = pytest.mark.internal

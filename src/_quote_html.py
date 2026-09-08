@@ -109,11 +109,13 @@ def _build_html(qd, style_name="enterprise"):
         parts.append('</tr>')
         # 数据行
         for it in sec.items:
+            # P3：description 为 None 时直接切片会 TypeError，降级空串
+            desc = it.description or ""
             cls = ' class="gift"' if it.is_gift else ""
             parts.append(f'<tr{cls}>')
             parts.append(f'<td class="idx">{it.index}</td>')
             parts.append(f'<td>{_h(it.name)}</td>')
-            parts.append(f'<td class="desc">{_h(it.description[:60])}{"…" if len(it.description) > 60 else ""}</td>')
+            parts.append(f'<td class="desc">{_h(desc[:60])}{"…" if len(desc) > 60 else ""}</td>')
             parts.append(f'<td class="amt">{_fmt_money(it.unit_price) if it.unit_price else ""}</td>')
             parts.append(f'<td class="center">{_h(it.discount_display)}</td>')
             parts.append(f'<td class="center">{it.quantity}</td>')

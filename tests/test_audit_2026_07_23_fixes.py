@@ -1,14 +1,11 @@
 # -*- coding: utf-8 -*-
-
-import pytest
-
-pytestmark = pytest.mark.internal
 """audit_2026-07-23 报告 P0+P1 修复的回归测试。
 
 覆盖：#1 #2 #5 #6 #7 #8 #12 #16 #17 #18 #19 #23 #24 #25 #26 #27
 """
 import json
 import os
+import pickle
 import sys
 import types
 
@@ -156,12 +153,52 @@ class TestPptdTableEscape:
 # ---------------------------------------------------------------------------
 class TestBm25CorruptIndex:
     def test_corrupt_pkl_returns_none(self, tmp_path, monkeypatch):
+        import warnings
+
         import _bm25
         bad = tmp_path / "bm25.pkl"
         bad.write_bytes(b"corrupted-not-a-pickle")
         monkeypatch.setattr(_bm25, "BM25_INDEX_PATH", str(bad))
         monkeypatch.setattr(_bm25, "_INDEX_CACHE", None)
-        assert _bm25.query_bm25("测试查询") is None
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")  # P1-1 fail-closed 后不再降级裸加载、不再告警
+            assert _bm25.query_bm25("测试查询") is None
+
+
+class TestSafePickleFailClosed:
+    """P1-1 安全修复：safe_pickle_load 无签名/签名不匹配一律拒绝（返回 None），
+    不再降级裸 pickle.load（fail-open → fail-closed）。"""
+
+    def test_unsigned_pkl_returns_none(self, tmp_path):
+        import warnings
+
+        from _paths import safe_pickle_load
+        p = tmp_path / "unsigned.pkl"
+        p.write_bytes(pickle.dumps({"a": 1}))
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")
+            assert safe_pickle_load(str(p)) is None
+
+    def test_short_pkl_returns_none(self, tmp_path):
+        from _paths import safe_pickle_load
+        p = tmp_path / "short.pkl"
+        p.write_bytes(b"\x80\x04abc")
+        assert safe_pickle_load(str(p)) is None
+
+    def test_tampered_pkl_returns_none(self, tmp_path):
+        from _paths import safe_pickle_dump, safe_pickle_load
+        p = tmp_path / "tampered.pkl"
+        safe_pickle_dump({"a": 1}, str(p))
+        raw = bytearray(p.read_bytes())
+        raw[-1] ^= 0xFF  # 篡改 payload 一个字节
+        p.write_bytes(bytes(raw))
+        assert safe_pickle_load(str(p)) is None
+
+    def test_signed_pkl_loads_normally(self, tmp_path):
+        from _paths import safe_pickle_dump, safe_pickle_load
+        p = tmp_path / "signed.pkl"
+        safe_pickle_dump({"a": 1, "b": [1, 2]}, str(p))
+        assert safe_pickle_load(str(p)) == {"a": 1, "b": [1, 2]}
 
 
 # ---------------------------------------------------------------------------
@@ -172,15 +209,15 @@ class TestCompactDictHistory:
         import _paths
         import _cli
         clients = tmp_path / "clients"
-        (clients / "蓝海集团").mkdir(parents=True)
+        (clients / "嘉益").mkdir(parents=True)
         logs = tmp_path / "logs"
         logs.mkdir()
         (logs / "task_history.json").write_text(json.dumps({
-            "tasks": [{"project": "client:蓝海集团", "date": "2026-07-01"} for _ in range(3)],
+            "tasks": [{"project": "client:嘉益", "date": "2026-07-01"} for _ in range(3)],
         }, ensure_ascii=False), encoding="utf-8")
         monkeypatch.setattr(_paths, "CLIENTS_DIR", str(clients))
         monkeypatch.setattr(_paths, "LOGS_DIR", str(logs))
-        args = types.SimpleNamespace(client="蓝海集团", keep=10, keep_sessions=0)
+        args = types.SimpleNamespace(client="嘉益", keep=10, keep_sessions=0)
         _cli.cmd_compact(args)  # dict 格式不再 AttributeError
 
 
@@ -217,9 +254,9 @@ class TestVerifyDocxClientName:
             return True, []
 
         monkeypatch.setattr(_verify, "check_bid_risks", _fake_check)
-        ok, _ = _verify.verify_docx(str(p), "蓝海集团")
+        ok, _ = _verify.verify_docx(str(p), "嘉益")
         assert ok
-        assert captured["client"] == "蓝海集团"
+        assert captured["client"] == "嘉益"
 
     def test_auto_verify_threads_client(self, monkeypatch):
         import _verify
@@ -230,14 +267,14 @@ class TestVerifyDocxClientName:
             return True, "ok"
 
         monkeypatch.setattr(_verify, "verify_docx", _fake_docx)
-        _verify.auto_verify("x.docx", "蓝海集团")
-        assert captured["client"] == "蓝海集团"
+        _verify.auto_verify("x.docx", "蓝海")
+        assert captured["client"] == "蓝海"
 
     def test_run_single_threads_client(self, monkeypatch):
         import _verify_hook
         captured = {}
 
-        def _fake_auto(path, client_name=""):
+        def _fake_auto(path, client_name="", **_kw):
             captured["client"] = client_name
             return True, "ok"
 
@@ -247,8 +284,8 @@ class TestVerifyDocxClientName:
         monkeypatch.setattr(_verify_hook, "_print_result", lambda *a, **k: None)
         import _verify
         monkeypatch.setattr(_verify, "auto_verify", _fake_auto)
-        _verify_hook.run_single("x.docx", client_name="蓝海集团")
-        assert captured["client"] == "蓝海集团"
+        _verify_hook.run_single("x.docx", client_name="示例集团")
+        assert captured["client"] == "示例集团"
 
 
 # ---------------------------------------------------------------------------

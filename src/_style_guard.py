@@ -5,7 +5,7 @@ import os
 import re
 import glob
 
-from _paths import SCRIPT_DIR, BANNED_WORDS
+from _paths import SCRIPT_DIR, BANNED_WORDS, CONTEXT_WORDS
 
 ANTIPATTERN_DIR = os.path.join(SCRIPT_DIR, "_knowledge", "snippets", "antipattern")
 STYLE_SAMPLES_DIR = os.path.join(SCRIPT_DIR, "_knowledge", "me", "style_samples")
@@ -18,7 +18,8 @@ AI_PATTERNS = {
     },
     "黑话": {
         # P2：移除"深度/全面/有效"等日常高频词，降低误报率
-        "pattern": r'(' + '|'.join(BANNED_WORDS) + r')',
+        # P3：词库 re.escape 后再拼——词含正则元字符时曾直接炸 pattern
+        "pattern": r'(' + '|'.join(re.escape(w) for w in BANNED_WORDS) + r')',
         "hint": "用具体动词替代（如'缩短周期'而非'提升效率'）",
     },
     "总结句": {
@@ -26,8 +27,15 @@ AI_PATTERNS = {
         "hint": "删除总结句，PPT 不需要",
     },
     "华丽形容词": {
-        "pattern": r'(卓越的|全方位的|一站式的|无与伦比的|领先的|世界级的|顶级的)',
+        # C-C1：仅删「全方位的」（移入语境层 warn）；「卓越的/一站式的」与 5 词硬禁一致保留
+        "pattern": r'(卓越的|一站式的|无与伦比的|领先的|世界级的|顶级的)',
         "hint": "删除形容词，直接给事实",
+    },
+    # C-C1 语境层：3 词的形容词性用法 warn 不阻断（EA 术语/惯用搭配降误杀）
+    "语境词": {
+        "pattern": r'(' + '|'.join(re.escape(w) for w in CONTEXT_WORDS) + r')',
+        "hint": "语境用法可保留；若是拔高修饰，删形容词直接给事实",
+        "severity": "warn",
     },
     "对称句式": {
         "pattern": r'(既要|不但)[^，。]{2,20}(又要|更要|还要)',
@@ -73,7 +81,11 @@ def _get_all_patterns():
 
 
 def check(text):
-    """检测文本中的 AI 套路。返回 [{name, count, matches, hint}, ...]。"""
+    """检测文本中的 AI 套路。返回 [{name, count, matches, hint, severity}, ...]。
+
+    severity：block（硬禁，命中即问题）/ warn（语境层提示，不阻断）。
+    消费方（pre_check/review）按 severity 区分处置强度。
+    """
     issues = []
     for name, config in _get_all_patterns().items():
         matches = re.findall(config["pattern"], text)
@@ -83,6 +95,7 @@ def check(text):
                 "count": len(matches),
                 "matches": matches[:5],
                 "hint": config["hint"],
+                "severity": config.get("severity", "block"),
             })
     return issues
 
@@ -106,12 +119,56 @@ def print_report(file_path):
 
     print(f"发现 {len(issues)} 类问题：\n")
     for issue in issues:
-        print(f"  [{issue['name']}] x{issue['count']}")
+        tag = "warn" if issue.get("severity") == "warn" else "block"
+        print(f"  [{issue['name']}] x{issue['count']}（{tag}）")
         print(f"    匹配：{issue['matches']}")
         print(f"    建议：{issue['hint']}\n")
 
+    # C-C1：warn 级（语境层）不阻断——只有 block 级命中才判失败
+    if all(i.get("severity") == "warn" for i in issues):
+        print("（仅语境层 warn 提示，不阻断；由 AI 人工定夺是否保留）")
+        return True
+
     print("修改建议：读 _knowledge/me/style_samples/ 样本，模仿其语感重写")
     return False
+
+
+# ============================================================
+# 注入剥离（S10-3b：musepool/词库注入 prompt 前的防泄漏纯函数）
+# ============================================================
+# 勘察记录（2026-09-08）：现行注入面有两处——
+#   ① gold 示范注入（_diagram_extract.load_gold_demo）：gold 文件头注释含
+#      验收来源（内部路径/客户名），已在读入时剥 `#` 注释行（先例）；
+#   ② 参考包 musepool（_knowledge/snippets/musepool.json，S10-3b 新建）：
+#      条目携带 id/source/origin/client 等溯源元数据，注入 prompt 时必须剥离，
+#      只留内容语义（防提示注入与信息泄漏）。
+# 消费方约定：任何把词库/参考包条目拼进 prompt 的代码路径，组装前过本函数。
+INJECTION_STRIP_KEYS = frozenset({
+    "id",        # 条目 id 内嵌来源文件名（如 baseline:fuwu_jianyishu:s1）
+    "source",    # 来源文件名/路径
+    "file",      # 片段文件相对路径（index.json 同款字段）
+    "path",      # 通用路径字段
+    "filepath",  # 路径字段别名
+    "origin",    # 来源集合名（gold_specs/baseline_specs）
+    "client",    # 客户归属（index.json 同款字段）
+    "created",   # 采集时间戳（溯源）
+    "url",       # 外链
+})
+
+
+def strip_injection_metadata(payload):
+    """递归剥离注入 payload 中的溯源元数据键，只留内容语义。
+
+    纯函数（不改入参）：dict 删 STRIP 键后对剩余值递归；list 逐项递归；
+    标量原样返回。剥离前后对比见 tests/test_s10_musepool.py。
+    """
+    if isinstance(payload, dict):
+        return {k: strip_injection_metadata(v)
+                for k, v in payload.items()
+                if k not in INJECTION_STRIP_KEYS}
+    if isinstance(payload, (list, tuple)):
+        return [strip_injection_metadata(x) for x in payload]
+    return payload
 
 
 # ============================================================
@@ -144,7 +201,12 @@ def _load_antipatterns_from_dir():
                         continue
                     words.append(line)
                 if words:
-                    extra[fname] = {"pattern": "|".join(words), "hint": f"避免 {fname}"}
+                    # P3：re.escape 后再拼——反模式词来自人工维护的 md，词含
+                    # 正则元字符（括号/*等）时曾拼出坏 pattern，让整个词库漏检
+                    extra[fname] = {
+                        "pattern": "|".join(re.escape(w) for w in words),
+                        "hint": f"避免 {fname}",
+                    }
         except Exception as e:
             # P1-3：原静默 pass，改为打印警告（反模式词库加载失败会让 AI 套路漏检）
             print(f"[warn] 反模式词库 {os.path.basename(f)} 加载失败: {e}")
@@ -158,11 +220,14 @@ def pre_check(ui_style="auto", client_name=None, task_id=None):
     {
         "ui_style": str,                    # 选定的 UI 风格
         "style_samples_loaded": bool,       # 是否加载了语感样本
-        "antipatterns_to_avoid": list,      # 反模式名列表
+        "antipatterns_to_avoid": list,      # 反模式名列表（severity=block 硬禁层）
+        "context_words": list,              # C-C1 语境层词表（severity=warn，提示不阻断）
         "required_reads": list,             # 必读文件路径列表
         "theme_guard": dict | None,         # 主题守卫结果（传 client_name 时有）
         "warnings": list
     }
+    severity 分层（check() 返回结构同规则）：block=硬禁阻断，warn=语境提示——
+    生成前阻断/返修只应消费 block 层，warn 层交 AI 人工定夺。
     """
     warnings = []
 
@@ -205,6 +270,7 @@ def pre_check(ui_style="auto", client_name=None, task_id=None):
         "ui_style": ui_style,
         "style_samples_loaded": style_samples_loaded,
         "antipatterns_to_avoid": antipatterns,
+        "context_words": list(CONTEXT_WORDS),
         "required_reads": required,
         "theme_guard": theme_guard,
         "warnings": warnings,
