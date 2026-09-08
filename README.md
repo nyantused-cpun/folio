@@ -21,6 +21,9 @@
 > **材料生成引擎 + 可组合方法论包——CLI 内核宿主无关，DSH 插件层深度增强。**
 > Folio = 对开本/作品集：把客户扔进来的材料，装订成能送达的汇报材料。
 
+> **DSH 兼容版本（本页 = 发布版 v2.0.0）**：插件实测锚定 **DSH 0.1.0-rc.8**（`verifiedAgainst` 与 peer 依赖均为 `^0.1.0-rc.8`，接口按 rc.8 源码逐行核实 + 插件自检/import 冒烟通过）。
+> **DSH 0.1.2-rc.1** 的代码级兼容（`folio-events` 事件读取三级回退）已在开发线就绪，随下一版同步发布。CLI 内核宿主无关——不装 DSH 也能用（L0）。详见[兼容性与生态取舍 §1 版本对齐](#1-版本对齐)。
+
 Folio 是给 AI 宿主（DeepSeek Harness / Trae / Kimi 等）外挂的**长程任务执行引擎**，特化于一件事：从客户材料到咨询/汇报交付物的全链路——接入材料 → 建立记忆 → 应用方法论 → 生成产出 → 守住质量。
 
 **引擎做机械的，AI 做判断的，云端模型做按需补位的。** 凡是「错了要重来、客户可见、可复现」的环节全部由确定性代码执行，模型只在判断、理解、生成语言处出手。
@@ -36,7 +39,7 @@ Folio 是给 AI 宿主（DeepSeek Harness / Trae / Kimi 等）外挂的**长程�
 | Python | **≥ 3.10** | 安装脚本自动探测 `py` / `python` / `python3`；未找到会失败并提示官网 |
 | Git | 需要 | `git clone` 获取仓库 |
 | 网络 | 首次安装需访问 PyPI | `install.ps1` 用 pip 安装 requirements.txt |
-| DSH | **仅插件层需要**：已安装且 `dsh` 在 PATH，版本对齐 0.1.0-rc.8 | 不装 DSH 也能用 CLI 内核（L0）；装了才有 15 工具 / 守卫 / 会话协议 |
+| DSH | **仅插件层需要**：已安装且 `dsh` 在 PATH，**发布版锚定 0.1.0-rc.8**（0.1.2-rc.1 兼容层已就绪，见 [§1 版本对齐](#1-版本对齐)） | 不装 DSH 也能用 CLI 内核（L0）；装了才有 15 工具 / 守卫 / 会话协议 |
 | Node.js | **不需要** | PPT 转换用 python-pptx；JS 插件由 DSH 宿主加载 |
 | PowerPoint | **可选** | 仅 `pptd-build --shots` 截图目检需要（COM）；不装则跳过截图，PPTX 生成正常 |
 | API key | 零 key 可跑（L0） | 建议按 `docs/能力配置引导` 配 1 个 embedding key 升级语义召回 |
@@ -174,8 +177,12 @@ pwsh .\setup\install-community-plugins.ps1 -Verify
 
 ### 1. 版本对齐
 
-- 当前对齐 **DSH 0.1.0-rc.8**（本机 `dsh --version` 实测）；插件 peer 依赖为 `@deepseek-ai/dsh-agent ^0.1.0-rc.8`、`@deepseek-ai/dsh-tools ^0.1.0-rc.8`、`@deepseek-ai/cordis ^4.0.1`。
-- 所有接口按 rc.8 源码核实，插件自检与 import 冒烟通过；运行级复测待重启 `dsh web` 后执行（`setup/install-folio-plugins.ps1 -Verify`）。
+| 线 | DSH 版本 | 状态 |
+|---|---|---|
+| **发布版 v2.0.0**（本页默认分支） | **0.1.0-rc.8** | 插件 `verifiedAgainst` / peer 依赖均为 `^0.1.0-rc.8`；接口按 rc.8 源码逐行核实，插件自检与 import 冒烟通过 |
+| 开发线（随下一版同步） | 0.1.2-rc.1 | `folio-events` 已加事件读取兼容层（`snapshotEvents()` → `ownEvents()` → 旧 `session.events` 三级回退，0.1.1/0.1.2 双兼容）；隔离 profile 全链验证通过，发布版锚定待同步后更新 |
+
+> **锚定纪律**：`verifiedAgainst` 只在对应 DSH 版本上实跑验证通过后才改——不提前标称「已适配」。本页顶部标注的版本即当前发布版可依赖的版本。
 
 ### 2. 社区插件：看了什么、为什么没直接装
 
