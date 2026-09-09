@@ -2,6 +2,7 @@
 
 > 目标：装完 Folio 后 30 分钟内，用虚构客户跑通「材料 → 方案 HTML → PPT」完整链路。
 > 全程不需要配任何 API key（L0 等级）。
+> **v2.0.0 提示**：旧 spec 里的 `style` 字段已由 `theme` 取代（`enterprise→corporate_navy` 等自动映射并打印提示）；主题共 7 套，默认 `consulting_kpmg`。详见 [迁移指南 v2.0](MIGRATION_v2.0.md)。
 
 ## 准备
 

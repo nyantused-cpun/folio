@@ -29,6 +29,7 @@ Folio 是给 AI 宿主（DeepSeek Harness / Trae / Kimi 等）外挂的**长程�
 - **主题体系并轨**（破坏性）：旧 style 自动映射新主题，迁移见 `docs/MIGRATION_v2.0.md`；
 - **confirm sidecar / compact 修复 / BM25 增强** 等质量修复随同源带入；
 - 示例知识卡（域卡/案例卡/方法论骨架，全虚构数据）随包分发。
+- **文档更新（2026-09-09）**：[技术白皮书 v6.0](docs/兰亭_技术白皮书_v6.0.md) / [产品说明 v6.0](docs/兰亭_产品说明_v6.0.md) / [英文 Product Brief v6.0](docs/product-brief_v6.0_en.md)；v4.0 / v5.0 转为历史版本；README 补数字口径说明（发布文案 vs 仓库实测）。
 
 ## v1.0.2（2026-08-16）社区友好与双语示例
 

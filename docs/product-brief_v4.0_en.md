@@ -1,5 +1,6 @@
 # Lanting (Folio) · Product Brief v4.0 (DSH-native edition)
 
+> **⚠️ Superseded**: this is the v4.0 historical snapshot (2026-08-16). See the [Product Brief v6.0](product-brief_v6.0_en.md) (2026-09-09, release v2.0.0).
 > **A material-generation engine that lives inside DSH** — 15 native tools · session-protocol automation · swap the methodology, not the engine
 > v4.0 · 2026-08-16 · Companion to the Technical Whitepaper v4.0
 

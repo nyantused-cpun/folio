@@ -1,6 +1,7 @@
 # Spec 协议 v1（spec.yml 字段与行为单一事实源）
 
 > 版本 v1 · 2026-07-20 · 状态：生效
+> **v2.0.0 对齐注记（2026-09-09）**：`style` 字段已被 `theme` 取代（见 §1）；元素全集 **39** 种、图形 **37** 种、主题 **7** 套；与主仓 `docs/spec_protocol_v1.md` v1.4.1 同口径。
 > 上游：内部协议重构计划 §六（Phase 1 协议层收敛），本文档是其 §6.4 交付物；该计划文档不随发布版分发
 > 代码事实源：`_renderer/elements.py`（字段兼容 + 能力矩阵 + 降级文本）、`_renderer/schema.py`（全量校验）；本文与代码冲突时以代码为准并回修本文
 > 读者：所有写 spec 的人与 AI。流程入口（confirmed 门禁、生成命令）见 `skills/spec-writing-guide/SKILL.md`，本协议只管"字段怎么写、写了会怎样"
@@ -16,7 +17,7 @@
 | `confirmed` | 是（生成前） | `false` | 确认门禁。未设 `true` 时所有 `*-build` 抛 `RenderBlockedError`（`src/_cli_guards.py:16-21`，判定单点 `src/_cli_guards.py:6-13`）。只能由人工确认后添加，AI 不得自设 |
 | `client_name` | 否 | — | **存在但为空字符串时阻断生成**（`_renderer/__init__.py:101-102`）；不写该字段则不检查 |
 | `project` | 否 | — | 信息字段，渲染器不消费（outline-to-spec 写入，`_outline_to_spec.py:352`） |
-| `style` | 否 | `enterprise` | 风格名：`education / enterprise / tech / gov`（`_renderer/__init__.py:112`）。注意：v1 中 HTML 端不消费 styles.json（重构计划 §一），`--style` 仅影响 PPTD/报价 |
+| `theme` | 否 | `consulting_kpmg` | 主题名（7 套）：`consulting_kpmg / corporate_navy / gov_red / legacy_bluegreen / product_charcoal / syzygit / weaver_blue`；spec 内禁 hex 字面量。旧 `style` 字段已废弃：`enterprise→corporate_navy`、`tech→product_charcoal`、`education→consulting_kpmg`、`gov→gov_red`（加载时打印迁移提示，详见 [MIGRATION_v2.0](MIGRATION_v2.0.md)） |
 | `author` | 否 | `""` | 顶层作者。`document.author` 缺省时的回退（`_renderer/__init__.py:165,213`）；PPTD 封面也读（`_pptd_gen.py:245-255`） |
 | `date` | 否 | `""` | 顶层日期。`document.cover.date` 缺省时的回退（`_renderer/__init__.py:170`）；PPTD 封面也读（`_pptd_gen.py:261-262`） |
 | `document.title` | 建议 | `"方案文档"` | 主标题（`_renderer/__init__.py:211,404`；PPTD `_pptd_gen.py:75`） |

@@ -11,13 +11,14 @@
 >
 > 有相关链接或想贡献，欢迎提 Issue / PR / Discussion。
 
-> **English TL;DR** — Folio is a host-agnostic CLI material-generation engine for consultants (87 commands, 37 diagram types), with an optional DSH enhancement layer: 15 schema-validated `folio_*` tools, session-protocol auto-save, an L0 guard, and a swappable methodology-pack system. Zero API keys to start (L0); one embedding key unlocks semantic recall (L1). Requirements: Windows 10/11, PowerShell, Python ≥ 3.10 — **Node.js not required**. See the [English product brief](docs/product-brief_v4.0_en.md), or open the bilingual demo outputs in the [v2.0.0 release](https://github.com/nyantused-cpun/folio/releases/tag/v2.0.0). **Help wanted: Excel formatting/formulas, Linux/mac ports.**
+> **English TL;DR** — Folio is a host-agnostic CLI material-generation engine for consultants (87 commands, 37 diagram types), with an optional DSH enhancement layer: 15 schema-validated `folio_*` tools, session-protocol auto-save, an L0 guard, and a swappable methodology-pack system. Zero API keys to start (L0); one embedding key unlocks semantic recall (L1). Requirements: Windows 10/11, PowerShell, Python ≥ 3.10 — **Node.js not required**. See the [English product brief](docs/product-brief_v6.0_en.md), or open the bilingual demo outputs in the [v2.0.0 release](https://github.com/nyantused-cpun/folio/releases/tag/v2.0.0). **Help wanted: Excel formatting/formulas, Linux/mac ports.**
 
 > **材料生成引擎 + 可组合方法论包——CLI 内核宿主无关，DSH 插件层深度增强。**
 > Folio = 对开本/作品集：把客户扔进来的材料，装订成能送达的汇报材料。
 
 > **DSH 兼容版本（本页 = 发布版 v2.0.0）**：插件实测锚定 **DSH 0.1.0-rc.8**（`verifiedAgainst` 与 peer 依赖均为 `^0.1.0-rc.8`，接口按 rc.8 源码逐行核实 + 插件自检/import 冒烟通过）。
 > **DSH 0.1.2-rc.1** 的代码级兼容（`folio-events` 事件读取三级回退）已在开发线就绪，随下一版同步发布。CLI 内核宿主无关——不装 DSH 也能用（L0）。详见[兼容性与生态取舍 §1 版本对齐](#1-版本对齐)。
+> **数字口径（v2.0.0 发布面）**：90 模块 / 87 命令 / 191 测试文件（发布文案）；仓库实测 109 py / 91 add_parser / 192 test 文件；工具 15（发布版）vs 17（开发线）。口径统一列入 v2.1。
 
 Folio 是给 AI 宿主（DeepSeek Harness / Trae / Kimi 等）外挂的**长程任务执行引擎**，特化于一件事：从客户材料到咨询/汇报交付物的全链路——接入材料 → 建立记忆 → 应用方法论 → 生成产出 → 守住质量。
 
@@ -125,9 +126,9 @@ folio/
 
 ## 文档
 
-- [产品说明 v4.0（DSH 原生版）](docs/兰亭_产品说明_v4.0.md)：v4.0 历史快照——它是什么、怎么装、为什么选 DSH；最新技术状态见[技术白皮书 v5.0](docs/兰亭_技术白皮书_v5.0.md)
-- [Product Brief v4.0 (English)](docs/product-brief_v4.0_en.md)：same content in English
-- [技术白皮书 v5.0（DSH 原生版）](docs/兰亭_技术白皮书_v5.0.md)：工具管线、事件机制、记忆单轨、防线与生产线收敛现状、已知限制如实说
+- [产品说明 v6.0](docs/兰亭_产品说明_v6.0.md)：它是什么、怎么装、三个卖点、已知限制如实说（v4.0 为历史快照）
+- [Product Brief v6.0 (English)](docs/product-brief_v6.0_en.md)：same content in English
+- [技术白皮书 v6.0](docs/兰亭_技术白皮书_v6.0.md)：工具管线、事件机制、记忆机制、交付流水线、质量与安全、发布与迁移（v5.0 为历史版本）
 - [产品定位与三卖点](docs/产品定位与三卖点_2026-08-15.md)：定位纲领、五段价值链、命名族
 - [能力配置引导](docs/能力配置引导_v1_2026-08-15.md)：6 个能力槽位怎么配、不配会怎样、外部怎么补位
 
