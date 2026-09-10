@@ -1,7 +1,8 @@
 // @nyantused/folio-dsh-events：兰亭会话协议事件插件（P1 实施 M3，2026-08-14；作用域隔离 2026-08-15）
 //
 // 把 AGENTS.md 的会话纪律机械化（「纪律变机械」第一步）：
-//   1. agent/session-start → 注入入口协议提醒（每新会话自动唤醒模型跑 folio_session_start）
+//   1. agent/session-start → 注入入口协议提醒（每新会话随下一次真实用户轮被动送达，
+//      不自启轮；同会话幂等一次）
 //   2. agent/disposed → 会话关闭自动 save（会话结束协议的机械触发；客户名从
 //      agent.session.events 的 tool/call 记录扫描提取）
 //
@@ -27,7 +28,7 @@
 //     （task_history/context.md 无跨进程锁），dispose 时机是协议正点，先只做它。
 
 import { createUserMessage } from "@deepseek-ai/dsh-llm/message";
-import { extractClientFromToolCall, makeCooldown } from "./state.js";
+import { extractClientFromToolCall, makeCooldown, makeSessionStartGate } from "./state.js";
 import { existsSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -86,6 +87,8 @@ async function runCli(ctx, args, timeoutMs = 120000) {
 
 function apply(ctx) {
   const saveCooldown = makeCooldown(SAVE_COOLDOWN_MS);
+  const sessionStartGate = makeSessionStartGate(); // P2：入口提醒每会话恰好一次
+  const remindedAgents = new WeakSet(); // 无 session id 时的兜底幂等
 
   // ── 1) 新会话入口协议提醒 ────────────────────────────────────────────────
   // 2026-09-10 修：注入必须**随下一次真实用户轮**送达，不能用 `followup`（followup =
@@ -95,6 +98,15 @@ function apply(ctx) {
   ctx.on("agent/session-start", (payload) => {
     const agent = payload?.agent;
     if (!agent) return;
+    // P2（2026-09-10）：session-start 实测会触发两次；同会话只投递一次，避免界面
+    // 出现「2 条排队消息」。无 session id 时退化为 agent 对象级 WeakSet 兜底。
+    const sessionId = String(agent?.session?.id ?? agent?.id ?? "");
+    if (sessionId) {
+      if (!sessionStartGate.should(sessionId)) return;
+    } else {
+      if (remindedAgents.has(agent)) return;
+      remindedAgents.add(agent);
+    }
     try {
       const msg = createUserMessage({
         content: [{ type: "text", text: SESSION_START_NOTE }],

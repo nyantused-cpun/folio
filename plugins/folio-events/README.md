@@ -6,7 +6,7 @@
 
 | 触发 | 事件（官方词汇） | 行为 |
 |---|---|---|
-| 新会话 | `agent/session-start`（notification） | `agent.followup(createUserMessage(...))` 注入入口协议提醒，唤醒模型跑 folio_session_start |
+| 新会话 | `agent/session-start`（notification） | `agent.send(createUserMessage(...), "next-turn", false)` **入队不唤醒**注入入口协议提醒（用户发第一条消息时随该轮送达）；同会话幂等一次（2026-09-10：session-start 实测触发两次 → 修「2 条排队消息」） |
 | 会话关闭 | `agent/disposed`（notification） | 从 `agent.session.events` 倒序扫描 `tool/call`（folio_session_start/folio_save 的 arguments）提取客户名，自动 spawn `.venv python _cli.py save <client>`（60s 冷却防重复事件）——会话结束协议机械触发 |
 
 > 作用域隔离（2026-08-15）：本插件挂在 pre-sales preset 层，仅「售前助手」模式生效；原 `session/event` 实时观察依赖 root scope 广播，preset 内收不到，故改为 disposed 时扫描会话事件。
@@ -15,7 +15,7 @@
 
 - `agent/session-start` / `agent/disposed`：dsh-agent 官方 live 词汇（non-vetoing）；
 - `tool/call` 会话事件形状 `{turn, step, callId, name, arguments}`：dsh-agent-loop `appendToolCall`（`session.append("tool/call", ...)`）；
-- `agent.followup(message)`：dsh-agent 入队原语（next-turn FIFO 唤醒）；
+- `agent.send(message, target, wakeup)` / `agent.inbox.append(target, message)`：dsh-agent 入队原语（`InboxTarget = "next-turn" | "next-step"`；`wakeup=false` 只入队不唤醒，`followup` = 入队 + 唤醒）；
 - `createUserMessage`：dsh-llm/message 依赖最小入口（mint MessageId，形状正确）；
 - spawn 形态保持 guard CLI 白名单契约（`.venv python _cli.py`）。
 
@@ -26,8 +26,8 @@
 
 ## 4. 验证
 
-- 沙箱内：`node --check index.js state.js` + `node test/run-check.mjs`（2026-08-14：7/7 通过；2026-08-20：rc.8 源码复核 + import 冒烟通过）；
-- 运行级（待 dsh web 重启）：新会话第一条消息后应出现【兰亭入口协议】提醒；会话关闭后宿主日志出现 `[folio-events] auto-save` 行。
+- 沙箱内：`node --check index.js state.js` + `node test/run-check.mjs`（2026-09-10：9/9 通过，含幂等门新例；import 冒烟通过）；
+- 运行级：新会话第一条消息后应出现【兰亭入口协议】提醒且**只出现一次**；会话关闭后宿主日志出现 `[folio-events] auto-save` 行。
 
 ## 5. 已知限制
 
@@ -40,7 +40,7 @@
 ```
 plugins/folio-events/
   index.js         插件体
-  state.js         纯逻辑（extractClientFromToolCall/makeCooldown，零依赖）
+  state.js         纯逻辑（extractClientFromToolCall/makeCooldown/makeSessionStartGate，零依赖）
   cordis.patch.yml 激活 patch（preset 层挂载由 install-folio-plugins.ps1 管理，此文件仅供参考）
   package.json
   test/run-check.mjs
@@ -51,3 +51,5 @@ plugins/folio-events/
 
 - 0.1.0-rc.1（2026-08-14）：M3 初版——三条行为 + 纯逻辑单测；冷却器首次调用放行 bug 当场修复。
 - 1.0.1（2026-08-15）：作用域隔离改造——插件移入 pre-sales preset 层；`session/event` 实时观察改为 `agent/disposed` 扫描 `agent.session.events` 提取客户名；发布版保留 `FOLIO_HOME`/上溯 `_cli.py` 路径解析，不硬编码作者路径。
+- 1.0.2（2026-09-10）：入口提醒注入改 `send("next-turn", wakeup=false)`（原 `followup` 会在会话创建瞬间自启一轮 → preset 固化 → 模式选择器消失）。
+- 1.0.3（2026-09-10）：入口提醒加每会话幂等门（有界淘汰最旧），修 `session-start` 触发两次导致的重复排队消息。

@@ -1,6 +1,6 @@
 // @nyantused/folio-dsh-events 纯逻辑自检（沙箱内可跑：无 spawn）
 import assert from "node:assert/strict";
-import { extractClientFromToolCall, makeCooldown } from "../state.js";
+import { extractClientFromToolCall, makeCooldown, makeSessionStartGate } from "../state.js";
 
 let passed = 0;
 let failed = 0;
@@ -63,6 +63,24 @@ check("makeCooldown：不同 key 互不影响 + clear 重置", () => {
   assert.equal(c.should("b", 100), true);
   c.clear("a");
   assert.equal(c.should("a", 200), true);
+});
+
+check("makeSessionStartGate：同会话只放行一次，不同会话互不影响", () => {
+  const gate = makeSessionStartGate();
+  assert.equal(gate.should("sess-1"), true, "首次放行");
+  assert.equal(gate.should("sess-1"), false, "重复触发忽略（修 2 条排队消息）");
+  assert.equal(gate.should("sess-2"), true, "不同会话不受影响");
+});
+
+check("makeSessionStartGate：空 id 不误伤 + 容量淘汰最旧", () => {
+  const gate = makeSessionStartGate(2);
+  assert.equal(gate.should(""), true);
+  assert.equal(gate.should("a"), true);
+  assert.equal(gate.should("b"), true);
+  assert.equal(gate.should("c"), true);
+  assert.equal(gate.has("a"), false, "最早记录被淘汰");
+  assert.equal(gate.has("b"), true);
+  assert.equal(gate.has("c"), true);
 });
 
 console.log(`== 结果: ${passed} 通过 / ${failed} 失败 ==`);

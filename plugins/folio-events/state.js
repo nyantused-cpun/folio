@@ -36,3 +36,35 @@ export function makeCooldown(cooldownMs) {
     },
   };
 }
+
+/**
+ * 每会话只放行一次的幂等门（入口提醒用）。
+ *
+ * 背景：`agent/session-start` 在 0.1.5 实测会触发两次，导致界面出现「2 条排队消息」。
+ * 以会话 id 为键，第一次放行、重复触发忽略；空 id 不误伤（返回 true，由调用方用
+ * WeakSet 兜底）。容量有界，超出后淘汰最早记录，避免长驻宿主内存无界增长。
+ */
+export function makeSessionStartGate(maxTracked = 1000) {
+  const limit = Number.isInteger(maxTracked) && maxTracked > 0 ? maxTracked : 1000;
+  const seen = new Set();
+  return {
+    /** 该会话是否首次触发；同一 id 第二次起返回 false。 */
+    should(sessionId) {
+      if (typeof sessionId !== "string" || sessionId.length === 0) return true;
+      if (seen.has(sessionId)) return false;
+      seen.add(sessionId);
+      if (seen.size > limit) {
+        const oldest = seen.values().next().value;
+        if (oldest !== undefined) seen.delete(oldest);
+      }
+      return true;
+    },
+    /** 该会话是否已被放行过（供排查/测试）。 */
+    has(sessionId) {
+      return seen.has(sessionId);
+    },
+    clear() {
+      seen.clear();
+    },
+  };
+}
