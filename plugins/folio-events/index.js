@@ -15,7 +15,8 @@
 //
 // 接口依据（本机 @deepseek-ai/dsh 0.1.0-rc.8 逐行核实）：
 //   - agent/session-start、agent/disposed：dsh-agent 官方 live 词汇（non-vetoing notification）；
-//   - agent.followup(message)：dsh-agent 官方入队原语（next-turn FIFO 唤醒）；消息用
+//   - agent.send(message, target, wakeup) / agent.inbox.append：dsh-agent 入队原语
+//   （`InboxTarget = "next-turn" | "next-step"`；wakeup=false 只入队不唤醒，followup=入队+唤醒）；消息用
 //     dsh-llm/message 的 createUserMessage 构造（mint MessageId，形状正确）；
 //   - tool/call 会话事件形状 {turn, step, callId, name, arguments}：dsh-agent-loop
 //     appendToolCall（session.append("tool/call", ...)）；
@@ -87,15 +88,25 @@ function apply(ctx) {
   const saveCooldown = makeCooldown(SAVE_COOLDOWN_MS);
 
   // ── 1) 新会话入口协议提醒 ────────────────────────────────────────────────
+  // 2026-09-10 修：注入必须**随下一次真实用户轮**送达，不能用 `followup`（followup =
+  // 入队 + 唤醒，会在会话创建瞬间自动起一轮）。会话一旦起轮，agent preset 即固化
+  // （客户端「即将开始的这个会话所用的 Agent 预设」座位消失）→ 用户永远落在默认模式
+  // 且其他模式不可选。改用 `send(msg,'next-turn',false)` 只入队不唤醒。
   ctx.on("agent/session-start", (payload) => {
     const agent = payload?.agent;
-    if (!agent || typeof agent.followup !== "function") return;
+    if (!agent) return;
     try {
       const msg = createUserMessage({
         content: [{ type: "text", text: SESSION_START_NOTE }],
         source: { kind: "folio-events", note: "session-start" },
       });
-      agent.followup(msg);
+      if (typeof agent.send === "function") {
+        agent.send(msg, "next-turn", false); // 入队不唤醒（0.1.2+ 契约）
+      } else if (agent.inbox && typeof agent.inbox.append === "function") {
+        agent.inbox.append("next-turn", msg); // 退路：直接进队列
+      } else {
+        console.warn("[folio-events] 宿主无 send/inbox，入口提醒跳过（避免自启轮锁死模式选择）");
+      }
     } catch (err) {
       console.error("[folio-events] 入口提醒注入失败（放行会话）:", err);
     }
