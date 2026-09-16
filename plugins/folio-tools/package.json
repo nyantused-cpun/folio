@@ -1,7 +1,7 @@
 {
   "name": "@nyantused/folio-dsh-tools",
   "description": "兰亭 CLI 命令工具化 + L0 守卫：记忆面 9 工具 + 质量面 6 工具（defineTool 注册，spawn venv _cli.py）+ 直写/直调守卫",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "type": "module",
   "main": "index.js",
   "exports": {
@@ -44,8 +44,8 @@
     },
     "verifiedAgainst": {
       "dshVersion": "0.1.0-rc.8",
-      "evidenceLevel": "L1 源码级（defineTool/subprocess/事件接口逐行核实）；L2 沙箱自检/import 冒烟；L4 运行级待 dsh web 重启后执行",
-      "testedAt": "2026-08-20"
+      "evidenceLevel": "L1 源码级（defineTool/subprocess/事件接口逐行核实）；L2 沙箱自检/import 冒烟；guard 命令位匹配（2026-09-16，与内部线 rc.7 同源）已过真实守卫判定 17/0；L4 运行级待 dsh web 重启后执行",
+      "testedAt": "2026-09-16"
     }
   },
   "peerDependencies": {

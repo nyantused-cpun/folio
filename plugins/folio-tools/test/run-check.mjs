@@ -7,7 +7,8 @@ import { TOOL_DEFS } from "../defs.js";
 import { createGuardRules } from "../guard.js";
 
 const byName = Object.fromEntries(TOOL_DEFS.map((d) => [d.name, d]));
-const CLI_WHITELIST_RE = /python\.exe"?\s+_cli\.py(?:\s+\S+)*\s*$/i;
+// 注（v3）：原先此处放了一份 CLI 白名单正则副本（`CLI_WHITELIST_RE`）供断言——它只能验证自己，
+// 改成用真实守卫判定（`rules.checkPythonExec(...) === null`），见下文「guard CLI 白名单兼容」。
 // PROJECT_DIR 仅作测试桩（纯字符串断言，无需真实存在）：从本文件位置推导，
 // 不硬编码作者机器路径。
 const PROJECT_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -106,7 +107,7 @@ check("质量面 buildArgs（verify/review/cite-audit/audit/theme-verify/spec-di
   assert.deepEqual(byName.folio_spec_diff.buildArgs({ spec_a: "a.yml", spec_b: "b.yml" }), ["spec-diff", "a.yml", "b.yml"]);
 });
 
-check("guard CLI 白名单兼容（5 个抽样命令）", () => {
+check("guard CLI 白名单兼容（5 个抽样命令，走真实守卫判定而非正则副本）", () => {
   const samples = [
     cliCommandString(byName.folio_status, {}),
     cliCommandString(byName.folio_recall, { keywords: ["化工"], client: "示例客户乙", rerank: true }),
@@ -114,7 +115,14 @@ check("guard CLI 白名单兼容（5 个抽样命令）", () => {
     cliCommandString(byName.folio_read, { file: "docs/PROJECT_DESIGN.md" }),
     cliCommandString(byName.folio_graph_query, { client: "通用", type: "decision" }),
   ];
-  for (const s of samples) assert.ok(CLI_WHITELIST_RE.test(s), `guard 白名单应放行: ${s}`);
+  for (const s of samples) assert.equal(rules.checkPythonExec(inProject("pwsh", s)), null, `guard 应放行合规 CLI: ${s}`);
+  // 带尾巴的合规调用也要放行（v1.1.0 的整条 `$` 锚定在此失配 → 守卫提示与行为自相矛盾）
+  for (const s of [
+    `${PYTHON} _cli.py status 2>&1 | head -5`,
+    `${PYTHON} _cli.py audit --mode all 2>&1`,
+  ]) {
+    assert.equal(rules.checkPythonExec(inProject("pwsh", s)), null, `带尾巴的合规 CLI 应放行: ${s}`);
+  }
 });
 
 check("required 参数可被 buildArgs 消费（不抛异常）", () => {
@@ -154,6 +162,37 @@ check("checkShellWrite：shell 直写 output 交付物 deny / refs 操作 deny /
   assert.equal(refs?.kind, "deny");
   assert.match(refs.reason, /refs/);
   assert.equal(rules.checkShellWrite(inProject("pwsh", "Get-ChildItem .")), null);
+});
+
+check("v3 命令位匹配：只读叙述/检索不再被误判（v1.1.0 的假阳性面）", () => {
+  for (const c of [
+    'Write-Output "评审提到 python 直调的历史"',
+    "Select-String -Path docs/x.md -Pattern python",
+    "Get-Content docs/x.md | Select-String -Pattern python",
+  ]) {
+    assert.equal(rules.checkPythonExec(inProject("pwsh", c)), null, `不应拦只读命令: ${c}`);
+  }
+  for (const c of [
+    'Select-String -Path refs/a.md -Pattern "Remove-Item"',
+    `cat "${PROJECT_DIR}/output/x/测试.html"`,
+    'find output -name "*.xlsx" 2>/dev/null',
+  ]) {
+    assert.equal(rules.checkShellWrite(inProject("pwsh", c)), null, `不应拦只读命令: ${c}`);
+  }
+});
+
+check("v3 真调用仍拦（零回归）：裸/带路径/嵌套壳/绝对路径含空格", () => {
+  const pyAbs = `${PROJECT_DIR.replace(/\\/g, "/")}/.venv/Scripts/python.exe`; // 安装根含空格也要认
+  assert.equal(rules.checkPythonExec(inProject("pwsh", 'python -c "import os"'))?.kind, "deny");
+  assert.equal(rules.checkPythonExec(inProject("pwsh", "cmd /c python x.py"))?.kind, "deny");
+  assert.equal(rules.checkPythonExec(inProject("pwsh", `${pyAbs} -c "print(1)"`))?.kind, "deny");
+  assert.equal(rules.checkPythonExec(inProject("pwsh", `${pyAbs} _cli.py status`)), null, "含空格绝对路径的合规 CLI 应放行");
+  assert.equal(rules.checkPythonExec(inProject("pwsh", "/usr/bin/grep -r python .")), null, "Unix 参数位字样不误伤");
+  assert.equal(rules.checkShellWrite(inProject("pwsh", `echo hi > "${PROJECT_DIR}/output/x/测试.html"`))?.kind, "deny");
+});
+
+check("公开线刻意更严：`python -m pytest` 不在放行面（未引入内部线 SAFE_MODULES 白名单）", () => {
+  assert.equal(rules.checkPythonExec(inProject("pwsh", "python -m pytest tests/"))?.kind, "deny");
 });
 
 check("isCommandInProject：cwd/workdir 项目内 true / 项目外 false / 相对路径 false", () => {
