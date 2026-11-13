@@ -20,6 +20,11 @@ __all__ = [
     "recall", "_keyword_fallback", "_embedding_recall",
     "_rrf_fuse", "_dedup_by_doc", "_apply_bm25_seats",
     "_detect_client_from_path", "_read_snippet", "read_chunk",
+    # R1：候选池精排 / 项目任务与有效性过滤
+    "_clamp_int", "_extract_decision_meta", "_is_invalid_decision",
+    "_filter_recall_items", "_read_rerank_body",
+    # R1 收尾：派生世界书排除（规则单一事实源 = _worldbook）
+    "_derived_view_exclusions", "_is_derived_view_hit",
 ]
 
 
@@ -35,8 +40,20 @@ def _load_recall_config():
         "rrf": {"k": 10, "fallback_threshold": 0.05},
         "embedding": {"threshold": 0.1, "top_k": 20},
         "bm25": {"top_k": 20},
-        "rerank": {"top_k": 5},
+        # R1：精排读取 chunk 正文后回落 final_k。
+        # candidates 默认 3 = 2026-11-12 golden A/B 实测最优（37 正样本）：
+        #   pool=3+正文 Hit@1 0.7568 / Hit@3 0.9459 / MRR 0.8514
+        #   pool=5      Hit@1 0.7027 / Hit@3 0.9459 / MRR 0.8198
+        #   pool=8      Hit@1 0.7027 / Hit@3 0.9189 / MRR 0.8063
+        #   pool=10     Hit@1 0.7027 / Hit@3 0.8919 / MRR 0.7973
+        # 8–12 候选无提升证据（成对 bootstrap 差异不显著 p≈0.18，但方向一致为负），
+        # 故不设为默认；需要扩大候选池时显式改 recall_config.yml（上限 20）。
+        "rerank": {"top_k": 5, "alpha": 0.7, "candidates": 3,
+                   "final_k": 3, "use_body": True, "body_chars": 1200},
         "bm25_seat": {"enabled": True, "top_docs": 3, "min_score_ratio": 0.95},
+        # R1：查询改写默认关（Gate 1 实测净负收益，见 recall_config.yml 注释）。
+        # 这里补默认值是为了让「配置节缺失」时也 fail-closed，而不是回落到开。
+        "query_rewrite": {"enabled": False, "confidence_threshold": 0.6},
     }
     try:
         import yaml
@@ -64,27 +81,35 @@ _RECALL_CONFIG = _load_recall_config()
 def recall(input_text, force_keyword=False, client_name=None, rerank=True,
            use_embedding=True, return_results=False, client_filter=None,
            permanent_only=False, use_aliases=True,
-           use_query_rewrite=True):
+           use_query_rewrite=True, cross_project=False, task_id=None):
     """召回相关历史项目。BM25 + Embedding 双路召回 + RRF 融合。
 
     client_name: 指定客户时用其别名展开查询，并在索引层按客户隔离搜索
-    rerank: True 时调云端 LLM 精排
+    rerank: True 时调云端 LLM 精排（候选池 candidates → 读正文 → 精排 → final_k）
     use_embedding: True 时启用 Embedding 语义召回（需要 ZHIPU_API_KEY）
     return_results: True 时返回结构化结果列表（RAG 注入用），False 时只打印
     client_filter: True 时在索引层只搜索 client_name 客户的文档。
                    None（默认）时自动按是否有 client_name 决定。
+                   False = 调用方显式要求跨客户（等价 cross_project=True）。
     permanent_only: True 时只保留 permanent 决策（task 决策排除；非决策结果不受影响）
     use_aliases: True 时对指定客户展开别名（默认）；False 时不展开。
-    use_query_rewrite: True 时启用查询改写（T2，默认）；False 时不改写（A0 基线/评测用）。
+    use_query_rewrite: True 时启用查询改写（T2）；缺省配置为关（R1：
+                       配置节缺失也 fail-closed，不再默认开）。
+    cross_project: 显式跨项目开关（R1）。只有 True（或 client_filter=False）才允许
+                   返回当前项目之外客户的材料；否则有项目上下文时硬隔离。
+    task_id: 当前任务 ID（R1）。scope=task 且 task_id 不符的决策结果被过滤；
+             未提供当前 task_id 时保持向后兼容（不过滤）。
 
 
     返回（return_results=True 时）：
         [{"client", "score", "path", "snippet", "parent_context",
-          "source", "mode", "degraded"}, ...] 或 None
+          "source", "mode", "degraded", ...}, ...] 或 None
         source: "客户=X | 文档=Y"（现有 print 的来源标注数据化）
-        mode: 实际生效链路（"BM25 + Embedding RRF" / "BM25" / "Embedding" / "关键词降级"）
+        mode: 实际生效链路（"BM25 + Embedding RRF" / "BM25" / "Embedding" / "关键词降级"）；
+              双查询合并属于查询计划，不再混进 mode（契约：mode 只描述链路）
         degraded: 任一降级路径触发即 True（请求 Embedding 无返回 / RRF 阈值 / 依赖缺失 / 关键词 fallback）
-        decision 结果额外带 persistence / scope（P6-2：缺失默认 permanent / client）
+        decision 结果额外带 persistence / scope / task_id / status / superseded_by
+        cross_project: 仅跨项目结果带 True（有项目上下文且客户不同）
     """
     # T9：降级状态跟踪。任一降级路径（见下方分支）触发后置 True，
     # 结果 item 的 "degraded" 键随之置位，供 folio_recall / RAG 注入识别质量折扣。
@@ -109,7 +134,7 @@ def recall(input_text, force_keyword=False, client_name=None, rerank=True,
             _queries = [(input_text, 1.0)]
             _rewrite = None
             _qr_cfg = _RECALL_CONFIG.get("query_rewrite", {}) or {}
-            if use_query_rewrite and _qr_cfg.get("enabled", True):
+            if use_query_rewrite and _qr_cfg.get("enabled", False):
                 from _query_rewrite import rewrite_query
                 _rw = rewrite_query(input_text, client=client_name)
                 _rewrite = {
@@ -142,13 +167,22 @@ def recall(input_text, force_keyword=False, client_name=None, rerank=True,
                 except Exception as e:
                     print(f"[warn] {client_name} 别名加载失败: {e}")
 
-            # client_filter 自动决策：未显式指定时，有 client_name 就开启索引层隔离
-            if client_filter is None:
-                client_filter = client_name
+            # client_filter 自动决策：True=强制隔离，False=显式跨客户，None=自动。
+            # R1 跨项目：只有 cross_project=True 或 client_filter=False（CLI
+            # --no-client-filter，调用方显式要求）才允许跨项目检索；
+            # 显式 client_filter=True 优先于 cross_project（显式过滤更保守）。
+            if client_filter is False:
+                allow_cross = True
+            elif client_filter is True:
+                allow_cross = False
+            else:
+                allow_cross = bool(cross_project)
             # 索引层过滤参数：传客户名给 BM25/Embedding 在 top_k 选取前过滤
-            index_filter = client_name if client_filter else None
+            index_filter = None if allow_cross else client_name
             if index_filter:
                 print(f"[recall] 索引层按客户隔离: {index_filter}")
+            elif allow_cross and client_name:
+                print("[recall] 显式跨项目检索（cross_project）：不限制客户")
 
             # I-1 出域开关：客户 cloud_policy 覆盖调用方参数（recall 与云端层同源解析）
             #   off → 仅 BM25+本地（熔断 Embedding/Chat/Rerank），degraded 标记质量折扣
@@ -189,15 +223,20 @@ def recall(input_text, force_keyword=False, client_name=None, rerank=True,
                       f"（cross_client_filtered={cross_client_filtered}）")
 
             # 合并：单查询直接用；多查询（低置信双路）按 0.4/0.6 加权 RRF 合并
+            _dual = False
             if len(_groups) == 1:
                 results = _groups[0][0]
             elif len(_groups) > 1:
                 results = _rrf_fuse_weighted(_groups, k=_RECALL_CONFIG["rrf"]["k"])
-                mode = f"{mode} (双查询)"
+                _dual = True
             else:
                 results = None
                 mode = None
-            base_mode = mode  # T9：rerank 前的基础链路，作为结果 item["mode"]（不含 rerank 后缀）
+            # T9：rerank 前的基础链路，作为结果 item["mode"]（不含 rerank 后缀）。
+            # R1：mode 只描述链路；「(双查询)」属于查询计划，只在人读标签里出现，
+            # 不再写进结构化 mode（cloud_policy 测试即按此契约断言）。
+            base_mode = mode
+            mode_label = f"{mode} (双查询)" if (_dual and mode) else mode
 
             # 关键词降级：RRF 最高分低于阈值时降级到关键词模式
             if results and _RECALL_CONFIG.get("rrf", {}).get("fallback_threshold"):
@@ -234,13 +273,27 @@ def recall(input_text, force_keyword=False, client_name=None, rerank=True,
                         top_docs=_seat_cfg.get("top_docs", 3),
                         min_score_ratio=_seat_cfg.get("min_score_ratio", 0.95))
 
+                # 候选池（R1）：精排前保留 candidates（默认 10，目标区间 8–12）个
+                # 候选 → 读正文 → 精排 → 只保留 final_k（默认 3）。非精排链路
+                # 仍直接取 final_k，结果与旧行为一致。
+                _rk_cfg = _RECALL_CONFIG.get("rerank", {}) or {}
+                final_k = _clamp_int(_rk_cfg.get("final_k", 3), 1, 10, 3)
+                pool_n = (_clamp_int(_rk_cfg.get("candidates", 10), 1, 20, 10)
+                          if rerank else final_k)
+                use_body = bool(_rk_cfg.get("use_body", True))
+                body_chars = _clamp_int(_rk_cfg.get("body_chars", 1200), 200, 8000, 1200)
+                pool = results[:pool_n]
+                if rerank and len(pool) > final_k:
+                    print(f"[recall] 精排候选池 {len(pool)} 个（final_k={final_k}）")
+
                 # 补全 client 和 snippet（两级检索：先读 2000 字 -> extract_attention 摘要）
                 # M2-R2：图扩展已从召回链路移除（R4 ablation 证明零增量），
                 # 不再读取 client_graph.json，也不再向结果附加 graph_expansions。
                 from _compress import extract_attention
 
                 enriched = []
-                for path, score in results[:3]:  # top 3（从 5 降为 3）
+                _rerank_texts = {}
+                for path, score in pool:
                     client = _detect_client_from_path(path)
                     raw = _read_snippet(path, 2000)
                     snippet = extract_attention(raw) if raw else ""
@@ -261,69 +314,80 @@ def recall(input_text, force_keyword=False, client_name=None, rerank=True,
                              "parent_context": parent_context,
                              "source_type": _classify_source_type(path)}
                     if item["source_type"] == "decision":
-                        item["persistence"] = _extract_persistence(raw)
-                        item["scope"] = _extract_scope(raw)
+                        _raw_for_meta = raw
+                        if _raw_for_meta.startswith("(该决策条目已废弃"):
+                            # 索引侧已过滤废弃块，读取侧返回说明文本——当作已废弃
+                            _raw_for_meta = "状态: 已废弃"
+                        item.update(_extract_decision_meta(_raw_for_meta))
+                    if rerank:
+                        # R1：精排输入用 chunk 正文（不再只喂 extract_attention 摘要）
+                        _body = _read_rerank_body(path, body_chars) if use_body else ""
+                        _rerank_texts[path] = _body or snippet
 
                     enriched.append(item)
 
-                # P6-2：--permanent-only —— 只保留 permanent 决策（task 决策排除）
-                if permanent_only:
-                    before = len(enriched)
-                    enriched = [e for e in enriched
-                                if e.get("source_type") != "decision"
-                                or e.get("persistence") == "permanent"]
-                    if before != len(enriched):
-                        print(f"[recall] permanent-only 过滤: {before} -> {len(enriched)}")
-
-                # 客户过滤：只保留指定客户的结果
-                if client_filter and client_name:
-                    before = len(enriched)
-                    enriched = [e for e in enriched if e["client"] == client_name]
-                    if before != len(enriched):
-                        print(f"[recall] 客户过滤: {before} -> {len(enriched)}（仅保留 {client_name}）")
+                # 精排前过滤：派生视图 / permanent-only / 当前有效性（废弃·被替代）
+                # / 任务（scope=task 且 task_id 不符）/ 客户隔离（R1）
+                _derived_excl = _derived_view_exclusions(client_name)
+                enriched, _filter_stats = _filter_recall_items(
+                    enriched, permanent_only=permanent_only, task_id=task_id,
+                    client_name=client_name, allow_cross=allow_cross,
+                    derived_exclusions=_derived_excl, marker_cache={})
+                for _reason, _n in _filter_stats.items():
+                    if _n:
+                        print(f"[recall] {_reason}过滤: -{_n}")
+                if _filter_stats.get("派生视图"):
+                    _primary = " / ".join(_derived_excl.get("primary_sources") or [])
+                    if _primary:
+                        print(f"[recall] 世界书仅作人读概览，证据回到真源: {_primary}")
 
                 # 精排（可选）：优先 Silicon Flow BGE-Reranker，失败降级到 LLM rerank
+                # 精排返回数与最终展示数对齐（final_k），不回吐 >3 条破坏契约。
                 if rerank and len(enriched) > 1:
                     try:
                         from _cloud_llm import rerank as llm_rerank, siliconflow_rerank
+                        _cands = [(e["client"], e["score"], e["path"],
+                                   _rerank_texts.get(e["path"]) or e["snippet"])
+                                  for e in enriched]
+                        # 精排覆盖整个候选池（top_k=池大小），融合后再裁到 final_k；
+                        # 若只让 reranker 返回 3 条，池子宽窄就失去意义（R1 A/B 实测：
+                        # 只取 3 条时 pool=10 反而 Hit@3 -10.8pp）。
+                        _rank_n = len(_cands)
                         ranked = siliconflow_rerank(
-                            input_text,
-                            [(e["client"], e["score"], e["path"], e["snippet"])
-                             for e in enriched],
-                            top_k=_RECALL_CONFIG["rerank"]["top_k"],
-                            alpha=_RECALL_CONFIG["rerank"].get("alpha", 0.7),
+                            input_text, _cands,
+                            top_k=_rank_n,
+                            alpha=_rk_cfg.get("alpha", 0.7),
                             client_name=client_name
                         )
                         if ranked is not None:
-                            print(f"[{mode}] BGE-Reranker 精排中...")
-                            mode += " + BGE-Rerank"
+                            print(f"[{mode_label}] BGE-Reranker 精排中...")
+                            mode_label += " + BGE-Rerank"
                         else:
-                            print(f"[{mode}] LLM rerank 精排中（SiliconFlow 未配置或失败）...")
+                            print(f"[{mode_label}] LLM rerank 精排中（SiliconFlow 未配置或失败）...")
                             ranked = llm_rerank(
-                                input_text,
-                                [(e["client"], e["score"], e["path"], e["snippet"])
-                                 for e in enriched],
-                                top_k=_RECALL_CONFIG["rerank"]["top_k"],
+                                input_text, _cands,
+                                top_k=_rank_n,
                                 client_name=client_name
                             )
-                            mode += " + LLM rerank"
+                            mode_label += " + LLM rerank"
                         # P0: rerank 后保留 parent_context + source_type + persistence
                         _path_to_meta = {e["path"]: e for e in enriched}
-                        enriched = [{"client": c, "score": s, "path": p, "snippet": sn,
-                                     "parent_context": _path_to_meta.get(p, {}).get("parent_context", ""),
-                                     "source_type": _path_to_meta.get(p, {}).get("source_type", "unknown")}
-                                    for c, s, p, sn in ranked]
-                        for _item in enriched:
-                            _meta = _path_to_meta.get(_item["path"], {})
-                            if _meta.get("persistence"):
-                                _item["persistence"] = _meta["persistence"]
-                            if _meta.get("scope"):
-                                _item["scope"] = _meta["scope"]
+                        _rebuilt = []
+                        _seen = set()
+                        for _c, s, p, sn in ranked:
+                            if p not in _path_to_meta or p in _seen:
+                                continue
+                            _seen.add(p)
+                            _item = dict(_path_to_meta[p])
+                            _item["score"] = s
+                            _item["snippet"] = sn
+                            _rebuilt.append(_item)
+                        enriched = _rebuilt[:final_k]
                     except Exception as e:
                         print(f"[rerank] 失败: {e}，返回原序")
-                        enriched = enriched[:3]
+                        enriched = enriched[:final_k]
                 else:
-                    enriched = enriched[:3]  # top 3（改动7：从 5 降为 3）
+                    enriched = enriched[:final_k]
 
                 # T9：来源锚 + 模式 + 降级标记（纯加法，不删不改既有键——
                 # folio_recall 工具 / RAG 注入消费这些 dict）
@@ -332,8 +396,11 @@ def recall(input_text, force_keyword=False, client_name=None, rerank=True,
                     _item["source"] = f"客户={_item['client']} | 文档={_doc_name}"
                     _item["mode"] = base_mode
                     _item["degraded"] = degraded
+                    if client_name and _item["client"] != client_name:
+                        # R1：跨项目结果必须可识别（消费端据此降权/复核）
+                        _item["cross_project"] = True
 
-                print(f"=== {mode} 检索结果 ===")
+                print(f"=== {mode_label} 检索结果 ===")
                 # 报价引用约束：检测是否涉及报价/价格，提示来源标注
                 quote_keywords = ["报价", "价格", "单价", "费用", "万元", "元/", "报价单", "预算"]
                 has_quote = any(kw in input_text for kw in quote_keywords)
@@ -737,6 +804,159 @@ def _dedup_by_doc(results, max_per_doc=1):
     return kept
 
 
+def _clamp_int(value, lo, hi, default):
+    """把配置值收敛到 [lo, hi]；非法值用 default。"""
+    try:
+        n = int(value)
+    except (TypeError, ValueError):
+        return default
+    return max(lo, min(hi, n))
+
+
+# 决策「当前无效」状态词表（status 字段命中即过滤；superseded_by 非空同样过滤）
+_INVALID_DECISION_STATUS = ("已废弃", "失效", "无效", "deprecated", "removed")
+# 被替代标记（与 _embed_index._SUPERSEDED_RE 同口径；此处本地定义，
+# 不依赖 Folio 旧版 _embed_index 是否已带该常量）
+_SUPERSEDED_RE = re.compile(r'[-*]\s*\*{0,2}superseded_by\*{0,2}\s*[：:]\s*\S+')
+
+
+def _derived_view_exclusions(client_name=None):
+    """派生视图排除配置（单一事实源 = `_worldbook.recall_exclusion_config`）。
+
+    R1 收尾：存量索引里可能还有世界书（client_index.md）的旧向量，召回侧
+    按同一份配置过滤，不另写一套规则。导入/调用失败返回 {}（不过滤）。
+    """
+    client_dir = None
+    if client_name:
+        client_dir = os.path.join(SCRIPT_DIR, "_knowledge", "clients", client_name)
+    try:
+        from _worldbook import recall_exclusion_config
+        cfg = recall_exclusion_config(client_dir)
+        return cfg if isinstance(cfg, dict) else {}
+    except Exception:
+        return {}
+
+
+def _is_derived_view_hit(path_spec, exclusions, marker_cache=None):
+    """召回结果是否来自派生视图（exclude_paths / exclude_basenames / skip_markers）。
+
+    marker_cache: 可选 {fpath: text}，同一次召回内复用文件头读取结果。
+    """
+    if not exclusions or not path_spec:
+        return False
+    fpath = str(path_spec).split("#")[0]
+    try:
+        target = os.path.normcase(os.path.abspath(fpath))
+    except (OSError, ValueError):
+        return False
+    for p in exclusions.get("exclude_paths") or []:
+        try:
+            if os.path.normcase(os.path.abspath(str(p))) == target:
+                return True
+        except (OSError, ValueError):
+            continue
+    bname = os.path.basename(fpath).lower()
+    if any(bname == str(n).lower()
+           for n in exclusions.get("exclude_basenames") or []):
+        return True
+    markers = exclusions.get("skip_markers") or []
+    if not markers or os.path.splitext(fpath)[1].lower() not in (".md", ".txt"):
+        return False
+    if marker_cache is not None and fpath in marker_cache:
+        head = marker_cache[fpath]
+    else:
+        head = ""
+        try:
+            with open(fpath, "r", encoding="utf-8") as f:
+                head = f.read(4096)
+        except (OSError, UnicodeDecodeError):
+            head = ""
+        if marker_cache is not None:
+            marker_cache[fpath] = head
+    return any(m in head for m in markers)
+
+
+def _extract_decision_meta(raw):
+    """从决策块原始文本提取过滤/标注元数据（R1）。
+
+    persistence / scope 缺省与 P6-2 口径一致（permanent / client）；
+    task_id / status / superseded_by 缺失为空串。
+    """
+    def _field(name):
+        m = re.search(rf'[-*]\s*\*{{0,2}}{name}\*{{0,2}}\s*[：:]\s*([^\n]+)', raw or "")
+        return m.group(1).strip() if m else ""
+
+    return {
+        "persistence": _extract_persistence(raw),
+        "scope": _extract_scope(raw),
+        "task_id": _field("task_id"),
+        "status": _field("状态"),
+        "superseded_by": _field("superseded_by"),
+    }
+
+
+def _is_invalid_decision(item):
+    """决策结果是否已失效/被替代（当前有效性过滤）。"""
+    if item.get("source_type") != "decision":
+        return False
+    if item.get("superseded_by"):
+        return True
+    status = str(item.get("status") or "").lower()
+    return any(k in status for k in _INVALID_DECISION_STATUS)
+
+
+def _filter_recall_items(items, *, permanent_only=False, task_id=None,
+                         client_name=None, allow_cross=False,
+                         derived_exclusions=None, marker_cache=None):
+    """精排前的统一过滤（R1）：派生视图 / permanent-only / 有效性 / 任务 / 客户隔离。
+
+    顺序无关（各条件独立）。返回 (kept, stats)，stats 为各原因丢弃数，
+    供调用方打印可视化计数（不静默过滤）。派生视图规则来自
+    `_worldbook.recall_exclusion_config`，此处不重写。
+    """
+    stats = {"派生视图": 0, "permanent-only": 0, "已失效/被替代": 0,
+             "任务不匹配": 0, "跨客户": 0}
+    kept = []
+    for item in items:
+        if derived_exclusions and _is_derived_view_hit(
+                item.get("path", ""), derived_exclusions, marker_cache):
+            stats["派生视图"] += 1
+            continue
+        if (permanent_only and item.get("source_type") == "decision"
+                and item.get("persistence") != "permanent"):
+            stats["permanent-only"] += 1
+            continue
+        if _is_invalid_decision(item):
+            stats["已失效/被替代"] += 1
+            continue
+        if (item.get("source_type") == "decision" and item.get("scope") == "task"
+                and task_id and item.get("task_id")
+                and item["task_id"] != task_id):
+            stats["任务不匹配"] += 1
+            continue
+        if client_name and not allow_cross and item.get("client") != client_name:
+            stats["跨客户"] += 1
+            continue
+        kept.append(item)
+    return kept, stats
+
+
+def _read_rerank_body(path_spec, max_chars=1200):
+    """读取 path#anchor 的 chunk 正文供精排（R1）。
+
+    优先 read_chunk（按锚点还原完整 chunk），失败/越界时回退 _read_snippet。
+    返回空串表示读取失败，调用方回退到 snippet 摘要。
+    """
+    try:
+        text = read_chunk(path_spec, max_chars=max_chars)
+    except Exception:
+        text = ""
+    if (not text or text.startswith("(文件不存在") or text.startswith("(读取失败")
+            or text.startswith("(无法读取")):
+        text = _read_snippet(path_spec, max_chars)
+    return text or ""
+
+
 def _detect_client_from_path(path):
     """从路径中检测客户名（D-121：docs 方法论文档归「方法论」）。"""
     # D-121：docs 方法论白名单文档无客户归属，显示为「方法论」
@@ -871,7 +1091,8 @@ def _read_snippet(path_spec, max_chars=200):
         # 跳过 conflict: pending / 已废弃 块；旧索引指向被跳过块时返回过滤说明）
         try:
             from _graph import _split_decision_blocks as _raw_split
-            from _embed_index import _split_decision_chunks, _DEPRECATED_RE, _sliding_window_chunks
+            from _embed_index import (_split_decision_chunks, _DEPRECATED_RE,
+                                      _sliding_window_chunks)
             idx = int(anchor[1:]) if anchor[1:].isdigit() else 0
             # P2-10：#d{i}#w{j} 超长块滑动窗口子块——还原具体窗口，与切片侧一致
             window_idx = None
@@ -888,7 +1109,8 @@ def _read_snippet(path_spec, max_chars=200):
             raw_blocks = _raw_split(content)[1:]  # 跳过文件头
             if 0 <= idx < len(raw_blocks):
                 raw = raw_blocks[idx]
-                if "<!-- conflict: pending -->" in raw or _DEPRECATED_RE.search(raw):
+                if ("<!-- conflict: pending -->" in raw or _DEPRECATED_RE.search(raw)
+                        or _SUPERSEDED_RE.search(raw)):
                     return "(该决策条目已废弃或处于未决冲突，已从召回索引过滤)"
         except Exception:
             pass

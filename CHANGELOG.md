@@ -4,10 +4,22 @@
 
 ## [Unreleased]
 
+### 新增
+
+- **`word-com apply-style`（2026-09-13）**：把 docx 的**样式定义层**照抄目标文档规格（内置 `gs0910` 规格集：正文 仿宋_GB2312 三号/行距固定 25pt/首行缩进 2 字符；H1 黑体二号加粗；H2 楷体_GB2312 三号；H3/H4 仿宋加粗四号；H5 仿宋加粗三号；图题 黑体五号居中；表格 仿宋小四）。**只改格式、不写 `w:t`**，纯 python-docx 零 COM；新增 `src/_renderer/docx_style_0910.py`。适用于「用户已在 Word 里改过文字、不能重出 doc」的场景。实测：773 段 / 51,197 字逐段完全一致。
+- **DOCX 图片环绕方式支持（2026-09-13）**：spec `image` 元素新增 `wrap` 字段，`wrap: top_bottom` 产出 Word「上下型环绕」浮动图（水平居中相对版心），缺省不写 = 嵌入型、旧 spec 行为零变化。新增 `src/_renderer/docx_wrap.py`（OOXML 层 `wp:inline` → `wp:anchor` 原地提升，子元素搬迁不重建、保留 `r:embed` 不丢图），`src/_renderer/__init__.py` 的 DOCX image 分支消费，提升失败进 `report.warn`。实测：21 图 `wp:anchor`=21 / `wp:wrapTopAndBottom`=21 / `media`=21，回归冒烟无字段仍为 `wp:inline`=1。
+
 ### 文档
 
 - 技术白皮书 v6.0 / 产品说明 v6.0 / 英文 Product Brief v6.0（2026-09-09）：对齐 v2.0.0 发布面（39 元素 / 37 图形 / 7 主题 / 审查链 / 育种 / 脱敏门）；`spec_protocol_v1.md` 补 `theme` 字段（`style` 转历史并给出映射）；v4.0 / v5.0 转历史版本；README 补数字口径说明。
 - README 首页补「DSH 兼容版本」标注：发布版插件锚定 **DSH 0.1.0-rc.8**（`verifiedAgainst` / peer 依赖口径）；**0.1.2-rc.1** 代码级兼容层（`folio-events` 事件读取三级回退）已在开发线就绪，随下一版同步。锚定纪律：`verifiedAgainst` 只在实跑验证通过后才改。
+
+### 修复
+
+- **召回顺序与查询计划契约（R1，2026-11-12）**：`src/_recall.py` 三处修正。① **查询改写默认关**：配置缺失 `query_rewrite` 节时不再回落到 `enabled=True`（原 `dict.get(..., True)` 是 fail-open）。这是「`--no-alias` 仍扩写」的真实成因——离线环境里改写调用穿透到云端并返回了带别名的改写查询，`use_aliases=False` 只关掉本地别名展开，关不掉改写；同时它让 `test_aliases_m2_r3` / `test_cloud_policy` 变成网络依赖（单跑 24s，修后 0.7s）。② **`mode` 契约只描述链路**：低置信双查询的 `(双查询)` 后缀不再写进结构化 `mode`，只在人读标题里出现（消费端按 `BM25 + Embedding RRF` 断言）。③ **精排候选池**：RRF 后保留 8–12 个候选（默认 10）→ 读取 chunk 正文 → 精排 → 最终 `final_k=3`，不再「取前 3 再精排」；非精排链路行为不变。新增项目/任务/有效性过滤（`scope=task` + `task_id` 不符、`状态=已废弃`、`superseded_by` 非空一律不召回），跨项目默认硬隔离，只有 `cross_project=True` 或 `--no-client-filter`（显式）才开放，跨项目结果带 `cross_project: true`。
+- **CLI 入口撤掉未配平的批量同步（2026-11-12）**：工作树的 `src/_cli.py` 混入了内部线一次性外迁/新功能同步（`register_audit_family`、`register_theme_family`、`register_worldbook_family`、`register_alias_family`、`register_recall_v2_family`、`register_baseline_update`，以及 `_cli_cmds_visual`、`_cli_import` 两个整模块、`table-build`/`import-artifact`/`density-metrics`/`visual-intent`/`design-precedent`/`page-*`/`--with-editor`），而这些目标在本仓库**全部不存在**，导致 `import _cli` 直接 `ImportError`、全量测试 7 个收集错误、CLI 完全不可用。处理：`src/_cli.py` 回到已提交基线（HEAD），只保留与 `_cli_cmds_gen.cmd_word_com` / `_renderer/docx_style_0910.py` 配平的 `word-com apply-style` 子命令注册。**未从内部线整文件覆盖，未 reset 分支**（工作树仍领先 `origin/master` 4 个提交）。配平后 `build_parser` 的 85 个命令与 `_build_dispatch` 85 项一一对应、无缺目标；全量 pytest 可完整收集（2729 collected / 466 deselected），2257 passed、3 failed（均为改动前就存在的召回标签契约红项，见 `docs/Folio同步断点修复_实施报告_2026-11-12.md`）、4 skipped。
+- **L0 守卫命令位匹配（`@nyantused/folio-dsh-tools` 1.1.1，2026-09-16）**：`guard.js` 的两处判定按「字面出现」工作，只读命令会被误拦——① `PYTHON_CALL_RE` 无前置断言 + CLI 白名单整条命令 `$` 锚定 → `Write-Output "评审提到 python 直调"`、`Select-String -Pattern python` 被判直调，`.venv python _cli.py x 2>&1 | head` 因尾巴失配被误拦（守卫提示与行为自相矛盾）；② `SHELL_MUTATE_CMDS` 含 `cat`（读取器）与裸 `>>?` 且在任意位置匹配 → `Select-String -Path refs/a.md -Pattern "Remove-Item"`、`find output -name "*.xlsx" 2>/dev/null` 被判 shell 直写。改为**命令位匹配**（段首 / 命令分隔符后 / 子表达式 / `&` / 赋值右值 / 嵌套壳 `cmd /c`·`pwsh -c` / `Start-Process`），并顺带修两处**路径带空格**盲区（绝对路径含空格解释器被漏放、`> "…/output/x.html"` 重定向目标被截断）；`cat` 移出写命令词表、裸 `>>?` 不再视作写。**刻意保留的更严口径**：不引入内部线的 `SAFE_MODULES`/`--version` 豁免（测试已锁定）。测试由「白名单正则副本」改为**真实守卫判定** + v3 反例，`node test/run-check.mjs` **17/17**。与内部工作区同源修补（内部线 guard `0.1.0-rc.7`）。
+- `folio-events`（v1.0.4，2026-09-11）：入口提醒投递目标 `next-turn` → `next-step`——原目标下提醒独立占 turn 1（吃掉被首轮锚定作用的那一轮，3/5 被 1024 截断、产出 0；无锚定臂还会在该轮跑出 `ask_user_question` 阻塞卡）；`claim("next-turn")` 先取全部 `next-step` 再取 1 条 `next-turn`，改后与用户首个真实消息同轮到达且提醒在前。与工作区副本同源修补。
 
 ## [2.0.0] - 2026-09-08
 

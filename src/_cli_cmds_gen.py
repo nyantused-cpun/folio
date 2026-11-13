@@ -352,11 +352,40 @@ def cmd_word_com(args):
     path = getattr(args, "file", None)
 
     if not sub or not path:
-        print("[word-com] 用法: python _cli.py word-com <normalize|renumber|polish|to-pdf|accept|compare> <文件>")
+        print("[word-com] 用法: python _cli.py word-com <normalize|renumber|polish|apply-style|to-pdf|accept|compare> <文件>")
         sys.exit(1)
     if not os.path.exists(path):
         print(f"[word-com] 文件不存在: {path}")
         sys.exit(1)
+
+    if sub == "apply-style":
+        # 只改样式定义与段落格式，不碰文字（纯 python-docx，无 COM）
+        from _renderer.docx_style_0910 import apply_style_0910
+        style_set = getattr(args, "style_set", "gs0910") or "gs0910"
+        if not getattr(args, "no_backup", False):
+            import shutil
+            from datetime import datetime
+            ver_dir = os.path.join(os.path.dirname(os.path.abspath(path)), ".versions")
+            try:
+                os.makedirs(ver_dir, exist_ok=True)
+                stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                shutil.copy2(path, os.path.join(
+                    ver_dir, f"{os.path.basename(path)}.{stamp}"))
+                print(f"[word-com] 已备份到 .versions/（{stamp}）")
+            except Exception as e:  # pragma: no cover - 备份失败不阻断
+                print(f"[word-com] 备份失败（不阻断）: {e}")
+        ok, info = apply_style_0910(
+            path, style_set=style_set,
+            numbering=not getattr(args, "no_numbering", False))
+        if not ok:
+            print(f"[word-com] apply-style 失败: {info.get('error', '未知错误')}")
+            sys.exit(1)
+        print(f"[word-com] apply-style 完成（样式集 {style_set}）："
+              f"样式 {len(info['styles'])} 项 / 图题 {info['captions']} 段 / "
+              f"表格段 {info['table_paragraphs']} 段 / 全文 {info['text_chars']} 字"
+              + (f" / 编号 {info.get('numbering', {}).get('numbering', '')}"
+                 if isinstance(info.get("numbering"), dict) else ""))
+        sys.exit(0)
 
     if sub == "normalize":
         n = normalize_headings(path)

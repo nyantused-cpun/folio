@@ -4,8 +4,9 @@
 python-docx 建骨架后：
 1. 多级标题编号（一、(一)、1.、1.1、…）：统一用 python-docx 手动写入
    （两条路径共用 _manual_numbering，与是否有 pywin32 无关）
-2. 自动生成目录（TOC 域）：有 pywin32 用 Word COM 生成并刷新；
-   无 pywin32 插入 TOC 域代码（Word 打开后 Ctrl+A -> F9 更新）
+2. 自动生成目录（TOC 域）：插入统一走 python-docx `_manual_toc`（锚点=正文
+   首个 Heading 段落，即封面之后）；有 pywin32 时 Word COM 只负责刷新出条目，
+   无 pywin32 则插入域代码（Word 打开后 Ctrl+A -> F9 更新）
 3. 页眉页脚（非暗标时插入项目名/页码）：仅 COM 路径
 """
 import os
@@ -68,15 +69,27 @@ def com_postprocess(docx_path, fmt_config):
         except Exception as e:
             print(f"[docx] 多级编号失败: {e}")
 
+    # 目录域插入：同样走 python-docx（锚点=封面之后的正文首个 Heading）。
+    # 原 COM 版 _generate_toc 插在文档 0 位，目录整块压在封面标题之上
+    if fmt_config.get("toc"):
+        try:
+            from docx import Document
+            _doc_t = Document(abs_path)
+            _manual_toc(_doc_t, fmt_config.get("toc_levels", "1-3"))
+            _doc_t.save(abs_path)
+            print("[docx] 目录域已插入（封面之后）")
+        except Exception as e:
+            print(f"[docx] 目录域插入失败: {e}")
+
     word = None
     doc = None
     try:
         word = _open_word()
         doc = word.Documents.Open(abs_path)
 
-        # 自动目录
+        # 目录域已在 python-docx 阶段插入到封面之后，COM 侧只负责刷新出条目
         if fmt_config.get("toc"):
-            _generate_toc(doc, fmt_config.get("toc_levels", "1-3"))
+            _update_toc(doc)
 
         # 页眉页脚（非暗标）
         if not fmt_config.get("dark_bid", False):
@@ -89,36 +102,14 @@ def com_postprocess(docx_path, fmt_config):
         _close_word(word, doc)
 
 
-def _generate_toc(doc, levels="1-3"):
-    """在文档开头插入目录。
-
-    使用 Word COM 的 TablesOfContents.Add 方法。
-    """
+def _update_toc(doc):
+    """刷新已插入的 TOC 域（插入由 _manual_toc 在 python-docx 阶段完成）。"""
     try:
-        # 跳到文档开头
-        rng = doc.Range(0, 0)
-
-        # 插入"目录"标题
-        rng.InsertBefore("\n目录\n")
-        rng = doc.Range(0, 0)
-
-        # 插入 TOC 域
-        # levels 格式 "1-3" -> Word 用 "1-3"
-        toc_range = doc.Range(0, 0)
-        doc.TablesOfContents.Add(
-            Range=toc_range,
-            UseHeadingStyles=True,
-            UpperHeadingLevel=int(levels.split("-")[0]),
-            LowerHeadingLevel=int(levels.split("-")[1]),
-        )
-
-        # 更新目录
         for toc in doc.TablesOfContents:
             toc.Update()
-
-        print("[COM] 目录已生成")
+        print("[COM] 目录已刷新")
     except Exception as e:
-        print(f"[COM] 目录生成失败: {e}")
+        print(f"[COM] 目录刷新失败: {e}")
 
 
 def _add_headers_footers(doc, fmt_config):
@@ -223,17 +214,38 @@ def _manual_numbering(doc, style="chinese_multi_level"):
 
 
 def _manual_toc(doc, levels="1-3"):
-    """手动插入 TOC 域代码（Word 打开时需手动更新）。"""
+    """在封面之后插入「目录」标题 + TOC 域（Word 打开时 Ctrl+A -> F9 更新）。
+
+    插入位置 = 正文第一个 Heading 样式段落之前（封面主标题是 Title 样式，
+    不命中）；此前实现插在文档 0 位，目录整块压在封面标题之上，且 TOC 域
+    与「目录」标题同插 0 位互相颠倒。目录标题不套 Heading 样式，避免被
+    目录域收录自引用；封面/目录/正文三段以分页符隔开。
+    """
     from docx.oxml import OxmlElement
     from docx.oxml.ns import qn
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
 
-    # 在文档开头插入段落
-    para = doc.paragraphs[0] if doc.paragraphs else doc.add_paragraph()
-    new_para = para.insert_paragraph_before("目录")
-    new_para.style = doc.styles["Heading 1"]
+    # 锚点：正文首个 Heading 样式段落
+    anchor = None
+    for para in doc.paragraphs:
+        if para.style.name.startswith("Heading"):
+            anchor = para
+            break
+
+    # 「目录」标题（居中加粗，不用 Heading 样式）
+    if anchor is not None:
+        title_para = anchor.insert_paragraph_before()
+        toc_para = anchor.insert_paragraph_before("")
+        anchor.paragraph_format.page_break_before = True
+    else:
+        title_para = doc.add_paragraph()
+        toc_para = doc.add_paragraph("")
+    title_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    title_run = title_para.add_run("目录")
+    title_run.bold = True
+    title_para.paragraph_format.page_break_before = True
 
     # 插入 TOC 域
-    toc_para = para.insert_paragraph_before("")
     run = toc_para.add_run()
 
     fldChar_begin = OxmlElement("w:fldChar")

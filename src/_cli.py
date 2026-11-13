@@ -481,7 +481,7 @@ def build_parser():
     p_dxe.add_argument("--renumber", action="store_true", help="全文重排编号（调用 docx_com_postprocess.renumber_headings）")
 
     # word-com：Word 排版操作族（子命令）
-    p_wc = sub.add_parser("word-com", help="Word 排版操作族（normalize/renumber/polish/to-pdf/accept/compare）")
+    p_wc = sub.add_parser("word-com", help="Word 排版操作族（normalize/renumber/polish/apply-style/to-pdf/accept/compare）")
     wc_sub = p_wc.add_subparsers(dest="word_com_cmd", help="word-com 子命令")
     p_wc_n = wc_sub.add_parser("normalize", help="识别裸奔标题并套用 Heading 样式")
     p_wc_n.add_argument("file", help="docx 文件路径")
@@ -493,6 +493,13 @@ def build_parser():
     p_wc_p.add_argument("--style-set", default="bid", choices=["bid", "general"], help="样式集")
     p_wc_p.add_argument("--project-name", default="", help="项目名（页眉）")
     p_wc_p.add_argument("--pdf", action="store_true", help="同时导出 PDF")
+    p_wc_s = wc_sub.add_parser("apply-style", help="只应用样式集（纯 python-docx，不改文字）")
+    p_wc_s.add_argument("file", help="docx 文件路径")
+    p_wc_s.add_argument("--style-set", default="gs0910", choices=["gs0910"],
+                        help="样式集（gs0910 = 照抄 0910 规格：仿宋三号正文/黑体楷体标题/黑体五号图题）")
+    p_wc_s.add_argument("--no-backup", action="store_true", help="不写 .versions/ 备份")
+    p_wc_s.add_argument("--no-numbering", action="store_true",
+                        help="不挂多级自动编号（缺省挂 Heading 1–5 自动编号，对标 0910）")
     p_wc_t = wc_sub.add_parser("to-pdf", help="另存为 PDF")
     p_wc_t.add_argument("file", help="docx 文件路径")
     p_wc_a = wc_sub.add_parser("accept", help="接受所有修订")

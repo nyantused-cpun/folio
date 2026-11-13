@@ -5,6 +5,7 @@ import os
 import yaml
 from string import Template
 
+from _renderer.docx_wrap import normalize_wrap, set_image_wrap_top_bottom
 from _renderer.elements import (
     CAPABILITIES, DEGRADE, END_DOCX, RenderReport, _esc, _nl2br, degrade_text,
     empty_payload_reason, is_empty_payload, normalize_element)
@@ -803,6 +804,16 @@ class Renderer:
                 run = img_para.add_run()
                 # 版心宽度约 14cm（A4 减去页边距）
                 run.add_picture(src, width=Cm(14 * width_ratio))
+
+                # 环绕方式：wrap=top_bottom → 上下型浮动图（缺省 = 嵌入型，行为不变）
+                if normalize_wrap(normalized.get("wrap")) == "top_bottom":
+                    ok, reason = set_image_wrap_top_bottom(
+                        run, alignment=alignment,
+                        relative_height=(index if isinstance(index, int) else 1) + 1)
+                    if not ok:
+                        self.report.warn(
+                            f"[渲染] {page_id} elements[{index}] "
+                            f"wrap=top_bottom 未生效：{reason}")
 
                 # 图题
                 if caption:

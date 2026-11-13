@@ -1,7 +1,7 @@
 // @nyantused/folio-dsh-events：兰亭会话协议事件插件（P1 实施 M3，2026-08-14；作用域隔离 2026-08-15）
 //
 // 把 AGENTS.md 的会话纪律机械化（「纪律变机械」第一步）：
-//   1. agent/session-start → 注入入口协议提醒（每新会话随下一次真实用户轮被动送达，
+//   1. agent/session-start → 注入入口协议提醒（每新会话与首个用户轮**同轮**被动送达，
 //      不自启轮；同会话幂等一次）
 //   2. agent/disposed → 会话关闭自动 save（会话结束协议的机械触发；客户名从
 //      agent.session.events 的 tool/call 记录扫描提取）
@@ -94,7 +94,13 @@ function apply(ctx) {
   // 2026-09-10 修：注入必须**随下一次真实用户轮**送达，不能用 `followup`（followup =
   // 入队 + 唤醒，会在会话创建瞬间自动起一轮）。会话一旦起轮，agent preset 即固化
   // （客户端「即将开始的这个会话所用的 Agent 预设」座位消失）→ 用户永远落在默认模式
-  // 且其他模式不可选。改用 `send(msg,'next-turn',false)` 只入队不唤醒。
+  // 且其他模式不可选。
+  // 2026-09-11 修：目标 `next-turn` → `next-step`。`claim("next-turn")` 的实现是**先取
+  // 全部 next-step、再追加 1 条 next-turn**（注释原文 "next-step input followed by the
+  // queued turn"）→ 提醒与用户首条消息在**同一次 claim 取出、提醒在前**，不再独立排成
+  // 队头一轮。原 next-turn 目标虽不自启轮，但仍独占 turn 1：吃掉被锚定的首轮（3/5 被
+  // 1024 截断、产出 0），无锚定臂还会在该轮跑出 `ask_user_question` 阻塞卡。
+  // wakeup=false 不变：只入队不唤醒 → 会话保持未开始 → 模式可选。
   ctx.on("agent/session-start", (payload) => {
     const agent = payload?.agent;
     if (!agent) return;
@@ -113,9 +119,9 @@ function apply(ctx) {
         source: { kind: "folio-events", note: "session-start" },
       });
       if (typeof agent.send === "function") {
-        agent.send(msg, "next-turn", false); // 入队不唤醒（0.1.2+ 契约）
+        agent.send(msg, "next-step", false); // 入队不唤醒；与首个用户轮同一次 claim 取出（2026-09-11）
       } else if (agent.inbox && typeof agent.inbox.append === "function") {
-        agent.inbox.append("next-turn", msg); // 退路：直接进队列
+        agent.inbox.append("next-step", msg); // 退路：直接进队列（同上，不独立占轮）
       } else {
         console.warn("[folio-events] 宿主无 send/inbox，入口提醒跳过（避免自启轮锁死模式选择）");
       }

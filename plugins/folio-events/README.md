@@ -2,11 +2,11 @@
 
 > P1 实施 M3（2026-08-14）。把 AGENTS.md 会话纪律机械化（「纪律变机械」第一步）。
 
-## 1. 行为面（v1.0.1 两条）
+## 1. 行为面（v1.0.4 两条）
 
 | 触发 | 事件（官方词汇） | 行为 |
 |---|---|---|
-| 新会话 | `agent/session-start`（notification） | `agent.send(createUserMessage(...), "next-turn", false)` **入队不唤醒**注入入口协议提醒（用户发第一条消息时随该轮送达）；同会话幂等一次（2026-09-10：session-start 实测触发两次 → 修「2 条排队消息」） |
+| 新会话 | `agent/session-start`（notification） | `agent.send(createUserMessage(...), "next-step", false)` **入队不唤醒**注入入口协议提醒（`claim("next-turn")` 先取全部 `next-step`、再取 1 条 `next-turn` → **与用户第一条消息同轮送达、提醒在前**，不独立占轮；2026-09-11 由 `next-turn` 改 `next-step`，见 §7）；同会话幂等一次（2026-09-10：session-start 实测触发两次 → 修「2 条排队消息」） |
 | 会话关闭 | `agent/disposed`（notification） | 从 `agent.session.events` 倒序扫描 `tool/call`（folio_session_start/folio_save 的 arguments）提取客户名，自动 spawn `.venv python _cli.py save <client>`（60s 冷却防重复事件）——会话结束协议机械触发 |
 
 > 作用域隔离（2026-08-15）：本插件挂在 pre-sales preset 层，仅「售前助手」模式生效；原 `session/event` 实时观察依赖 root scope 广播，preset 内收不到，故改为 disposed 时扫描会话事件。
@@ -53,3 +53,7 @@ plugins/folio-events/
 - 1.0.1（2026-08-15）：作用域隔离改造——插件移入 pre-sales preset 层；`session/event` 实时观察改为 `agent/disposed` 扫描 `agent.session.events` 提取客户名；发布版保留 `FOLIO_HOME`/上溯 `_cli.py` 路径解析，不硬编码作者路径。
 - 1.0.2（2026-09-10）：入口提醒注入改 `send("next-turn", wakeup=false)`（原 `followup` 会在会话创建瞬间自启一轮 → preset 固化 → 模式选择器消失）。
 - 1.0.3（2026-09-10）：入口提醒加每会话幂等门（有界淘汰最旧），修 `session-start` 触发两次导致的重复排队消息。
+- 1.0.4（2026-09-11）：入口提醒投递目标 `next-turn` → `next-step`——原目标下提醒仍独立占
+  turn 1（吃掉被首轮锚定作用的那一轮；无锚定臂还会在该轮跑出 `ask_user_question` 阻塞卡）；
+  `claim("next-turn")` 先取全部 `next-step` 再取 1 条 `next-turn`，改后与首个用户轮同轮到达
+  且提醒在前。与工作区副本同源修补；运行级验证见工作区隔离实例（`_scratch/b1_ab/runs_nextstep/`）。

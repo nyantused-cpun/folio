@@ -53,8 +53,12 @@ export function createGuardRules(projectDir) {
   const PY_BOUNDARY = "(?=[\\s;&|)\\}\\]['\"`]|$)";
   const PYTHON_CALL_RE = new RegExp(CMD_POS_PREFIX + PY_BIN + PY_BOUNDARY, "i");
   // 真 CLI 调用 = 命令位解释器 token 紧邻 `_cli.py` 路径 token（不再「整条命令 $ 锚定」）
+  // ⚠ rc.8 同源修复（2026-09-19）：路径 token 放开空格 + 收尾 `\b` 改前瞻。
+  //   旧式 `[^\s"']*_cli\.py` 排除空格 → 项目根含空格（`D:\knowledge base`）的 CLI 全被误拦；
+  //   收尾 `\b` 在引号分支后永不成立（`"`+空格两侧皆非词字符）→ 引号分支自始为死码。
+  //   两者叠加 = 「守卫提示用 _cli.py、_cli.py 却被拦」。见 .dsh/guard/index.js rc.8 注释与 §B2 断言。
   const CLI_CALL_RE = new RegExp(
-    CMD_POS_PREFIX + PY_BIN + "\\s+(?:\"[^\"]*_cli\\.py\"|'[^']*_cli\\.py'|[^\\s\"']*_cli\\.py)\\b",
+    CMD_POS_PREFIX + PY_BIN + "\\s+(?:\"[^\"]*_cli\\.py\"|'[^']*_cli\\.py'|[^\\s\"'|;&(){}`]*_cli\\.py)(?=[\\s\"'|;&(){}`]|$)",
     "i"
   );
 
